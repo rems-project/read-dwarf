@@ -1,0 +1,2 @@
+<src/*.{ml,mli}> : package(lem), package(linksem)
+<src/main.{d.byte,byte,native,p.native}> : package(lem), package(linksem)
