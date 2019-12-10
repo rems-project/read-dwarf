@@ -139,20 +139,68 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line: bool) (a: natural) : string
        )
     
   
+(** ********************************************************************* *)
+(** **          pull disassembly out of an objdump -d file             ** *)
+(** ********************************************************************* *)
 
+
+
+let objdump_lines : (natural * (natural * string)) list option ref = ref None
+
+let init_objdump () =     
+  match !Globals.objdump_d with
+  | None -> ()
+  | Some filename ->
+     match read_source_file filename with
+     | None ->
+        Warn.fatal "couldn't read objdump-d file: \"%s\"\n" filename
+     | Some lines ->
+        let parse_line (s:string) : (natural*(natural*string)) option =
+          if String.length s >=9 && s.[8] = ':' then 
+            match Scanf.sscanf s " %x: %x%n" (fun a -> fun i -> fun n -> (a,i,n)) with
+            | (a,i,n) ->
+               let s' = String.sub s n (String.length s - n) in
+               Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
+            | exception _ -> None
+          else
+            None
+        in
+        objdump_lines := Some (List.filter_map parse_line (Array.to_list lines))
+
+let lookup_objdump_lines (a: natural) : (natural*string) option =
+  match !objdump_lines with
+  | Some lines -> 
+     List.assoc_opt a lines
+  | None ->
+     None
+
+    
 
 (** ********************************************************************* *)
 (** **          pretty-print the result                                ** *)
 (** ********************************************************************* *)
 
 let pp_test test = 
+  init_objdump ();
+
   (* pull out instructions from text section, assuming 4-byte insns *)
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
 
   let pp_instruction ((addr:natural),(i:natural)) =
-    Ml_bindings.hex_string_of_big_int_pad8 addr ^ "  " ^ Ml_bindings.hex_string_of_big_int_pad8 i ^ "\n"
-    ^ match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s | None -> ""
+    Ml_bindings.hex_string_of_big_int_pad8 addr ^ ":  " ^ Ml_bindings.hex_string_of_big_int_pad8 i 
+    ^ begin match lookup_objdump_lines addr with
+      | Some (i',s) ->
+         if i=i' then 
+           s
+         else
+           Warn.fatal "instruction mismatch - linksem: %s vs objdump: %s\n"  (Ml_bindings.hex_string_of_big_int_pad8 i) (Ml_bindings.hex_string_of_big_int_pad8 i')
+      | None ->
+         ""
+      end
+    ^ "\n"
+    ^ begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end
+    ^ "\n"
   in
 
   String.concat "" (List.map pp_instruction instructions)

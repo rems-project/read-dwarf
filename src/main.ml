@@ -6,7 +6,12 @@ let opts = [
   ("-dwarf_source_path",
     Arg.String (fun s -> Globals.dwarf_source_dir := s),
     Printf.sprintf "<string> path to directory containing source files, for DWARF debug output (%s)" !Globals.dwarf_source_dir);
-]
+
+  ("-objdump-d",
+    Arg.String (fun s -> Globals.objdump_d := Some s),
+    Printf.sprintf "<string> file containing result of objdump -d, used for disassembly");
+
+  ]
 
 let main = fun () ->
   let usage = "Usage: main [options]* filename (ELF file)\n" ^
