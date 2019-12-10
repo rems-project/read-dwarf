@@ -143,8 +143,6 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line: bool) (a: natural) : string
 (** **          pull disassembly out of an objdump -d file             ** *)
 (** ********************************************************************* *)
 
-
-
 let objdump_lines : (natural * (natural * string)) list option ref = ref None
 
 let init_objdump () =     
@@ -188,7 +186,10 @@ let pp_test test =
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
 
   let pp_instruction ((addr:natural),(i:natural)) =
+
+    (* the address and (hex) instruction *)
     Ml_bindings.hex_string_of_big_int_pad8 addr ^ ":  " ^ Ml_bindings.hex_string_of_big_int_pad8 i 
+    (* the dissassembly from objdump, if it exists *)
     ^ begin match lookup_objdump_lines addr with
       | Some (i',s) ->
          if i=i' then 
@@ -199,7 +200,11 @@ let pp_test test =
          ""
       end
     ^ "\n"
+    (* the source file lines (if any) associated to this address *)
     ^ begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end
+    (* the variables whose location ranges include this address *)
+    ^ let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
+      Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als
     ^ "\n"
   in
 
