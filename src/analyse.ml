@@ -132,8 +132,9 @@ let source_line file n1 =
         access_lines lines n
      | MyFail s ->
 (*        source_file_cache := (file, None) :: !source_file_cache;
-        None *)
-        (Warn.nonfatal "%s" s; None)
+          None *)
+         source_file_cache := (file, None) :: !source_file_cache;
+         (Warn.nonfatal "%s" s; None)
 
 let pp_source_line so =
   match so with
@@ -207,14 +208,14 @@ let init_objdump () =
         Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename
      | Ok lines ->
         let parse_line (s:string) : (natural*(natural*string)) option =
-          if String.length s >=9 && s.[8] = ':' then 
-            match Scanf.sscanf s " %x: %x%n" (fun a -> fun i -> fun n -> (a,i,n)) with
-            | (a,i,n) ->
-               let s' = String.sub s n (String.length s - n) in
-               Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
-            | exception _ -> None
-          else
-            None
+(*          if String.length s >=9 && s.[8] = ':' then *)
+          match Scanf.sscanf s " %x: %x%n" (fun a -> fun i -> fun n -> (a,i,n)) with
+          | (a,i,n) ->
+              let s' = String.sub s n (String.length s - n) in
+              Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
+          | exception _ -> None
+(*          else
+            None*)
         in
         objdump_lines := Some (List.filter_map parse_line (Array.to_list lines))
 
