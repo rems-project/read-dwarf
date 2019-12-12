@@ -83,8 +83,9 @@ let safe_open_in (filename: string) (f: in_channel -> 'a) : 'a =
     close_in chan;
     res
 
+type 'a ok_or_fail = Ok of 'a | MyFail of string    
 
-let read_source_file (name: string) : string array option=
+let read_source_file (name: string) : string array ok_or_fail = 
   let read_lines chan =
     let lines = ref [] in
     let () =
@@ -95,11 +96,19 @@ let read_source_file (name: string) : string array option=
     in
     !lines |> List.rev |> Array.of_list
   in
-  let file = Filename.concat !Globals.dwarf_source_dir name in
-  match safe_open_in file read_lines with
-  | lines -> Some lines
-  | exception Sys_error _ -> None
-                           
+  match safe_open_in name read_lines with
+  | lines -> Ok lines
+  | exception Sys_error s ->
+     MyFail (Printf.sprintf "read_source_file Sys_error \"%s\"\n" s)
+
+let rec read_source_file2 (names: string list) (err_acc:string) : string array ok_or_fail =
+  match names with
+  | [] -> MyFail ("not found:\n"^err_acc)
+  | name::names' ->
+     match read_source_file name with
+     | Ok lines -> Ok lines
+     | MyFail err -> read_source_file2 names' (err_acc^err)
+                 
 let source_file_cache = ref ([] : (string * (string array option)) list)
 
 let source_line file n1 =
@@ -114,13 +123,17 @@ let source_line file n1 =
   | Some (Some lines) -> access_lines lines n
   | Some (None) -> None
   | None ->
-     match read_source_file file with
-     | Some lines ->
+     let filenames = match !Globals.dwarf_source_dirs with
+     | [] -> [file]
+     | _ -> List.map (fun s -> Filename.concat s file) !Globals.dwarf_source_dirs in
+     match read_source_file2 filenames "" with
+     | Ok lines ->
         source_file_cache := (file, Some lines) :: !source_file_cache;
         access_lines lines n
-     | None ->
-        source_file_cache := (file, None) :: !source_file_cache;
-        None
+     | MyFail s ->
+(*        source_file_cache := (file, None) :: !source_file_cache;
+        None *)
+        (Warn.nonfatal "%s" s; None)
 
 let pp_source_line so =
   match so with
@@ -190,9 +203,9 @@ let init_objdump () =
   | None -> ()
   | Some filename ->
      match read_source_file filename with
-     | None ->
-        Warn.fatal "couldn't read objdump-d file: \"%s\"\n" filename
-     | Some lines ->
+     | MyFail s ->
+        Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename
+     | Ok lines ->
         let parse_line (s:string) : (natural*(natural*string)) option =
           if String.length s >=9 && s.[8] = ':' then 
             match Scanf.sscanf s " %x: %x%n" (fun a -> fun i -> fun n -> (a,i,n)) with
@@ -243,7 +256,7 @@ let pp_test test =
          if i=i' then 
            s
          else
-           Warn.fatal "instruction mismatch - linksem: %s vs objdump: %s\n"  (pp_addr i) (pp_addr i')
+           Warn.fatal2 "instruction mismatch - linksem: %s vs objdump: %s\n"  (pp_addr i) (pp_addr i')
       | None ->
          ""
       end
