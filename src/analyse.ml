@@ -2,6 +2,8 @@
 open Printf;;
 
 type natural = Nat_big_num.num
+
+let pp_addr (a:natural) = Ml_bindings.hex_string_of_big_int_pad8 a
              
 type test =
   {
@@ -11,7 +13,8 @@ type test =
    e_entry: natural;
    e_machine: natural;
    dwarf_static: Dwarf.dwarf_static;
- }
+   dwarf_semi_pp_frame_info:  (natural (*address*) * string (*cfa*) * (string*string) (*register rules*) list) list;
+  }
 
 (** ********************************************************************* *)
 (** **   use linksem to parse ELF file and extract DWARF info          ** *)
@@ -53,6 +56,7 @@ let parse_file (filename:string) : test =
           Debug.print_string2 (Dwarf.pp_evaluated_frame_info ds.Dwarf.ds_evaluated_frame_info);*)
           ds
      in
+     let dwarf_semi_pp_frame_info = Dwarf.semi_pp_evaluated_frame_info ds.ds_evaluated_frame_info in 
      let test =
        { elf_file    = elf_file;
          symbol_map  = symbol_map (*@ (symbols_for_stacks !Globals.elf_threads)*);
@@ -60,6 +64,7 @@ let parse_file (filename:string) : test =
          e_entry     = e_entry;
          e_machine   = e_machine;
          dwarf_static= ds;
+         dwarf_semi_pp_frame_info = dwarf_semi_pp_frame_info;
        } in
      test
   end
@@ -148,7 +153,31 @@ let elf_symbols_of_address (test:test) (addr:natural) : string list =
     (fun (name, (typ, size, address, mb, binding)) ->
       if address=addr then Some name else None)
     test.symbol_map
+
+
+(** ********************************************************************* *)
+(** **          look up address in frame info                          ** *)
+(** ********************************************************************* *)
+
+let aof ((a:natural),(cfa:string),(regs:(string*string) list)) = a
   
+let rec f (aof:'b->natural) (a:natural) (last: 'b option) (bs:'b list) : 'b option =
+  match (last,bs) with
+  | (None,   [])        -> None
+  | (Some b',[])        -> if Nat_big_num.greater_equal a (aof b') then Some b' else None
+  | (None,    b''::bs') -> f aof a (Some b'') bs'
+  | (Some b', b''::bs') ->
+     if Nat_big_num.less a (aof b') then None
+     else if Nat_big_num.greater_equal a (aof b') && Nat_big_num.less a (aof b'') then Some b'
+     else f aof a (Some b'') bs'
+
+  
+let pp_frame_info (test:test) (addr:natural) : string =
+  (* assuming the dwarf_semi_pp_frame_info has monotonically increasing addresses - always true? *)
+  match f aof addr None test.dwarf_semi_pp_frame_info with
+  | None -> "<no frame info for this address>\n"
+  | Some ((a:natural),(cfa:string),(regs:(string*string) list)) -> 
+     pp_addr a ^ " " ^ "CFA:" ^ cfa ^ " " ^ String.concat " " (List.map (function (rname,rinfo)->rname^":"^rinfo) regs) ^"\n"
 
 (** ********************************************************************* *)
 (** **          pull disassembly out of an objdump -d file             ** *)
@@ -202,28 +231,31 @@ let pp_test test =
     String.concat ""
       (List.map
          (fun (s:string) ->
-           Ml_bindings.hex_string_of_big_int_pad8 addr
+           pp_addr addr
            ^ " <" ^ s ^">:\n")
          (elf_symbols_of_address test addr))
     
     (* the address and (hex) instruction *)
-    ^ Ml_bindings.hex_string_of_big_int_pad8 addr ^ ":  " ^ Ml_bindings.hex_string_of_big_int_pad8 i 
+    ^ pp_addr addr ^ ":  " ^ pp_addr i 
     (* the dissassembly from objdump, if it exists *)
     ^ begin match lookup_objdump_lines addr with
       | Some (i',s) ->
          if i=i' then 
            s
          else
-           Warn.fatal "instruction mismatch - linksem: %s vs objdump: %s\n"  (Ml_bindings.hex_string_of_big_int_pad8 i) (Ml_bindings.hex_string_of_big_int_pad8 i')
+           Warn.fatal "instruction mismatch - linksem: %s vs objdump: %s\n"  (pp_addr i) (pp_addr i')
       | None ->
          ""
       end
     ^ "\n"
+    (* the frame info for this address *)
+    ^ pp_frame_info test addr
     (* the source file lines (if any) associated to this address *)
     ^ begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end
     (* the variables whose location ranges include this address *)
     ^ let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
       Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als
+
     ^ "\n"
   in
 
