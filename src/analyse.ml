@@ -137,8 +137,19 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line: bool) (a: natural) : string
              sls
           )
        )
-    
+
+
+(** ********************************************************************* *)
+(** **          look up address in ELF symbol table                    ** *)
+(** ********************************************************************* *)
+
+let elf_symbols_of_address (test:test) (addr:natural) : string list =
+  List.filter_map
+    (fun (name, (typ, size, address, mb, binding)) ->
+      if address=addr then Some name else None)
+    test.symbol_map
   
+
 (** ********************************************************************* *)
 (** **          pull disassembly out of an objdump -d file             ** *)
 (** ********************************************************************* *)
@@ -187,8 +198,16 @@ let pp_test test =
 
   let pp_instruction ((addr:natural),(i:natural)) =
 
+    (* the elf symbols at this address, if any *)
+    String.concat ""
+      (List.map
+         (fun (s:string) ->
+           Ml_bindings.hex_string_of_big_int_pad8 addr
+           ^ " <" ^ s ^">:\n")
+         (elf_symbols_of_address test addr))
+    
     (* the address and (hex) instruction *)
-    Ml_bindings.hex_string_of_big_int_pad8 addr ^ ":  " ^ Ml_bindings.hex_string_of_big_int_pad8 i 
+    ^ Ml_bindings.hex_string_of_big_int_pad8 addr ^ ":  " ^ Ml_bindings.hex_string_of_big_int_pad8 i 
     (* the dissassembly from objdump, if it exists *)
     ^ begin match lookup_objdump_lines addr with
       | Some (i',s) ->
