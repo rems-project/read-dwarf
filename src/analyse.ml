@@ -49,8 +49,15 @@ let parse_file (filename:string) : test =
 
   
   let f64 = match elf_file with Elf_file.ELF_File_64 f -> f | _ -> raise (Failure "not Elf64") in
-(*  
-  (* check the underlying string table *)
+
+(* linksem main_elf --symbols looks ok for gcc and clang
+
+That uses                 Elf_file.read_elf64_file bs0 >>= fun f1 ->
+                return (Harness_interface.harness_string_of_elf64_syms
+ *)
+  
+  (*
+  (* check the underlying string table - looks right for clang and gcc*)
   let string_table :String_table.string_table =
     match Elf_file.get_elf64_file_symbol_string_table f64 with
     | Error.Success x -> x
@@ -58,17 +65,15 @@ let parse_file (filename:string) : test =
   in
   begin match string_table with String_table.Strings(c,s) -> Printf.printf "%s\n" s end;
   exit 0;
- *)  
+*)
 
-
+  (* check the symbol table - plausible looking "Name" offsets for both gcc and clang *)
   (*
-  (* check the symbol table *)
 Printf.printf "%s"
     (Elf_symbol_table.string_of_elf64_symbol_table (match Elf_file.get_elf64_file_symbol_table f64 with Error.Success x -> x | Error.Fail s -> raise (Failure "foo")));
   exit 0;
-   *)
-
-  (* check the symbol_map - right number of entries, but no strings.... *)
+*)
+  (* check the symbol_map - right number of entries, and strings for gcc, but no strings for clang... *)
   Printf.printf "symbol_map=\n%s"  (pp_symbol_map symbol_map);
   (* Printf.printf "%s\n" (Sail_interface.string_of_executable_process_image elf_epi);*)
   exit 0;
