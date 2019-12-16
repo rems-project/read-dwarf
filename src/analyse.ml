@@ -17,6 +17,18 @@ type test =
   }
 
 (** ********************************************************************* *)
+(** **   pp symbol map                                                 ** *)
+(** ********************************************************************* *)
+
+let pp_symbol_map (symbol_map: Elf_file.global_symbol_init_info) =
+  String.concat ""
+    (List.map
+       (fun (name, (typ, size, address, mb, binding)) ->
+         Printf.sprintf "**** name = %s  address = %s  typ = %d\n" name  (pp_addr address) (Nat_big_num.to_int typ))
+       symbol_map)
+
+  
+(** ********************************************************************* *)
 (** **   use linksem to parse ELF file and extract DWARF info          ** *)
 (** ********************************************************************* *)
   
@@ -34,9 +46,33 @@ let parse_file (filename:string) : test =
     | Error.Success x -> x
     end
   in
-  
-  (* Printf.printf "%s\n" (Sail_interface.string_of_executable_process_image elf_epi);*)
 
+  
+  let f64 = match elf_file with Elf_file.ELF_File_64 f -> f | _ -> raise (Failure "not Elf64") in
+(*  
+  (* check the underlying string table *)
+  let string_table :String_table.string_table =
+    match Elf_file.get_elf64_file_symbol_string_table f64 with
+    | Error.Success x -> x
+    | Error.Fail s -> raise (Failure ("foo "^s))
+  in
+  begin match string_table with String_table.Strings(c,s) -> Printf.printf "%s\n" s end;
+  exit 0;
+ *)  
+
+
+  (*
+  (* check the symbol table *)
+Printf.printf "%s"
+    (Elf_symbol_table.string_of_elf64_symbol_table (match Elf_file.get_elf64_file_symbol_table f64 with Error.Success x -> x | Error.Fail s -> raise (Failure "foo")));
+  exit 0;
+   *)
+
+  (* check the symbol_map - right number of entries, but no strings.... *)
+  Printf.printf "symbol_map=\n%s"  (pp_symbol_map symbol_map);
+  (* Printf.printf "%s\n" (Sail_interface.string_of_executable_process_image elf_epi);*)
+  exit 0;
+  
   Debug.print_string "elf segments etc\n";
   begin match elf_epi, elf_file with
   | (Sail_interface.ELF_Class_32 _, _)  -> Warn.fatal "%s" "cannot handle ELF_Class_32"
