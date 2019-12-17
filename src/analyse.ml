@@ -73,12 +73,14 @@ Printf.printf "%s"
     (Elf_symbol_table.string_of_elf64_symbol_table (match Elf_file.get_elf64_file_symbol_table f64 with Error.Success x -> x | Error.Fail s -> raise (Failure "foo")));
   exit 0;
 *)
+
+(*
   (* check the symbol_map - right number of entries, and strings for gcc, but no strings for clang... *)
   Printf.printf "symbol_map=\n%s"  (pp_symbol_map symbol_map);
   (* Printf.printf "%s\n" (Sail_interface.string_of_executable_process_image elf_epi);*)
   exit 0;
-  
-  Debug.print_string "elf segments etc\n";
+ *)
+  (*  Debug.print_string "elf segments etc\n";*)
   begin match elf_epi, elf_file with
   | (Sail_interface.ELF_Class_32 _, _)  -> Warn.fatal "%s" "cannot handle ELF_Class_32"
   | (_, Elf_file.ELF_File_32 _)  -> Warn.fatal "%s" "cannot handle ELF_File_32"
