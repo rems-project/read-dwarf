@@ -55,6 +55,9 @@ let parse_file (filename:string) : test =
 That uses                 Elf_file.read_elf64_file bs0 >>= fun f1 ->
                 return (Harness_interface.harness_string_of_elf64_syms
  *)
+
+(*
+  let pp_string_table strtab =  match strtab with String_table.Strings(c,s) -> String.map (function c' -> if c'=c then ' ' else c') s in
   
   (*
   (* check the underlying string table - looks right for clang and gcc*)
@@ -63,23 +66,25 @@ That uses                 Elf_file.read_elf64_file bs0 >>= fun f1 ->
     | Error.Success x -> x
     | Error.Fail s -> raise (Failure ("foo "^s))
   in
-  begin match string_table with String_table.Strings(c,s) -> Printf.printf "%s\n" s end;
+  Printf.printf "%s\n" (pp_string_table string_table);
   exit 0;
 *)
 
   (* check the symbol table - plausible looking "Name" offsets for both gcc and clang *)
-  (*
-Printf.printf "%s"
-    (Elf_symbol_table.string_of_elf64_symbol_table (match Elf_file.get_elf64_file_symbol_table f64 with Error.Success x -> x | Error.Fail s -> raise (Failure "foo")));
-  exit 0;
-*)
 
-(*
+  (match Elf_file.get_elf64_file_symbol_table f64 with
+  | Error.Success (symtab,strtab) -> Printf.printf "%s\n%s" (pp_string_table strtab) (Elf_symbol_table.string_of_elf64_symbol_table symtab)
+  | Error.Fail s -> raise (Failure "foo"));
+
+
+
+
   (* check the symbol_map - right number of entries, and strings for gcc, but no strings for clang... *)
   Printf.printf "symbol_map=\n%s"  (pp_symbol_map symbol_map);
   (* Printf.printf "%s\n" (Sail_interface.string_of_executable_process_image elf_epi);*)
-  exit 0;
+(*  exit 0;*)
  *)
+  
   (*  Debug.print_string "elf segments etc\n";*)
   begin match elf_epi, elf_file with
   | (Sail_interface.ELF_Class_32 _, _)  -> Warn.fatal "%s" "cannot handle ELF_Class_32"
