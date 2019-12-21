@@ -315,6 +315,7 @@ let pp_test test =
 
   let last_frame_info = ref "" in
   let last_var_info = ref "" in
+  let last_source_info = ref "" in
   
   let pp_instruction ((addr:natural),(i:natural)) =
 
@@ -325,6 +326,8 @@ let pp_test test =
            pp_addr addr
            ^ " <" ^ s ^">:\n")
          (elf_symbols_of_address test addr))
+    (* the source file lines (if any) associated to this address *)
+    ^ (let source_info = begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end in if source_info = !last_source_info then ""(*"unchanged\n"*) else (last_source_info:=source_info;source_info))
     
     (* the address and (hex) instruction *)
     ^ pp_addr addr ^ ":  " ^ pp_addr i 
@@ -341,14 +344,12 @@ let pp_test test =
     ^ "\n"
     (* the frame info for this address *)
     ^ (let frame_info = pp_frame_info test addr in if frame_info = !last_frame_info then ""(*"CFA: unchanged\n"*) else (last_frame_info:=frame_info;frame_info))
-    (* the source file lines (if any) associated to this address *)
-    ^ begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end
     (* the variables whose location ranges include this address *)
     ^ (let var_info = 
          let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
          Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als in
        if var_info = !last_var_info then ""(*"vars: unchanged\n"*) else (last_var_info:=var_info;var_info))
-    ^ "\n"
+        (*    ^ "\n"*)
   in
 
   String.concat "" (List.map pp_instruction instructions)
