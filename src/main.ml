@@ -3,19 +3,19 @@
 
 
 let opts = [
-  ("-dwarf_source_path",
-    Arg.String (fun s -> Globals.dwarf_source_dir_root := s; Globals.dwarf_source_dirs :=[s]),
-    Printf.sprintf "<string> path to directory containing source files, for DWARF debug output (%s)" !Globals.dwarf_source_dir_root);
+  ("-comp_dir",
+    Arg.String (fun s -> Globals.comp_dir := Some s),
+    Printf.sprintf "<string> path to root directory of compilation, to override DWARF comp_dir if need be");
 
+  (*
   ("-I",
     Arg.String (fun s -> Globals.dwarf_source_dirs := (!Globals.dwarf_source_dirs) @ [Filename.concat !Globals.dwarf_source_dir_root s] ),
     Printf.sprintf "<string> add include dir, relative to dwarf_source_path");
-
+   *)
   
   ("-objdump-d",
     Arg.String (fun s -> Globals.objdump_d := Some s),
     Printf.sprintf "<string> file containing result of objdump -d, used for disassembly");
-
   ]
 
 let main = fun () ->

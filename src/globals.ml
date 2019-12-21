@@ -1,5 +1,4 @@
-let dwarf_source_dir_root = ref ""
-let dwarf_source_dirs = ref ([]:string list)
+let comp_dir = ref (None: string option)
 let objdump_d = ref (None : string option)
 
                   

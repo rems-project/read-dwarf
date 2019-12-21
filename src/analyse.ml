@@ -149,6 +149,7 @@ let read_source_file (name: string) : string array ok_or_fail =
   | exception Sys_error s ->
      MyFail (Printf.sprintf "read_source_file Sys_error \"%s\"\n" s)
 
+    (*
 let rec read_source_file2 (names: string list) (err_acc:string) : string array ok_or_fail =
   match names with
   | [] -> MyFail ("not found:\n"^err_acc)
@@ -156,10 +157,15 @@ let rec read_source_file2 (names: string list) (err_acc:string) : string array o
      match read_source_file name with
      | Ok lines -> Ok lines
      | MyFail err -> read_source_file2 names' (err_acc^err)
-                 
-let source_file_cache = ref ([] : (string * (string array option)) list)
+     *)
+    
+let source_file_cache = ref ([] : ((string option * string option *string) * (string array option)) list)
 
-let source_line file n1 =
+let source_line (comp_dir,dir,file) n1 =
+  let pp_string_option s = match s with Some s'->s'|None -> "<none>" in
+(*
+  Printf.printf "comp_dir=\"%s\"  source_line dir=\"%s\"  file=\"%s\"\n" (pp_string_option comp_dir) (pp_string_option dir) file;
+ *)
   let access_lines lines n =
     if n < 0 || n >= Array.length lines then
       Some (sprintf "line out of range: %i vs %i" n (Array.length lines))
@@ -167,10 +173,28 @@ let source_line file n1 =
       Some lines.(n) in
 
   let n = n1 -1 in
-  match (try Some (List.assoc file !source_file_cache) with Not_found -> None) with
+  match (try Some (List.assoc (comp_dir,dir,file) !source_file_cache) with Not_found -> None) with
   | Some (Some lines) -> access_lines lines n
   | Some (None) -> None
   | None ->
+     let filename = match (comp_dir,dir,file) with
+       | (Some cd, Some d, f) -> Filename.concat cd (Filename.concat d f)
+       | (Some cd, None,   f) -> Filename.concat cd f
+       | (None,    Some d, f) -> Filename.concat d  f
+       | (None,    None,   f) -> f
+     in
+     match read_source_file filename with
+     | Ok lines ->
+        source_file_cache := ((comp_dir,dir,file), Some lines) :: !source_file_cache;
+        access_lines lines n
+     | MyFail s ->
+(*        source_file_cache := (file, None) :: !source_file_cache;
+          None *)
+         source_file_cache := ((comp_dir,dir,file), None) :: !source_file_cache;
+         (Warn.nonfatal "%s" s; None)
+
+
+     (*
      let filenames = match !Globals.dwarf_source_dirs with
      | [] -> [file]
      | _ -> List.map (fun s -> Filename.concat s file) !Globals.dwarf_source_dirs in
@@ -183,7 +207,8 @@ let source_line file n1 =
           None *)
          source_file_cache := (file, None) :: !source_file_cache;
          (Warn.nonfatal "%s" s; None)
-
+ *)
+     
 let pp_source_line so =
   match so with
   | Some s -> s (*" (" ^ s ^ ")"*)
@@ -198,8 +223,9 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line: bool) (a: natural) : string
        (String.concat
           ", "
           (List.map
-             (fun (s,n,lnr) ->
-               s ^ ":" ^ Nat_big_num.to_string n ^ if pp_actual_line then pp_source_line (source_line s (Nat_big_num.to_int n))  else ""
+             (fun (comp_dir,dir,file,n,lnr) ->
+               let comp_dir' = match !Globals.comp_dir with None -> comp_dir | Some comp_dir'' -> Some comp_dir'' in 
+               file ^ ":" ^ Nat_big_num.to_string n ^ if pp_actual_line then pp_source_line (source_line (comp_dir',dir,file) (Nat_big_num.to_int n))  else ""
              )
              sls
           )
@@ -287,6 +313,9 @@ let pp_test test =
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
 
+  let last_frame_info = ref "" in
+  let last_var_info = ref "" in
+  
   let pp_instruction ((addr:natural),(i:natural)) =
 
     (* the elf symbols at this address, if any *)
@@ -311,13 +340,14 @@ let pp_test test =
       end
     ^ "\n"
     (* the frame info for this address *)
-    ^ pp_frame_info test addr
+    ^ (let frame_info = pp_frame_info test addr in if frame_info = !last_frame_info then ""(*"CFA: unchanged\n"*) else (last_frame_info:=frame_info;frame_info))
     (* the source file lines (if any) associated to this address *)
     ^ begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end
     (* the variables whose location ranges include this address *)
-    ^ let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
-      Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als
-
+    ^ (let var_info = 
+         let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
+         Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als in
+       if var_info = !last_var_info then ""(*"vars: unchanged\n"*) else (last_var_info:=var_info;var_info))
     ^ "\n"
   in
 
