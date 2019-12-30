@@ -4,7 +4,11 @@ open Printf;;
 type natural = Nat_big_num.num
 
 let pp_addr (a:natural) = Ml_bindings.hex_string_of_big_int_pad8 a
-             
+                        
+let parse_addr (s:string) : natural =
+  Scanf.sscanf s "%Lx" (fun i64 ->  Nat_big_num.of_int64 i64)
+
+                        
 type test =
   {
    elf_file: Elf_file.elf_file;
@@ -116,6 +120,26 @@ That uses                 Elf_file.read_elf64_file bs0 >>= fun f1 ->
        } in
      test
   end
+
+(** ********************************************************************* *)
+(** **          marshal and unmarshal test                             ** *)
+(** ********************************************************************* *)
+
+let marshal_to_file filename test =
+  let c = open_out filename in
+  Marshal.to_channel c test [];
+  close_out c
+
+let marshal_from_file filename : test option =
+  try
+    let c = open_in filename in
+    let test = Marshal.from_channel c in
+    close_in c;
+    Some test
+  with
+  | Sys_error s -> None
+  | e -> raise e
+  
   
 
 (** ********************************************************************* *)
@@ -267,6 +291,8 @@ let pp_frame_info (test:test) (addr:natural) : string =
   | Some ((a:natural),(cfa:string),(regs:(string*string) list)) -> 
      pp_addr a ^ " " ^ "CFA:" ^ cfa ^ " " ^ String.concat " " (List.map (function (rname,rinfo)->rname^":"^rinfo) regs) ^"\n"
 
+
+    
 (** ********************************************************************* *)
 (** **          pull disassembly out of an objdump -d file             ** *)
 (** ********************************************************************* *)
@@ -283,7 +309,7 @@ let init_objdump () =
      | Ok lines ->
         let parse_line (s:string) : (natural*(natural*string)) option =
 (*          if String.length s >=9 && s.[8] = ':' then *)
-          match Scanf.sscanf s " %x: %x%n" (fun a -> fun i -> fun n -> (a,i,n)) with
+          match Scanf.sscanf s " %x: %x %n" (fun a -> fun i -> fun n -> (a,i,n)) with
           | (a,i,n) ->
               let s' = String.sub s n (String.length s - n) in
               Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
@@ -301,11 +327,210 @@ let lookup_objdump_lines (a: natural) : (natural*string) option =
      None
 
     
+(** ********************************************************************* *)
+(** **         hacky parse of control-flow instruction asm             ** *)
+(** ********************************************************************* *)
+
+type control_flow_insn =
+  | C_ret_eret
+  | C_branch of string (*mnemonic*) * string (*numeric addr*) * string (*symbolic addr*)
+  | C_smc_hvc of string
+
+let pp_target t = match t with
+  | C_ret_eret -> "ret/eret"
+  | C_branch(is,s1,s2) -> is ^ " "^s1^" "^s2
+  | C_smc_hvc s -> "smc/hvc "^s
+
+let pp_target_option t = match t with
+  | None -> ""
+  | Some t -> pp_target t
+               
+let parse_target s =
+  match Scanf.sscanf s "%s %s" (fun s1 -> fun s2 -> (s1,s2)) with
+  | (s1,s2) -> Some (""^s1, ""^s2^"")
+  | exception _ -> None
+
+let parse_drop_one s =
+  match Scanf.sscanf s "%s %n" (fun s1 -> fun n -> let s' = String.sub s n (String.length s - n) in (s1,s')) with
+  | (s1,s') -> Some s'
+  | exception _  -> None
+             
+let parse_control_flow_instruction e s = 
+  match Scanf.sscanf s "%s %n" (fun mnemonic -> fun n -> let s' = String.sub s n (String.length s - n) in (mnemonic,s')) with
+  | exception _ -> None
+  | (mnemonic,s') -> 
+     if List.mem mnemonic ["ret"; "eret"] then 
+       Some C_ret_eret
+     else if List.mem mnemonic ["b."; "b "; "bl"] then 
+       match parse_target s' with
+       | None -> raise (Failure ("b./b/bl parse error for: \""^s'^"\" in "^e^"\n"))
+       | Some (s1,s2) -> Some (C_branch (mnemonic,s1,s2))
+     else if List.mem mnemonic ["cbz"; "cbnz"] then 
+       match parse_drop_one s' with
+       | None -> raise (Failure ("cbz/cbnz 1 parse error for: "^e^"\n"))
+       | Some s' ->  
+          match parse_target s' with
+          | None -> raise (Failure ("cbz/cbnz 2 parse error for: "^s' ^ " in "^e^"\n"))
+          | Some (s1,s2) -> Some (C_branch (mnemonic,s1,s2))
+     else if List.mem mnemonic ["tbz"; "tbnz"] then 
+       match parse_drop_one s' with
+       | None -> raise (Failure ("tbz/tbnz 1 parse error for: "^e^"\n"))
+       | Some s'' ->  
+          match parse_drop_one s'' with
+          | None -> raise (Failure ("tbz/tbnz 2 parse error for: "^e^"\n"))
+          | Some s''' ->  
+             match parse_target s''' with
+             | None -> raise (Failure ("tbz/tbnz 3 parse error for: "^e^"\n"))
+             | Some (s1,s2) -> Some (C_branch (mnemonic,s1,s2))
+     else if List.mem mnemonic ["smc"; "hvc"] then 
+       Some (C_smc_hvc s')
+     else 
+       None
+    
+
+type node = natural * string
+          
+
+let pp_cfg test = 
+  init_objdump ();
+
+  (* pull out instructions from text section, assuming 4-byte insns *)
+  let (p,addr,bs) = Dwarf.extract_text test.elf_file in
+  let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
+
+  let is_control_flow_insn  (addr:natural) : (control_flow_insn option) option =  
+    begin match lookup_objdump_lines addr with
+    | Some (i,s) ->
+       (*       if i=i' then*)
+       (match Scanf.sscanf s "%s %s" (fun mnemonic -> fun s' -> (mnemonic,s')) with
+        | (mnemonic,s') -> 
+           if List.mem mnemonic ["b."; "b "; "bl"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then
+             Some (parse_control_flow_instruction s s)
+                                            (*Printf.printf "%s %s\n" (pp_addr addr) (pp_target_option t);*)
+           else
+             Some (None)
+        | exception _ ->
+           Some (None)
+(*       else
+         Warn.fatal2 "instruction mismatch - linksem: %s vs objdump: %s\n"  (pp_addr i) (pp_addr i')
+ *)
+       )
+    | None ->
+       None
+    end in
+
+  (* hackery to count reachable instructions *)
+  (* assumes addresses small enough to fit in int *)
+  let touched : int Array.t = Array.make (List.length instructions) 0 in
+  let base_address = match instructions with (addr,s)::_ -> addr in 
+  let index_of_address (addr:natural) : int = Nat_big_num.to_int (Nat_big_num.div (Nat_big_num.sub addr base_address) (Nat_big_num.of_int 4)) in
+  let address_of_index (i:int) : natural = Nat_big_num.mul (Nat_big_num.of_int 4) (Nat_big_num.add base_address (Nat_big_num.of_int i)) in
+  let touch (addr:natural) = let i = index_of_address addr in touched.(i) <- touched.(i) +1 in
+  let count_touched () = Array.fold_left (function count -> function c -> if c=0 then count else count+1) 0 touched in    (* fold_left : ('a -> 'b -> 'a) -> 'a -> 'b array -> 'a *)
+  
+  (* all the branch targets reachable by one successful branch from the given address *)
+  let rec branch_successors (addr:natural) : (natural*string) list =
+    (*    Printf.printf "%s\n" (pp_addr addr);*)
+    touch addr;
+    let succ_addr = (Nat_big_num.add addr (Nat_big_num.of_int 4)) in
+    match is_control_flow_insn addr with
+    | None -> []  (* lookup source line failed *)
+    | Some None -> branch_successors succ_addr
+    | Some (Some C_ret_eret) -> []
+    | Some (Some (C_branch (mnemonic,s1,s2))) ->
+       if mnemonic = "b" then [(parse_addr s1,s2)] else (*b./bl (assuming the bl can return) / cbz/cbnz/tbz/tbnz*)
+         (parse_addr s1,s2)::branch_successors succ_addr
+    | Some (Some (C_smc_hvc s)) -> []
+  in
+    
+  let branch_instructions : (natural * natural * control_flow_insn) list =
+    List.filter_map
+      (fun ((addr:natural),(i:natural)) -> match is_control_flow_insn addr with None->None | Some None -> None| Some (Some t) -> Some (addr,i,t))
+      instructions in
+
+  let branch_targets : (natural * string) list =
+    List.filter_map (function (a,i,t) ->
+        match t with
+        | C_ret_eret -> None
+        | C_branch(mnemonic,s1,s2) -> Some (parse_addr s1,s2)
+        | C_smc_hvc s -> None
+      )
+      branch_instructions in
+
+(*
+  List.iter (function (s1,s2) -> Printf.printf "%s %s\n" s1 s2) branch_targets;
+ *)
+  
+  let elf_symbols : (natural * string) list = 
+    let elf_symbol_addresses = 
+      List.sort_uniq compare
+        (List.map
+           (fun (name, (typ, size, address, mb, binding)) -> address)
+           test.symbol_map) in
+    List.map
+      (fun address ->
+        let names =
+          (List.filter_map
+             (fun (name, (typ, size, address', mb, binding)) -> if address'=address && String.length name >=1 && name.[0]<>'$' then Some name else None) test.symbol_map) in
+        (address,"elf:"^String.concat "__" names))
+      elf_symbol_addresses
+  in
+
+  let fake_symbol = (parse_addr "40009eb4", "api.c:1526") in
+  let fake_symbols = [fake_symbol] in
+  
+  let nodes = List.sort_uniq compare (fake_symbols @ branch_targets @ elf_symbols) in (*TODO: merge same-address pairs*)
+  let pp_node (addr,s) = "\"a" ^ pp_addr addr^"_"^s^"\"" in
+
+  (*  let nodes_initial = List.filter (function (addr,s)->s="<sync_lower_exception>") nodes in*)
+  let nodes_initial = List.filter (function (addr,s)->s="<api_share_memory>") nodes in
+  (*  let nodes_initial = fake_symbols in *)
+
+  (*
+  let edges = List.flatten (List.map (function (addr,s) -> (List.map (function (addr',s')-> ((addr,s),(addr',s'))) (List.sort_uniq compare (branch_successors addr)))) nodes) in
+   *)
+
+  let edges : (node,node list) Hashtbl.t = Hashtbl.create 1000 in 
+  
+  let rec stupid_reachability (max_depth:int) (acc_reachable:node list) (todo:node list) : node list =
+    if max_depth = 0 then acc_reachable else
+    match todo with
+    | [] -> acc_reachable
+    | ((addr,s) as n)::todo' ->
+       if List.mem n acc_reachable then
+         stupid_reachability (max_depth-1) acc_reachable todo'
+       else
+         let new_todo = List.sort_uniq compare (branch_successors addr) in
+         Hashtbl.add edges n new_todo;
+         stupid_reachability (max_depth-1) (n::acc_reachable) (new_todo @ todo')
+  in
+  let reachable = stupid_reachability 3 [] nodes_initial in
+           
+  let pp_edge (n1,n2) = pp_node n1 ^ " -> " ^ pp_node n2 ^ ";\n" in
+
+  Printf.printf "touched = %d of %d instructions\n" (count_touched()) (Array.length touched);
+  let c = open_out "foo.dot" in 
+  Printf.fprintf c "digraph g {\n";
+  Printf.fprintf c "rankdir=\"LR\";\n";
+  (List.iter (function n -> Printf.fprintf c "%s [label=\"\"];\n" (pp_node n)) reachable);
+  List.iter (function n ->
+               let ns' = Hashtbl.find edges n in
+               List.iter (function n' -> 
+                            Printf.fprintf c "%s" (pp_edge (n,n'))) ns') reachable;
+  Printf.fprintf c "}\n";
+  let _ = close_out c in
+  
+  ()
+
+ 
+
 
 (** ********************************************************************* *)
 (** **          pretty-print the result                                ** *)
 (** ********************************************************************* *)
 
+  
+    
 let pp_test test = 
   init_objdump ();
 
@@ -313,6 +538,8 @@ let pp_test test =
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
 
+
+  
   let last_frame_info = ref "" in
   let last_var_info = ref "" in
   let last_source_info = ref "" in
@@ -327,12 +554,12 @@ let pp_test test =
            ^ " <" ^ s ^">:\n")
          (elf_symbols_of_address test addr))
     (* the source file lines (if any) associated to this address *)
-    ^ (let source_info = begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end in if source_info = !last_source_info then ""(*"unchanged\n"*) else (last_source_info:=source_info;source_info))
+    ^ (if !Globals.show_source then (let source_info = begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end in if source_info = !last_source_info then ""(*"unchanged\n"*) else (last_source_info:=source_info;source_info)) else "")
     
     (* the address and (hex) instruction *)
     ^ pp_addr addr ^ ":  " ^ pp_addr i 
     (* the dissassembly from objdump, if it exists *)
-    ^ begin match lookup_objdump_lines addr with
+    ^ "  " ^ begin match lookup_objdump_lines addr with
       | Some (i',s) ->
          if i=i' then 
            s
@@ -343,18 +570,25 @@ let pp_test test =
       end
     ^ "\n"
     (* the frame info for this address *)
-    ^ (let frame_info = pp_frame_info test addr in if frame_info = !last_frame_info then ""(*"CFA: unchanged\n"*) else (last_frame_info:=frame_info;frame_info))
+    ^ (if !Globals.show_cfa then (let frame_info = pp_frame_info test addr in if frame_info = !last_frame_info then ""(*"CFA: unchanged\n"*) else (last_frame_info:=frame_info;frame_info)) else "")
     (* the variables whose location ranges include this address *)
-    ^ (let var_info = 
-         let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
-         Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als in
-       if var_info = !last_var_info then ""(*"vars: unchanged\n"*) else (last_var_info:=var_info;var_info))
+    ^ (if !Globals.show_vars then
+         let var_info = 
+           let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
+           Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als in
+         if var_info = !last_var_info then ""(*"vars: unchanged\n"*) else (last_var_info:=var_info;var_info)
+       else
+         "")
         (*    ^ "\n"*)
   in
 
   String.concat "" (List.map pp_instruction instructions)
 
 
+
+
+                      
+  
 
 
 
@@ -364,6 +598,19 @@ let pp_test test =
     
 
 let process_file (filename:string) : unit =
-  let test = parse_file filename in
-  printf "%s" (pp_test test)
+  (* caching linksem output - though that only takes 5s, so scarcely worth the possible confusion *)
+  let filename_marshalled = filename ^ ".linksem-marshalled" in
+  let test =
+    match marshal_from_file filename_marshalled with
+    | None ->
+       let test = parse_file filename in
+       marshal_to_file filename_marshalled test;
+       test
+    | Some test ->
+       test
+  in              
+
+  pp_cfg test
+  (*printf "%s" (pp_test test)*)
+    
     

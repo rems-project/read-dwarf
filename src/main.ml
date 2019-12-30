@@ -7,6 +7,19 @@ let opts = [
     Arg.String (fun s -> Globals.comp_dir := Some s),
     Printf.sprintf "<string> path to root directory of compilation, to override DWARF comp_dir if need be");
 
+  ("-show_vars",
+    Arg.Bool (fun b -> Globals.show_vars := b),
+    Printf.sprintf "<true|false> show var info at each instruction (%b)" !Globals.show_vars);
+
+    ("-show_cfa",
+    Arg.Bool (fun b -> Globals.show_cfa := b),
+    Printf.sprintf "<true|false> show cfa info at each instruction (%b)" !Globals.show_cfa);
+
+    ("-show_source",
+    Arg.Bool (fun b -> Globals.show_source := b),
+    Printf.sprintf "<true|false> show source lines at each instruction (%b)" !Globals.show_source);
+
+  
   (*
   ("-I",
     Arg.String (fun s -> Globals.dwarf_source_dirs := (!Globals.dwarf_source_dirs) @ [Filename.concat !Globals.dwarf_source_dir_root s] ),
