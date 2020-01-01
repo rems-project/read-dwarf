@@ -331,9 +331,12 @@ let lookup_objdump_lines (a: natural) : (natural*string) option =
 (** **         hacky parse of control-flow instruction asm             ** *)
 (** ********************************************************************* *)
 
+(* this ignores indirect branches (br instructions), so isn't good for much*)
+    
 type control_flow_insn =
   | C_ret_eret
   | C_branch of string (*mnemonic*) * string (*numeric addr*) * string (*symbolic addr*)
+  (*  | C_branch_register of string (*mnemonic*) * string (*argument*)*)
   | C_smc_hvc of string
 
 let pp_target t = match t with
@@ -598,7 +601,8 @@ let pp_test test =
     
 
 let process_file (filename:string) : unit =
-  (* caching linksem output - though that only takes 5s, so scarcely worth the possible confusion *)
+  (* try caching linksem output - though linksem only takes 5s, so scarcely worth the possible confusion. It's recomputing the variable info that takes the time *)
+  (*
   let filename_marshalled = filename ^ ".linksem-marshalled" in
   let test =
     match marshal_from_file filename_marshalled with
@@ -609,8 +613,11 @@ let process_file (filename:string) : unit =
     | Some test ->
        test
   in              
-
-  pp_cfg test
+   *)
+  let test = parse_file filename in
+  printf "%s" (pp_test test)
+  
+  (*  pp_cfg test*)
   (*printf "%s" (pp_test test)*)
     
     
