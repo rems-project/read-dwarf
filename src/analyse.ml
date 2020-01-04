@@ -300,24 +300,25 @@ let pp_frame_info (test:test) (addr:natural) : string =
 let objdump_lines : (natural * (natural * string)) list option ref = ref None
 
 let init_objdump () =     
-  match !Globals.objdump_d with
-  | None -> ()
-  | Some filename ->
-     match read_source_file filename with
-     | MyFail s ->
-        Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename
-     | Ok lines ->
-        let parse_line (s:string) : (natural*(natural*string)) option =
-(*          if String.length s >=9 && s.[8] = ':' then *)
-          match Scanf.sscanf s " %x: %x %n" (fun a -> fun i -> fun n -> (a,i,n)) with
-          | (a,i,n) ->
-              let s' = String.sub s n (String.length s - n) in
-              Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
-          | exception _ -> None
-(*          else
+  if !objdump_lines <> None then () else
+    match !Globals.objdump_d with
+    | None -> ()
+    | Some filename ->
+       match read_source_file filename with
+       | MyFail s ->
+          Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename
+       | Ok lines ->
+          let parse_line (s:string) : (natural*(natural*string)) option =
+            (*          if String.length s >=9 && s.[8] = ':' then *)
+            match Scanf.sscanf s " %x: %x %n" (fun a -> fun i -> fun n -> (a,i,n)) with
+            | (a,i,n) ->
+               let s' = String.sub s n (String.length s - n) in
+               Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
+            | exception _ -> None
+          (*          else
             None*)
-        in
-        objdump_lines := Some (List.filter_map parse_line (Array.to_list lines))
+          in
+          objdump_lines := Some (List.filter_map parse_line (Array.to_list lines))
 
 let lookup_objdump_lines (a: natural) : (natural*string) option =
   match !objdump_lines with
@@ -326,31 +327,38 @@ let lookup_objdump_lines (a: natural) : (natural*string) option =
   | None ->
      None
 
+
+          
     
 (** ********************************************************************* *)
 (** **         hacky parse of control-flow instruction asm             ** *)
 (** ********************************************************************* *)
 
 (* this ignores indirect branches (br instructions), so isn't good for much*)
+
+type addr=natural
     
 type control_flow_insn =
-  | C_ret_eret
-  | C_branch of string (*mnemonic*) * string (*numeric addr*) * string (*symbolic addr*)
-  (*  | C_branch_register of string (*mnemonic*) * string (*argument*)*)
+  | C_ret
+  | C_eret
+  | C_branch of addr (*numeric addr*) * string (*symbolic addr*)
+  | C_branch_and_link of addr (*numeric addr*) * string (*symbolic addr*)
+  | C_branch_cond of string (*mnemonic*) * addr (*numeric addr*) * string (*symbolic addr*)
+  | C_branch_register of string (*argument*)
   | C_smc_hvc of string
 
-let pp_target t = match t with
-  | C_ret_eret -> "ret/eret"
-  | C_branch(is,s1,s2) -> is ^ " "^s1^" "^s2
+let pp_control_flow_instruction c = match c with
+  | C_ret -> "ret"
+  | C_eret -> "eret"
+  | C_branch(a,s) -> "b" ^ " "^pp_addr a^" "^s
+  | C_branch_and_link(a,s) -> "bl" ^ " "^pp_addr a^" "^s
+  | C_branch_cond(is,a,s) -> is ^ " "^pp_addr a^" "^s
+  | C_branch_register(r) -> "br"
   | C_smc_hvc s -> "smc/hvc "^s
 
-let pp_target_option t = match t with
-  | None -> ""
-  | Some t -> pp_target t
-               
 let parse_target s =
   match Scanf.sscanf s "%s %s" (fun s1 -> fun s2 -> (s1,s2)) with
-  | (s1,s2) -> Some (""^s1, ""^s2^"")
+  | (s1,s2) -> Some (parse_addr s1, s2)
   | exception _ -> None
 
 let parse_drop_one s =
@@ -358,70 +366,170 @@ let parse_drop_one s =
   | (s1,s') -> Some s'
   | exception _  -> None
              
-let parse_control_flow_instruction e s = 
+let parse_control_flow_instruction s = 
   match Scanf.sscanf s "%s %n" (fun mnemonic -> fun n -> let s' = String.sub s n (String.length s - n) in (mnemonic,s')) with
   | exception _ -> None
   | (mnemonic,s') -> 
-     if List.mem mnemonic ["ret"; "eret"] then 
-       Some C_ret_eret
+     if List.mem mnemonic ["ret"] then 
+       Some C_ret
+     else if List.mem mnemonic ["eret"] then 
+       Some C_eret
+     else if List.mem mnemonic ["br"] then 
+       Some (C_branch_register (mnemonic))
      else if List.mem mnemonic ["b."; "b "; "bl"] then 
        match parse_target s' with
-       | None -> raise (Failure ("b./b/bl parse error for: \""^s'^"\" in "^e^"\n"))
-       | Some (s1,s2) -> Some (C_branch (mnemonic,s1,s2))
+       | None -> raise (Failure ("b./b/bl parse error for: \""^s^"\"\n"))
+       | Some (a,s) ->
+          if mnemonic="b" then Some (C_branch (a,s))
+          else if mnemonic="bl" then Some (C_branch_and_link (a,s))
+          else Some (C_branch_cond (mnemonic,a,s))
      else if List.mem mnemonic ["cbz"; "cbnz"] then 
        match parse_drop_one s' with
-       | None -> raise (Failure ("cbz/cbnz 1 parse error for: "^e^"\n"))
+       | None -> raise (Failure ("cbz/cbnz 1 parse error for: "^s^"\n"))
        | Some s' ->  
           match parse_target s' with
-          | None -> raise (Failure ("cbz/cbnz 2 parse error for: "^s' ^ " in "^e^"\n"))
-          | Some (s1,s2) -> Some (C_branch (mnemonic,s1,s2))
+          | None -> raise (Failure ("cbz/cbnz 2 parse error for: "^s ^ "\n"))
+          | Some (a,s) -> Some (C_branch_cond (mnemonic,a,s))
      else if List.mem mnemonic ["tbz"; "tbnz"] then 
        match parse_drop_one s' with
-       | None -> raise (Failure ("tbz/tbnz 1 parse error for: "^e^"\n"))
+       | None -> raise (Failure ("tbz/tbnz 1 parse error for: "^s^"\n"))
        | Some s'' ->  
           match parse_drop_one s'' with
-          | None -> raise (Failure ("tbz/tbnz 2 parse error for: "^e^"\n"))
+          | None -> raise (Failure ("tbz/tbnz 2 parse error for: "^s^"\n"))
           | Some s''' ->  
              match parse_target s''' with
-             | None -> raise (Failure ("tbz/tbnz 3 parse error for: "^e^"\n"))
-             | Some (s1,s2) -> Some (C_branch (mnemonic,s1,s2))
+             | None -> raise (Failure ("tbz/tbnz 3 parse error for: "^s^"\n"))
+             | Some (a,s) -> Some (C_branch_cond (mnemonic,a,s))
      else if List.mem mnemonic ["smc"; "hvc"] then 
        Some (C_smc_hvc s')
      else 
        None
     
 
-type node = natural * string
+    
+
           
 
-let pp_cfg test = 
+let branch_targets test = 
   init_objdump ();
+  (** **         read in branch-table description file                   ** *)
+  
+  let branch_data : (natural(*a_br*) * (natural(*a_table*) * natural(*size*))) list = 
+    match !Globals.branch_table_data_file with
+    | None -> [] (*None*) (*Warn.fatal "no branch table data file\n"*)
+    | Some filename ->
+       match read_source_file filename with
+       | MyFail s ->
+          Warn.fatal2 "%s\ncouldn't read branch table data file: \"%s\"\n" s filename
+       | Ok lines ->
+          let parse_line (s:string) : (natural*(natural*natural)) option =
+            match Scanf.sscanf s " %x: %x %x" (fun a_br -> fun a_table -> fun n -> (a_br,a_table,n)) with
+            | (a_br,a_table,n) ->
+               Some (Nat_big_num.of_int a_br, (Nat_big_num.of_int a_table, Nat_big_num.of_int n))
+            | exception _ -> Warn.fatal "couldn't parse branch table data file line: \"%s\"\n" s
+          in
+          (List.filter_map parse_line (List.tl (Array.to_list lines))) in
 
+  let objdump_rodata : (natural(*addr*) * natural(*word*)) list = 
+    match !Globals.objdump_rodata with
+    | None -> Warn.fatal0 "no objdump_rodata file\n" ""
+    | Some filename ->
+       match read_source_file filename with
+       | MyFail s ->
+          Warn.fatal2 "%s\ncouldn't read objdump_rodata file: \"%s\"\n" s filename
+       | Ok lines ->
+          let parse_line (s:string) : (natural*natural) option =
+            match Scanf.sscanf s " %x: %x .word %x" (fun a -> fun w -> fun _ -> (a,w)) with
+            | (a,w) ->
+               Some (Nat_big_num.of_int a, Nat_big_num.of_int w)
+            | exception _ -> None
+          in
+          (List.filter_map parse_line (Array.to_list lines)) in
+
+  let rec natural_assoc_opt n nys =
+    match nys with
+    | [] -> None
+    | (n',y)::nys' -> if Nat_big_num.equal n n' then Some y else natural_assoc_opt n nys' in
+  
+  let targets_of_control_flow_insn (addr:natural) (c:control_flow_insn) : (addr * string) list = 
+    match c with
+    | C_ret -> []
+    | C_eret -> []
+    | C_branch(a,s) -> [(a,s)]
+    | C_branch_and_link(a,s) ->
+       let succ_addr = (Nat_big_num.add addr (Nat_big_num.of_int 4)) in
+       [(a,s);(succ_addr,"<return>")]
+    | C_branch_cond(is,a,s) ->
+       let succ_addr = (Nat_big_num.add addr (Nat_big_num.of_int 4)) in
+       [(a,s);(succ_addr,"<fallthrough>")]
+    | C_branch_register(r1) ->
+       (match natural_assoc_opt addr branch_data with
+       | None -> Warn.fatal "no branch table for address%s\n" (pp_addr addr)
+       | Some (a_table,n) ->
+          let rec f i =
+            if  i> Nat_big_num.to_int n then [] else
+              let table_entry_addr = Nat_big_num.add a_table (Nat_big_num.of_int (4*i)) in
+              match natural_assoc_opt table_entry_addr objdump_rodata with
+              | None -> Warn.fatal2 "no branch table entry for address %s, for code address %s\n" (pp_addr table_entry_addr) (pp_addr addr)
+              | Some table_entry ->
+                 let a_target = Nat_big_num.modulus (Nat_big_num.add a_table table_entry) (Nat_big_num.pow_int_positive 2 32) in
+                 (* that 32 is good for the sign-extended negative 32-bit offsets we see in the Hf branch tables *)
+                 (a_target,"<indirect>") :: f (i+1) in
+          f 0)
+    | C_smc_hvc s -> [] in
+
+
+  
   (* pull out instructions from text section, assuming 4-byte insns *)
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
 
-  let is_control_flow_insn  (addr:natural) : (control_flow_insn option) option =  
+  let control_flow_insn  ((addr:natural),(i:natural)) : (addr * control_flow_insn) option =  
     begin match lookup_objdump_lines addr with
     | Some (i,s) ->
-       (*       if i=i' then*)
        (match Scanf.sscanf s "%s %s" (fun mnemonic -> fun s' -> (mnemonic,s')) with
         | (mnemonic,s') -> 
-           if List.mem mnemonic ["b."; "b "; "bl"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then
-             Some (parse_control_flow_instruction s s)
-                                            (*Printf.printf "%s %s\n" (pp_addr addr) (pp_target_option t);*)
+           if List.mem mnemonic ["b."; "b "; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then
+             match parse_control_flow_instruction s with
+             | None -> Warn.fatal "parse error %s\n" s
+             | Some c -> Some (addr,c)
            else
-             Some (None)
+             None
         | exception _ ->
-           Some (None)
-(*       else
-         Warn.fatal2 "instruction mismatch - linksem: %s vs objdump: %s\n"  (pp_addr i) (pp_addr i')
- *)
+           None
        )
     | None ->
        None
     end in
 
+  let control_flow_insns : (addr * control_flow_insn) list
+    = List.filter_map control_flow_insn instructions in
+
+  let control_flow_insns_with_targets : (addr * control_flow_insn * ((addr * string) list)) list
+    = List.map (function (a,c) -> (a,c,targets_of_control_flow_insn a c)) control_flow_insns in
+
+  control_flow_insns_with_targets
+  
+let pp_branch_targets (xs: (addr * control_flow_insn * ((addr * string) list)) list) =
+  List.iter
+    (function (a,c,ts) ->
+       Printf.printf "%s\n"
+         (pp_addr a
+          ^ ":  "
+          ^ pp_control_flow_instruction c
+          ^ " -> "
+          ^ String.concat ","
+              (List.map (function (a',s) -> pp_addr a' ^""^s^"") ts)
+    ))
+    xs
+    
+
+                      
+                       
+
+(*
+type node = natural * string
+    
   (* hackery to count reachable instructions *)
   (* assumes addresses small enough to fit in int *)
   let touched : int Array.t = Array.make (List.length instructions) 0 in
@@ -525,7 +633,7 @@ let pp_cfg test =
   
   ()
 
- 
+ *)
 
 
 (** ********************************************************************* *)
@@ -619,6 +727,10 @@ let process_file (filename:string) : unit =
   in              
    *)
   let test = parse_file filename in
+
+
+  pp_branch_targets (branch_targets test); exit 1;
+
   printf "%s" (pp_test test)
   
   (*  pp_cfg test*)

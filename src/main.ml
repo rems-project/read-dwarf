@@ -26,10 +26,18 @@ let opts = [
     Printf.sprintf "<string> add include dir, relative to dwarf_source_path");
    *)
   
-  ("-objdump-d",
-    Arg.String (fun s -> Globals.objdump_d := Some s),
-    Printf.sprintf "<string> file containing result of objdump -d, used for disassembly");
-  ]
+    ("-objdump-d",
+     Arg.String (fun s -> Globals.objdump_d := Some s),
+     Printf.sprintf "<string> file containing result of objdump -d, used for disassembly");
+
+    ("-objdump-rodata",
+     Arg.String (fun s -> Globals.objdump_rodata := Some s),
+     Printf.sprintf "<string> file containing result of objdump -d --section=.rodata, used for branch table contents");
+
+    ("-branch-tables",
+     Arg.String (fun s -> Globals.branch_table_data_file := Some s),
+     Printf.sprintf "<string> file containing branch table base addresses and sizes");
+]
 
 let main = fun () ->
   let usage = "Usage: main [options]* filename (ELF file)\n" ^
