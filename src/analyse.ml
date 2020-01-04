@@ -356,6 +356,15 @@ let pp_control_flow_instruction c = match c with
   | C_branch_register(r) -> "br"
   | C_smc_hvc s -> "smc/hvc "^s
 
+let pp_control_flow_instruction_short c = match c with
+  | C_ret -> "ret"
+  | C_eret -> "eret"
+  | C_branch(a,s) -> "b"
+  | C_branch_and_link(a,s) -> "bl"
+  | C_branch_cond(is,a,s) -> is
+  | C_branch_register(r) -> "br"
+  | C_smc_hvc s -> "smc/hvc"
+                 
 let parse_target s =
   match Scanf.sscanf s "%s %s" (fun s1 -> fun s2 -> (s1,s2)) with
   | (s1,s2) -> Some (parse_addr s1, s2)
@@ -370,19 +379,21 @@ let parse_control_flow_instruction s =
   match Scanf.sscanf s "%s %n" (fun mnemonic -> fun n -> let s' = String.sub s n (String.length s - n) in (mnemonic,s')) with
   | exception _ -> None
   | (mnemonic,s') -> 
+     (
      if List.mem mnemonic ["ret"] then 
        Some C_ret
      else if List.mem mnemonic ["eret"] then 
        Some C_eret
      else if List.mem mnemonic ["br"] then 
        Some (C_branch_register (mnemonic))
-     else if List.mem mnemonic ["b."; "b "; "bl"] then 
+     else if List.mem mnemonic ["b."; "b"; "bl"] then 
+       (
        match parse_target s' with
        | None -> raise (Failure ("b./b/bl parse error for: \""^s^"\"\n"))
        | Some (a,s) ->
           if mnemonic="b" then Some (C_branch (a,s))
           else if mnemonic="bl" then Some (C_branch_and_link (a,s))
-          else Some (C_branch_cond (mnemonic,a,s))
+          else Some (C_branch_cond (mnemonic,a,s)))
      else if List.mem mnemonic ["cbz"; "cbnz"] then 
        match parse_drop_one s' with
        | None -> raise (Failure ("cbz/cbnz 1 parse error for: "^s^"\n"))
@@ -404,7 +415,7 @@ let parse_control_flow_instruction s =
        Some (C_smc_hvc s')
      else 
        None
-    
+      )
 
     
 
@@ -423,7 +434,7 @@ let branch_targets test =
           Warn.fatal2 "%s\ncouldn't read branch table data file: \"%s\"\n" s filename
        | Ok lines ->
           let parse_line (s:string) : (natural*(natural*natural)) option =
-            match Scanf.sscanf s " %x: %x %x" (fun a_br -> fun a_table -> fun n -> (a_br,a_table,n)) with
+            match Scanf.sscanf s " %x: %x %x " (fun a_br -> fun a_table -> fun n -> (a_br,a_table,n)) with
             | (a_br,a_table,n) ->
                Some (Nat_big_num.of_int a_br, (Nat_big_num.of_int a_table, Nat_big_num.of_int n))
             | exception _ -> Warn.fatal "couldn't parse branch table data file line: \"%s\"\n" s
@@ -478,8 +489,6 @@ let branch_targets test =
           f 0)
     | C_smc_hvc s -> [] in
 
-
-  
   (* pull out instructions from text section, assuming 4-byte insns *)
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
@@ -489,7 +498,7 @@ let branch_targets test =
     | Some (i,s) ->
        (match Scanf.sscanf s "%s %s" (fun mnemonic -> fun s' -> (mnemonic,s')) with
         | (mnemonic,s') -> 
-           if List.mem mnemonic ["b."; "b "; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then
+           if List.mem mnemonic ["b."; "b"; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then
              match parse_control_flow_instruction s with
              | None -> Warn.fatal "parse error %s\n" s
              | Some c -> Some (addr,c)
@@ -522,8 +531,29 @@ let pp_branch_targets (xs: (addr * control_flow_insn * ((addr * string) list)) l
               (List.map (function (a',s) -> pp_addr a' ^""^s^"") ts)
     ))
     xs
-    
 
+let come_from_table (xs : (addr * control_flow_insn * ((addr * string) list)) list) : (int,((addr * control_flow_insn * string) )) Hashtbl.t =
+  let t = Hashtbl.create 1000 in
+  List.iter (function (a,c,ts) ->
+               List.iter (function (a',s) ->
+                            let aint'=Nat_big_num.to_int a' in
+                            (*                            let prev = Hashtbl.find t aint' in*)
+                            let come_from = (a,c,s) in
+                            Hashtbl.add t aint' come_from)
+                 ts)
+    xs;
+  t
+
+let come_froms t addr : (addr * control_flow_insn * string) list =
+  List.rev (Hashtbl.find_all t (Nat_big_num.to_int addr))
+
+let pp_come_froms (cfs : (addr * control_flow_insn * string) list) : string = 
+  match cfs with
+  | [] -> ""
+  | _ -> " <- " ^ String.concat "," (List.map (function (a,c,s) -> pp_addr a ^ "(" ^ pp_control_flow_instruction_short c ^ ")"^s) cfs)
+                                   
+
+  
                       
                        
 
@@ -649,6 +679,9 @@ let pp_test test =
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
 
+  (* compute the come-from data *)
+  let t = come_from_table (branch_targets test) in
+  
 
   
   let last_frame_info = ref "" in
@@ -693,6 +726,7 @@ let pp_test test =
       | None ->
          ""
       end
+    ^ pp_come_froms (come_froms t addr)
     ^ "\n"
         (*    ^ "\n"*)
   in
@@ -729,9 +763,11 @@ let process_file (filename:string) : unit =
   let test = parse_file filename in
 
 
-  pp_branch_targets (branch_targets test); exit 1;
 
-  printf "%s" (pp_test test)
+
+  printf "%s" (pp_test test);
+  printf "\n************** branch targets *****************\n";
+  pp_branch_targets (branch_targets test)
   
   (*  pp_cfg test*)
   (*printf "%s" (pp_test test)*)
