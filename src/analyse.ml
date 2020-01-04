@@ -375,18 +375,19 @@ let parse_drop_one s =
   | (s1,s') -> Some s'
   | exception _  -> None
              
-let parse_control_flow_instruction s = 
-  match Scanf.sscanf s "%s %n" (fun mnemonic -> fun n -> let s' = String.sub s n (String.length s - n) in (mnemonic,s')) with
+let parse_control_flow_instruction s mnemonic s'  = 
+(*  match Scanf.sscanf s "%s %n" (fun mnemonic -> fun n -> let s' = String.sub s n (String.length s - n) in (mnemonic,s')) with
   | exception _ -> None
   | (mnemonic,s') -> 
      (
-     if List.mem mnemonic ["ret"] then 
+ *)
+  if List.mem mnemonic ["ret"] then 
        Some C_ret
      else if List.mem mnemonic ["eret"] then 
        Some C_eret
      else if List.mem mnemonic ["br"] then 
        Some (C_branch_register (mnemonic))
-     else if List.mem mnemonic ["b."; "b"; "bl"] then 
+     else if (String.length mnemonic >=2 && String.sub s 0 2 ="b.") || List.mem mnemonic ["b"; "bl"] then 
        (
        match parse_target s' with
        | None -> raise (Failure ("b./b/bl parse error for: \""^s^"\"\n"))
@@ -415,8 +416,9 @@ let parse_control_flow_instruction s =
        Some (C_smc_hvc s')
      else 
        None
-      )
-
+  (*
+    )
+   *)
     
 
           
@@ -485,7 +487,7 @@ let branch_targets test =
               | Some table_entry ->
                  let a_target = Nat_big_num.modulus (Nat_big_num.add a_table table_entry) (Nat_big_num.pow_int_positive 2 32) in
                  (* that 32 is good for the sign-extended negative 32-bit offsets we see in the Hf branch tables *)
-                 (a_target,"<indirect>") :: f (i+1) in
+                 (a_target,"<indirect"^string_of_int i^">") :: f (i+1) in
           f 0)
     | C_smc_hvc s -> [] in
 
@@ -498,12 +500,12 @@ let branch_targets test =
     | Some (i,s) ->
        (match Scanf.sscanf s "%s %s" (fun mnemonic -> fun s' -> (mnemonic,s')) with
         | (mnemonic,s') -> 
-           if List.mem mnemonic ["b."; "b"; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then
-             match parse_control_flow_instruction s with
-             | None -> Warn.fatal "parse error %s\n" s
+           (*           if (String.length mnemonic >=2 && String.sub s 0 2 ="b.") || List.mem mnemonic ["b"; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then*)
+             match parse_control_flow_instruction s mnemonic s' with
+             | None -> None (*Warn.fatal "parse error %s\n" s*)
              | Some c -> Some (addr,c)
-           else
-             None
+(*           else
+             None*)
         | exception _ ->
            None
        )
@@ -517,20 +519,22 @@ let branch_targets test =
   let control_flow_insns_with_targets : (addr * control_flow_insn * ((addr * string) list)) list
     = List.map (function (a,c) -> (a,c,targets_of_control_flow_insn a c)) control_flow_insns in
 
-  control_flow_insns_with_targets
+  let indirect_branches = List.filter (function (a,c,ts) -> match c with C_branch_register _ -> true | _ -> false) control_flow_insns_with_targets in
+  
+  (control_flow_insns_with_targets, indirect_branches)
   
 let pp_branch_targets (xs: (addr * control_flow_insn * ((addr * string) list)) list) =
-  List.iter
+  String.concat "" (List.map
     (function (a,c,ts) ->
-       Printf.printf "%s\n"
-         (pp_addr a
-          ^ ":  "
-          ^ pp_control_flow_instruction c
-          ^ " -> "
-          ^ String.concat ","
-              (List.map (function (a',s) -> pp_addr a' ^""^s^"") ts)
-    ))
-    xs
+       (pp_addr a
+        ^ ":  "
+        ^ pp_control_flow_instruction c
+        ^ " -> "
+        ^ String.concat ","
+            (List.map (function (a',s) -> pp_addr a' ^""^s^"") ts)
+        ^ "\n"
+       ))
+    xs)
 
 let come_from_table (xs : (addr * control_flow_insn * ((addr * string) list)) list) : (int,((addr * control_flow_insn * string) )) Hashtbl.t =
   let t = Hashtbl.create 1000 in
@@ -680,7 +684,8 @@ let pp_test test =
   let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
 
   (* compute the come-from data *)
-  let t = come_from_table (branch_targets test) in
+  let (control_flow_insns_with_targets, indirect_branches) = branch_targets test in
+  let t = come_from_table control_flow_insns_with_targets in
   
 
   
@@ -726,13 +731,22 @@ let pp_test test =
       | None ->
          ""
       end
+    ^
+      (match List.find_opt (function (a,c,ts)-> Nat_big_num.equal a addr) indirect_branches with
+       | Some (a,c,ts) ->
+          " -> "
+          ^ String.concat ","
+              (List.map (function (a',s) -> pp_addr a' ^""^s^"") ts)
+          ^ " "
+       | None -> "")
     ^ pp_come_froms (come_froms t addr)
     ^ "\n"
         (*    ^ "\n"*)
   in
 
   String.concat "" (List.map pp_instruction instructions)
-
+  ^  "\n************** branch targets *****************\n"
+  ^ pp_branch_targets (control_flow_insns_with_targets)
 
 
 
@@ -766,8 +780,6 @@ let process_file (filename:string) : unit =
 
 
   printf "%s" (pp_test test);
-  printf "\n************** branch targets *****************\n";
-  pp_branch_targets (branch_targets test)
   
   (*  pp_cfg test*)
   (*printf "%s" (pp_test test)*)
