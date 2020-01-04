@@ -249,7 +249,7 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line: bool) (a: natural) : string
           (List.map
              (fun (comp_dir,dir,file,n,lnr) ->
                let comp_dir' = match !Globals.comp_dir with None -> comp_dir | Some comp_dir'' -> Some comp_dir'' in 
-               file ^ ":" ^ Nat_big_num.to_string n ^ if pp_actual_line then pp_source_line (source_line (comp_dir',dir,file) (Nat_big_num.to_int n))  else ""
+               file ^ ":" ^ Nat_big_num.to_string n ^ " " ^ if pp_actual_line then pp_source_line (source_line (comp_dir',dir,file) (Nat_big_num.to_int n))  else ""
              )
              sls
           )
@@ -544,21 +544,35 @@ let pp_test test =
 
   
   let last_frame_info = ref "" in
-  let last_var_info = ref "" in
+  let last_var_info = ref [] in
   let last_source_info = ref "" in
   
   let pp_instruction ((addr:natural),(i:natural)) =
 
-    (* the elf symbols at this address, if any *)
-    String.concat ""
-      (List.map
-         (fun (s:string) ->
-           pp_addr addr
-           ^ " <" ^ s ^">:\n")
-         (elf_symbols_of_address test addr))
+    (* the elf symbols at this address, if any (and reset the last_var_info if any) *)
+    let elf_symbols = elf_symbols_of_address test addr in
+    (match elf_symbols with []->() | _ -> last_var_info :=[]);
+    
+    (match elf_symbols with []->"" | _ ->"\n")
+    ^ String.concat ""
+        (List.map
+           (fun (s:string) ->
+             pp_addr addr
+             ^ " <" ^ s ^">:\n")
+           elf_symbols)
     (* the source file lines (if any) associated to this address *)
     ^ (if !Globals.show_source then (let source_info = begin match pp_dwarf_source_file_lines () test.dwarf_static true addr with Some s -> s^"\n" | None -> "" end in if source_info = !last_source_info then ""(*"unchanged\n"*) else (last_source_info:=source_info;source_info)) else "")
     
+    (* the frame info for this address *)
+    ^ (if !Globals.show_cfa then (let frame_info = pp_frame_info test addr in if frame_info = !last_frame_info then ""(*"CFA: unchanged\n"*) else (last_frame_info:=frame_info;frame_info)) else "")
+    (* the variables whose location ranges include this address *)
+    ^ (if !Globals.show_vars then
+         let als_old = !last_var_info in
+         let als_new (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
+         last_var_info := als_new;
+         Dwarf.pp_analysed_location_data_diff  test.dwarf_static.ds_dwarf als_old als_new 
+       else
+         "")
     (* the address and (hex) instruction *)
     ^ pp_addr addr ^ ":  " ^ pp_addr i 
     (* the dissassembly from objdump, if it exists *)
@@ -572,16 +586,6 @@ let pp_test test =
          ""
       end
     ^ "\n"
-    (* the frame info for this address *)
-    ^ (if !Globals.show_cfa then (let frame_info = pp_frame_info test addr in if frame_info = !last_frame_info then ""(*"CFA: unchanged\n"*) else (last_frame_info:=frame_info;frame_info)) else "")
-    (* the variables whose location ranges include this address *)
-    ^ (if !Globals.show_vars then
-         let var_info = 
-           let als (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
-           Dwarf.pp_analysed_location_data test.dwarf_static.ds_dwarf als in
-         if var_info = !last_var_info then ""(*"vars: unchanged\n"*) else (last_var_info:=var_info;var_info)
-       else
-         "")
         (*    ^ "\n"*)
   in
 
