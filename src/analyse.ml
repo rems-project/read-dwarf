@@ -4,9 +4,7 @@ open Printf;;
 type natural = Nat_big_num.num
 
 let pp_addr (a:natural) = Ml_bindings.hex_string_of_big_int_pad8 a
-                        
-let parse_addr (s:string) : natural =
-  Scanf.sscanf s "%Lx" (fun i64 ->  Nat_big_num.of_int64 i64)
+
 
                         
 type test =
@@ -331,10 +329,8 @@ let lookup_objdump_lines (a: natural) : (natural*string) option =
           
     
 (** ********************************************************************* *)
-(** **         hacky parse of control-flow instruction asm             ** *)
+(** **         parse of control-flow instruction asm                   ** *)
 (** ********************************************************************* *)
-
-(* this ignores indirect branches (br instructions), so isn't good for much*)
 
 type addr=natural
     
@@ -364,7 +360,31 @@ let pp_control_flow_instruction_short c = match c with
   | C_branch_cond(is,a,s) -> is
   | C_branch_register(r) -> "br"
   | C_smc_hvc s -> "smc/hvc"
-                 
+
+let highlight c = 
+  match c with
+  | C_ret 
+    | C_eret 
+    | C_branch_and_link(_,_) 
+    | C_smc_hvc _ -> false
+  | C_branch(_,_) 
+    | C_branch_cond(_,_,_) 
+    | C_branch_register(_) -> true
+
+(* highlight branch targets to earlier addresses*)
+let pp_target_addr_wrt (addr:natural) (c:control_flow_insn) (a:natural) =
+  (if highlight c && Nat_big_num.less a addr then "^" else "") ^ pp_addr a
+
+(* highlight branch come-froms from later addresses*)
+let pp_come_from_addr_wrt (addr:natural) (c:control_flow_insn) (a:natural) =
+  (if highlight c && Nat_big_num.greater a addr then "v" else "") ^ pp_addr a
+  
+
+(* hacky parsing of assembly from objdump -d *)
+  
+let parse_addr (s:string) : natural =
+  Scanf.sscanf s "%Lx" (fun i64 ->  Nat_big_num.of_int64 i64)
+
 let parse_target s =
   match Scanf.sscanf s "%s %s" (fun s1 -> fun s2 -> (s1,s2)) with
   | (s1,s2) -> Some (parse_addr s1, s2)
@@ -446,7 +466,7 @@ let branch_targets test =
   
   let ((c,addr,bs) as rodata) : Dwarf.p_context*Nat_big_num.num*(char)list =  Dwarf.extract_section_body test.elf_file ".rodata" true in
   (* chop into 4-byte words - as needed for branch offset tables, though not for all other things in .rodata *)
-  let rodata_words : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
+  let rodata_words : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
   
 (*  
@@ -501,7 +521,7 @@ let branch_targets test =
 
   (* pull out instructions from text section, assuming 4-byte insns *)
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
-  let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
+  let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
   let control_flow_insn  ((addr:natural),(i:natural)) : (addr * control_flow_insn) option =  
     begin match lookup_objdump_lines addr with
@@ -559,10 +579,10 @@ let come_from_table (xs : (addr * control_flow_insn * ((addr * string) list)) li
 let come_froms t addr : (addr * control_flow_insn * string) list =
   List.rev (Hashtbl.find_all t (Nat_big_num.to_int addr))
 
-let pp_come_froms (cfs : (addr * control_flow_insn * string) list) : string = 
+let pp_come_froms (addr:addr) (cfs : (addr * control_flow_insn * string) list) : string = 
   match cfs with
   | [] -> ""
-  | _ -> " <- " ^ String.concat "," (List.map (function (a,c,s) -> pp_addr a ^ "(" ^ pp_control_flow_instruction_short c ^ ")"^s) cfs)
+  | _ -> " <- " ^ String.concat "," (List.map (function (a,c,s) -> pp_come_from_addr_wrt addr c a ^ "(" ^ pp_control_flow_instruction_short c ^ ")"^s) cfs)
                                    
 
   
@@ -689,7 +709,7 @@ let pp_test test =
 
   (* pull out instructions from text section, assuming 4-byte insns *)
   let (p,addr,bs) = Dwarf.extract_text test.elf_file in
-  let instructions : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
+  let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
   (* compute the come-from data *)
   let (control_flow_insns_with_targets, indirect_branches) = branch_targets test in
@@ -744,10 +764,10 @@ let pp_test test =
        | Some (a,c,ts) ->
           " -> "
           ^ String.concat ","
-              (List.map (function (a',s) -> pp_addr a' ^""^s^"") ts)
+              (List.map (function (a',s) -> pp_target_addr_wrt addr c a' ^""^s^"") ts)
           ^ " "
        | None -> "")
-    ^ pp_come_froms (come_froms t addr)
+    ^ pp_come_froms addr (come_froms t addr)
     ^ "\n"
         (*    ^ "\n"*)
   in
