@@ -443,6 +443,13 @@ let branch_targets test =
           in
           (List.filter_map parse_line (List.tl (Array.to_list lines))) in
 
+  
+  let ((c,addr,bs) as rodata) : Dwarf.p_context*Nat_big_num.num*(char)list =  Dwarf.extract_section_body test.elf_file ".rodata" true in
+  (* chop into 4-byte words - as needed for branch offset tables, though not for all other things in .rodata *)
+  let rodata_words : (natural * natural) list = Dwarf.instructions_of_byte_list addr bs [] in
+
+  
+(*  
   let objdump_rodata : (natural(*addr*) * natural(*word*)) list = 
     match !Globals.objdump_rodata with
     | None -> Warn.fatal0 "no objdump_rodata file\n" ""
@@ -458,7 +465,8 @@ let branch_targets test =
             | exception _ -> None
           in
           (List.filter_map parse_line (Array.to_list lines)) in
-
+ *)
+  
   let rec natural_assoc_opt n nys =
     match nys with
     | [] -> None
@@ -482,7 +490,7 @@ let branch_targets test =
           let rec f i =
             if  i> Nat_big_num.to_int n then [] else
               let table_entry_addr = Nat_big_num.add a_table (Nat_big_num.of_int (4*i)) in
-              match natural_assoc_opt table_entry_addr objdump_rodata with
+              match natural_assoc_opt table_entry_addr rodata_words with
               | None -> Warn.fatal2 "no branch table entry for address %s, for code address %s\n" (pp_addr table_entry_addr) (pp_addr addr)
               | Some table_entry ->
                  let a_target = Nat_big_num.modulus (Nat_big_num.add a_table table_entry) (Nat_big_num.pow_int_positive 2 32) in
