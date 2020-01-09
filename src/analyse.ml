@@ -464,7 +464,7 @@ let branch_targets test =
           (List.filter_map parse_line (List.tl (Array.to_list lines))) in
 
   
-  let ((c,addr,bs) as rodata) : Dwarf.p_context*Nat_big_num.num*(char)list =  Dwarf.extract_section_body test.elf_file ".rodata" true in
+  let ((c,addr,bs) as rodata) : Dwarf.p_context*Nat_big_num.num*(char)list =  Dwarf.extract_section_body test.elf_file ".rodata" false in
   (* chop into 4-byte words - as needed for branch offset tables, though not for all other things in .rodata *)
   let rodata_words : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
