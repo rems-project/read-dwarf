@@ -1,7 +1,4 @@
 
-
-
-
 let opts = [
   ("-comp_dir",
     Arg.String (fun s -> Globals.comp_dir := Some s),

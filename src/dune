@@ -1,6 +1,6 @@
 (executable
  (name main)
-  (libraries linksem))
+  (libraries linksem isla-lang))
 
 (env
  (dev
