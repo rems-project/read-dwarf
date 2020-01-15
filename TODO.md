@@ -1,9 +1,7 @@
 # Build system and maintenance (optional but nice to have stuff)
 
- - Write a README
  - Switch to Cmdliner for argument parsing and add multiple subcommands (or do it with Stdlib.Arg)
  - Switch to `Logs` for logging instead of mixing debug and warn.
- - Add an automated `make deps` that do all the opam pin and cargo install on adjacent repositories
  - Make all the test target in the Makefile work again ideally without requiring hafnium-verification-plan
  - (To discuss) Remove file that can be deterministically generated from the Makefile
  - Setup automated formating with dune
@@ -12,6 +10,7 @@
  - Add the generation of `Og` target in addition to `O{0-2}` for testing
  - Try to have the program automatically create/cache the objdump instead of asking it as a command line parameter.
  - Package this thing with opam and dune to check it works.
+ - Package isla-lang properly (need to change ott package also).
 
 # Required Plumbing
 
@@ -19,7 +18,6 @@
    - Modify `isla` to allow online interaction
    - Write the code that do the interaction
    - Write the system that caches results.
-   - Import the ocaml isla parser into opam and use it here.
  - Z3
    - Write the pipe code
    - Check we can send requests and read answers
