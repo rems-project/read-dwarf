@@ -1,7 +1,6 @@
 # Build system and maintenance (optional but nice to have stuff)
 
  - Write a README
- - Switch to dune for the ocaml build system
  - Switch to Cmdliner for argument parsing and add multiple subcommands (or do it with Stdlib.Arg)
  - Switch to `Logs` for logging instead of mixing debug and warn.
  - Add an automated `make deps` that do all the opam pin and cargo install on adjacent repositories
@@ -30,6 +29,7 @@
  - Find a clean way to represent a state to the user.
  - Symbolically execute custom assembly
  - Try to set up the state to have a single branch for basic non-branching code.
+   - Need to figure out the intended value of a lot of system registers
  - Try to do some matching of manual assembly
  - Try to do some matching of Ox and Oy of `tiny_test`.
  - Specify the function API
