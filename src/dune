@@ -1,6 +1,8 @@
+(include_subdirs unqualified)
+
 (executable
  (name main)
-  (libraries linksem isla-lang))
+  (libraries linksem isla-lang cmdliner))
 
 (env
  (dev
