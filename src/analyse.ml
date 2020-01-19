@@ -704,7 +704,8 @@ type node = natural * string
 
   
     
-let pp_test test = 
+let pp_test test =
+
   init_objdump ();
 
   (* pull out instructions from text section, assuming 4-byte insns *)
@@ -804,7 +805,9 @@ let process_file (filename:string) : unit =
    *)
   let test = parse_file filename in
 
-
+  let d = test.dwarf_static.ds_dwarf in 
+  let c = Dwarf.p_context_of_d d in
+  Printf.printf "aggregates:\n%s" (Dwarf.pp_all_aggregate_types c d); 
 
 
   printf "%s" (pp_test test);

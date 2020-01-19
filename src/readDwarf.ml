@@ -33,10 +33,21 @@ let show_source =
     Arg.(value & flag & info ["show_source"] ~doc)
 
 let objdump =
-  let doc = "File containing result of objdump" in
+  let doc = "File containing result of objdump -d" in
   setter Globals.objdump_d
     Arg.(value & opt (some non_dir_file) None & info ["objdump-d"] ~docv:"OBJDUMP_FILE" ~doc)
 
+let branch_tables =
+  let doc = "File containing branch table base addresses and sizes" in
+  setter Globals.branch_table_data_file
+    Arg.(value & opt (some non_dir_file) None & info ["branch-tables"] ~docv:"BRANCH_TABLES_FILE" ~doc)
+
+    (*
+  ("-branch-tables",
+     Arg.String (fun s -> Globals.branch_table_data_file := Some s),
+     Printf.sprintf "<string> file containing branch table base addresses and sizes");
+     *)
+  
 let elf =
   let doc = "ELF file whose dwarf is to be dumped" in
   Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"ELF_FILE" ~doc)
@@ -47,6 +58,6 @@ let info =
 
 let options = [comp_dir; show_vars; show_cfa; show_source; objdump]
 (* let full_term = add_option [comp_dir; show_vars; show_cfa; show_source; objdump] main_term *)
-let full_term = Term.((add_option comp_dir (const Analyse.process_file)) $ elf)
+let full_term = Term.((add_option comp_dir (add_option objdump (add_option branch_tables (const Analyse.process_file)))) $ elf)
 
 let command = (full_term, info)
