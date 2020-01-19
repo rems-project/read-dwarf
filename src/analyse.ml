@@ -401,6 +401,7 @@ let parse_control_flow_instruction s mnemonic s'  =
   | (mnemonic,s') -> 
      (
  *)
+  (*  Printf.printf "s=\"%s\" mnemonic=\"%s\" s'=\"%s\"\n"s mnemonic s';*)
   if List.mem mnemonic ["ret"] then 
        Some C_ret
      else if List.mem mnemonic ["eret"] then 
@@ -431,7 +432,9 @@ let parse_control_flow_instruction s mnemonic s'  =
           | Some s''' ->  
              match parse_target s''' with
              | None -> raise (Failure ("tbz/tbnz 3 parse error for: "^s^"\n"))
-             | Some (a,s) -> Some (C_branch_cond (mnemonic,a,s))
+             | Some (a,s'''') ->
+                (*                Printf.printf "s=%s mnemonic=%s s'=%s s''=%s s'''=%s s''''=%s\n"s mnemonic s' s'' s''' s'''';*)
+                Some (C_branch_cond (mnemonic,a,s''''))
      else if List.mem mnemonic ["smc"; "hvc"] then 
        Some (C_smc_hvc s')
      else 
@@ -526,7 +529,7 @@ let branch_targets test =
   let control_flow_insn  ((addr:natural),(i:natural)) : (addr * control_flow_insn) option =  
     begin match lookup_objdump_lines addr with
     | Some (i,s) ->
-       (match Scanf.sscanf s "%s %s" (fun mnemonic -> fun s' -> (mnemonic,s')) with
+       (match Scanf.sscanf s "%s %n" (fun mnemonic -> fun n -> let s' = String.sub s n (String.length s - n) in (mnemonic,s')) with
         | (mnemonic,s') -> 
            (*           if (String.length mnemonic >=2 && String.sub s 0 2 ="b.") || List.mem mnemonic ["b"; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then*)
              match parse_control_flow_instruction s mnemonic s' with
@@ -715,20 +718,21 @@ let pp_test test =
   (* compute the come-from data *)
   let (control_flow_insns_with_targets, indirect_branches) = branch_targets test in
   let t = come_from_table control_flow_insns_with_targets in
-  
 
-  
   let last_frame_info = ref "" in
   let last_var_info = ref [] in
   let last_source_info = ref "" in
   
   let pp_instruction ((addr:natural),(i:natural)) =
 
+    (* the come_froms for this address, calculated first to determine whether this is the start of a basic block *)
+    let come_froms' = come_froms t addr in 
+    
     (* the elf symbols at this address, if any (and reset the last_var_info if any) *)
     let elf_symbols = elf_symbols_of_address test addr in
     (match elf_symbols with []->() | _ -> last_var_info :=[]);
     
-    (match elf_symbols with []->"" | _ ->"\n")
+    (if come_froms' <> [] || elf_symbols <> [] then "\n" else "")
     ^ String.concat ""
         (List.map
            (fun (s:string) ->
@@ -768,12 +772,15 @@ let pp_test test =
               (List.map (function (a',s) -> pp_target_addr_wrt addr c a' ^""^s^"") ts)
           ^ " "
        | None -> "")
-    ^ pp_come_froms addr (come_froms t addr)
+    ^ pp_come_froms addr come_froms'
     ^ "\n"
         (*    ^ "\n"*)
   in
 
-  String.concat "" (List.map pp_instruction instructions)
+  "\n************** instructions *****************\n"
+  ^ String.concat "" (List.map pp_instruction instructions)
+
+  
   ^  "\n************** branch targets *****************\n"
   ^ pp_branch_targets (control_flow_insns_with_targets)
 
@@ -805,9 +812,10 @@ let process_file (filename:string) : unit =
    *)
   let test = parse_file filename in
 
+  Printf.printf "%s" "************** aggregate type definitions *****************\n";
   let d = test.dwarf_static.ds_dwarf in 
   let c = Dwarf.p_context_of_d d in
-  Printf.printf "aggregates:\n%s" (Dwarf.pp_all_aggregate_types c d); 
+  Printf.printf "\n%s" (Dwarf.pp_all_aggregate_types c d); 
 
 
   printf "%s" (pp_test test);
