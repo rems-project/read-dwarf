@@ -2,8 +2,9 @@
 
 (executable
  (name main)
-  (libraries linksem isla-lang cmdliner))
+ (libraries linksem isla-lang cmdliner pprint))
 
 (env
  (dev
-  (flags (:standard -warn-error -A))))
+  (flags
+   (:standard -warn-error -A))))

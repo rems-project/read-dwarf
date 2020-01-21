@@ -1,5 +1,4 @@
-open Cmdliner;;
-
+open Cmdliner
 
 module Default = struct
   (** Default action to run when no command is set *)
@@ -11,7 +10,7 @@ module Default = struct
     Term.(info "read-dwarf" ~doc ~exits:default_exits)
 
   (** Default command *)
-  let command = (Term.(const action $ const ()), info);;
+  let command = (Term.(const action $ const ()), info)
 end
 
 (** List of all non-default commands *)
