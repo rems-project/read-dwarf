@@ -1,0 +1,29 @@
+(** This module is a rename of Res.array for the day we want to remove the Res dependency *)
+include Res.Array
+
+(** ensure vec size v make the vector at least size size. Add value v at the end *)
+let ensure vec size v =
+  let len = length vec in
+  if size > len then
+    for _ = len to size - 1 do
+      add_one vec v
+    done
+  else ()
+
+(** resize vec size v make the vector of size size.
+    If this is an expansion, add value v to the end *)
+let resize vec size v =
+  let len = length vec in
+  if size < len then remove_n vec (len - size) else ensure vec size v
+
+let map2 f veca vecb =
+  let arra = to_array veca and arrb = to_array vecb in
+  Array.map2 f arra arrb |> of_array
+
+(** Vector pretty printer *)
+module PP = struct
+  open PP
+
+  let vector conv vec =
+    surround 2 0 !^"vec[" (vec |> map conv |> to_list |> separate (semi ^^ space)) !^"]"
+end

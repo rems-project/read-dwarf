@@ -2,7 +2,7 @@
 
 (executable
  (name main)
- (libraries linksem isla-lang cmdliner pprint))
+ (libraries linksem isla-lang cmdliner pprint res))
 
 (env
  (dev

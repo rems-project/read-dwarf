@@ -18,7 +18,8 @@ let parse_one_instr (c : in_channel) =
 exception Isla_Crashed
 
 (* args.(0) must be empty *)
-let isla_cmd args =
+(* cont will be called on the channel. It may return something *)
+let isla_cmd (cont : in_channel -> 'a) (args : string array) : 'a =
   (* let _ = PP.(println @@ array qstring args) in *)
   let isla = which !isla in
   args.(0) <- isla;
@@ -30,4 +31,4 @@ let isla_cmd args =
         PP.(println @@ statusi code);
         raise Isla_Crashed
   in
-  protect (fun () -> parse_one_instr isla_output) closing
+  protect (fun () -> cont isla_output) closing
