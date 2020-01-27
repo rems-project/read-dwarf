@@ -226,7 +226,7 @@ let source_line (comp_dir, dir, file) n1 =
           (*        source_file_cache := (file, None) :: !source_file_cache;
                   None *)
           source_file_cache := ((comp_dir, dir, file), None) :: !source_file_cache;
-          Warn.nonfatal "%s" s;
+          Warn.nonfatal2 "filename %s %s" filename s;
           None
     )
 
