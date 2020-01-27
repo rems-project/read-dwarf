@@ -259,7 +259,7 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
                 let comp_dir' =
                   match !Globals.comp_dir with
                   | None -> comp_dir
-                  | Some comp_dir'' -> Some comp_dir''
+                  | Some comp_dir'' -> match comp_dir with None -> Some comp_dir'' | Some s -> Some (Filename.concat comp_dir'' s)
                 in
                 file ^ ":" ^ Nat_big_num.to_string n ^ " "
                 ^
