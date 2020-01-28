@@ -29,16 +29,13 @@ let type_unop (u : unop) t =
 let type_binop (u : binop) t t' =
   match u with
   (* Equality *)
-  | Neq when t = t' -> Ty_Bool
+  | Eq | Neq -> if t = t' then Ty_Bool else raise TypeError
   (* Logic *)
   | And | Or -> if (t, t') = (Ty_Bool, Ty_Bool) then Ty_Bool else raise TypeError
   (* Arithmetic *)
-  | Bvand | Bvor | Bvxor | Bvnand | Bvnor | Bvxnor | Bvadd | Bvsub | Bvmul | Bvudiv | Bvsdiv
-   |Bvurem | Bvsrem | Bvsmod ->
-      if t = t' && t != Ty_Bool then t else raise TypeError
+  | Bvarith _ -> if t = t' && t != Ty_Bool then t else raise TypeError
   (* Comparaisons *)
-  | Bvult | Bvslt | Bvule | Bvsle | Bvuge | Bvsge | Bvugt | Bvsgt ->
-      if t = t' && t != Ty_Bool then Ty_Bool else raise TypeError
+  | Bvcomp _ -> if t = t' && t != Ty_Bool then Ty_Bool else raise TypeError
   (* Shifts *)
   | Bvshl | Bvlshr | Bvashr -> (
       match (t, t') with Ty_BitVec n, Ty_BitVec m -> t | _ -> raise TypeError
@@ -47,7 +44,6 @@ let type_binop (u : binop) t t' =
   | Concat -> (
       match (t, t') with Ty_BitVec n, Ty_BitVec m -> Ty_BitVec (n + m) | _ -> raise TypeError
     )
-  | _ -> raise TypeError
 
 let isla2reg_type : Isla_lang.ty -> Reg.typ = function
   | Ty_Bool -> Plain 1
@@ -78,14 +74,11 @@ let rec type_expr (cont : type_context) : exp -> ty = function
   | Bool (_, _) -> Ty_Bool
   | Unop (u, e, _) -> type_unop u @@ type_expr cont e
   | Binop (b, e, e', _) -> type_binop b (type_expr cont e) (type_expr cont e')
-  (* TODO move Eq into Binop *)
-  | Eq (e, e', _) when type_expr cont e = type_expr cont e' -> Ty_Bool
   | Ite (c, i, e, _) ->
       let ti = type_expr cont i and te = type_expr cont e in
       tassert (type_expr cont c = Ty_Bool);
       tassert (ti = te);
       ti
-  | _ -> raise TypeError
 
 (** Add the new register found in the trace and dump old ones. *)
 let type_regs (isla_trace : trace) =
