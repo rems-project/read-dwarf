@@ -12,11 +12,17 @@ type trace = trc
 type type_context = ty hvector
 
 (** TODO add more diagnostic into that *)
-exception TypeError
+exception TypeError of Isla_lang.l * string
 
-let tassert b = if not b then raise TypeError
+let _ =
+  Printexc.register_printer (function
+    | TypeError (l, s) ->
+        Some OPP.(sprint @@ prefix 2 1 (Isla_lang.pp_l l ^^ !^": ") (!^"TypeError: " ^^ !^s))
+    | _ -> None)
 
-let type_unop (u : unop) t =
+let tassert l s b = if not b then raise (TypeError (l, s))
+
+let type_unop l (u : unop) t =
   match (u, t) with
   | Not, Ty_Bool -> Ty_Bool
   | Bvnot, Ty_BitVec _ | Bvneg, Ty_BitVec _ -> t
@@ -24,25 +30,29 @@ let type_unop (u : unop) t =
   | Extract (b, a), Ty_BitVec n when a < b && b <= n -> Ty_BitVec (b + 1 - a)
   | ZeroExtend m, Ty_BitVec n -> Ty_BitVec (n + m)
   | SignExtend m, Ty_BitVec n -> Ty_BitVec (n + m)
-  | _ -> raise TypeError
+  | _ -> raise (TypeError (l, "Unary operator"))
 
-let type_binop (u : binop) t t' =
+let type_binop l (u : binop) t t' =
   match u with
   (* Equality *)
-  | Eq | Neq -> if t = t' then Ty_Bool else raise TypeError
+  | Eq | Neq -> if t = t' then Ty_Bool else raise (TypeError (l, "Equality requires same type"))
   (* Logic *)
-  | And | Or -> if (t, t') = (Ty_Bool, Ty_Bool) then Ty_Bool else raise TypeError
+  | And | Or ->
+      if (t, t') = (Ty_Bool, Ty_Bool) then Ty_Bool
+      else raise (TypeError (l, "Boolean logic requires booleans"))
   (* Arithmetic *)
-  | Bvarith _ -> if t = t' && t != Ty_Bool then t else raise TypeError
+  | Bvarith _ -> if t = t' && t != Ty_Bool then t else raise (TypeError (l, "Bvarith"))
   (* Comparaisons *)
-  | Bvcomp _ -> if t = t' && t != Ty_Bool then Ty_Bool else raise TypeError
+  | Bvcomp _ -> if t = t' && t != Ty_Bool then Ty_Bool else raise (TypeError (l, "Bvcomp"))
   (* Shifts *)
   | Bvshl | Bvlshr | Bvashr -> (
-      match (t, t') with Ty_BitVec n, Ty_BitVec m -> t | _ -> raise TypeError
+      match (t, t') with Ty_BitVec n, Ty_BitVec m -> t | _ -> raise (TypeError (l, "Bv shifts"))
     )
   (* Concatenation *)
   | Concat -> (
-      match (t, t') with Ty_BitVec n, Ty_BitVec m -> Ty_BitVec (n + m) | _ -> raise TypeError
+      match (t, t') with
+      | Ty_BitVec n, Ty_BitVec m -> Ty_BitVec (n + m)
+      | _ -> raise (TypeError (l, "Concat "))
     )
 
 let isla2reg_type : Isla_lang.ty -> Reg.typ = function
@@ -72,12 +82,12 @@ let rec type_expr (cont : type_context) : exp -> ty = function
   | Bits (str, _) ->
       Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2)
   | Bool (_, _) -> Ty_Bool
-  | Unop (u, e, _) -> type_unop u @@ type_expr cont e
-  | Binop (b, e, e', _) -> type_binop b (type_expr cont e) (type_expr cont e')
-  | Ite (c, i, e, _) ->
+  | Unop (u, e, l) -> type_unop l u @@ type_expr cont e
+  | Binop (b, e, e', l) -> type_binop l b (type_expr cont e) (type_expr cont e')
+  | Ite (c, i, e, l) ->
       let ti = type_expr cont i and te = type_expr cont e in
-      tassert (type_expr cont c = Ty_Bool);
-      tassert (ti = te);
+      tassert l "If condition must be a Bool" (type_expr cont c = Ty_Bool);
+      tassert l "If and else branches must have same type" (ti = te);
       ti
 
 (** Add the new register found in the trace and dump old ones. *)
@@ -85,13 +95,14 @@ let type_regs (isla_trace : trace) =
   let c : type_context = HashVector.empty () in
   let (Trace (events, _)) = isla_trace in
   let process : Isla_lang.event -> unit = function
-    | Smt (DeclareConst (var, typ, _), _) -> HashVector.add c var typ
-    | Smt (DefineConst (var, exp, _), _) -> HashVector.add c var @@ type_expr c exp
-    | Smt (Assert (exp, _), _) -> if type_expr c exp != Ty_Bool then raise TypeError
-    | ReadReg (name, _, v, _) | WriteReg (name, _, v, _) ->
+    | Smt (DeclareConst (var, typ), _) -> HashVector.add c var typ
+    | Smt (DefineConst (var, exp), _) -> HashVector.add c var @@ type_expr c exp
+    | Smt (Assert exp, l) -> tassert l "Assertion type must be Bool" (type_expr c exp = Ty_Bool)
+    | ReadReg (name, _, v, l) | WriteReg (name, _, v, l) ->
         let tv = type_valu c v in
         if Reg.mem_string name then
-          tassert @@ Reg.type_weak_eq tv @@ Reg.reg_type (Reg.from_string name)
+          tassert l "Register structure cannot change"
+          @@ Reg.type_weak_eq tv (Reg.reg_type (Reg.from_string name))
         else ignore @@ Reg.add_reg name tv
     | _ -> ()
   in

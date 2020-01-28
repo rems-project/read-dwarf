@@ -9,10 +9,21 @@ let isla = ref "isla-footprint"
 (** Call the `which` shell command to get a executable position from its name *)
 let which arg = input_line @@ open_process_in @@ "which " ^ arg
 
+(** Parse a single Isla instruction output from a Lexing.lexbuf *)
+let parse_term (filename : string) (l : Lexing.lexbuf) : Isla_lang.term =
+  l.lex_curr_p <- { pos_fname = filename; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+  try Isla_lang.Parser.term_start Isla_lang.Lexer.token @@ l with
+  | Isla_lang.Parser.Error -> PP.(fatal @@ Isla_lang.pp_lpos l.lex_start_p ^^ !^": Syntax error")
+  | Isla_lang.Lexer.Error _ ->
+      PP.(fatal @@ Isla_lang.pp_lpos l.lex_start_p ^^ !^": Unexpected character")
+
+(** Parse a single Isla instruction output from a string *)
+let parse_term_string (filename : string) (s : string) : Isla_lang.term =
+  parse_term filename @@ Lexing.from_string ~with_positions:true s
+
 (** Parse a single Isla instruction output from a channel *)
-let parse_one_instr (c : in_channel) =
-  let t = Isla_lang.Parser.term_start Isla_lang.Lexer.token @@ Lexing.from_channel c in
-  PP.(println @@ Isla_lang.PP.pp_term t)
+let parse_term_channel (filename : string) (c : in_channel) : Isla_lang.term =
+  parse_term filename @@ Lexing.from_channel ~with_positions:true c
 
 (** Thrown when Isla program did not return with code 0 *)
 exception Isla_Crashed

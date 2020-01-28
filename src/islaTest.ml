@@ -92,12 +92,12 @@ let input_f2m file : imode = if file then FILE else CMD
 
 let imode_term = Term.(const input_f2m $ file)
 
-(** Input takes the imode and the main argument and returns the input string *)
-let input imode (arg : string) : string Term.ret =
+(** Input takes the imode and the main argument and returns the filename and input string *)
+let input imode (arg : string) : (string * string) Term.ret =
   match imode with
-  | CMD -> `Ok arg
+  | CMD -> `Ok ("CLI input", arg)
   | FILE -> (
-      try `Ok (read_file arg) with e -> `Error (false, Printexc.to_string e)
+      try `Ok (arg, read_file arg) with e -> `Error (false, Printexc.to_string e)
     )
 
 let input_term = Term.(ret (const input $ imode_term $ instr))
@@ -112,10 +112,11 @@ let isla_f2m direct inter : isla_mode Term.ret =
 
 let isla_mode_term = Term.(ret (const isla_f2m $ direct $ noparse))
 
-let isla_run isla_mode arch (input : string) : string =
+let isla_run isla_mode arch (filename, input) : string * string =
   match isla_mode with
-  | RAW -> input
-  | CMD -> isla_cmd read_all [|""; "-a"; arch; "-i"; input; "-t"; "1"|]
+  | RAW -> (filename, input)
+  | CMD ->
+      (filename ^ " through isla", isla_cmd read_all [|""; "-a"; arch; "-i"; input; "-t"; "1"|])
   | INT -> raise @@ Failure "Interactive isla interaction is not yet implemented"
 
 let isla_term = Term.(const isla_run $ isla_mode_term $ arch $ input_term)
@@ -125,9 +126,9 @@ let processing_f2m noparse typer run =
 
 let pmode_term = Term.(const processing_f2m $ noparse $ typer $ run)
 
-let processing pmode input : unit =
+let processing pmode (filename, input) : unit =
   let parse input =
-    let t = Isla_lang_parser.term_start Isla_lang_lexer.token @@ Lexing.from_string input in
+    let t = Isla.parse_term_string filename input in
     PPA.(println @@ pp_term t);
     t
   in

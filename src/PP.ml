@@ -1,14 +1,8 @@
 include PPrint
-include PPrintEngine
-include PPrintRenderer
 
-let space = break 1
-
-let int i = i |> string_of_int |> string
-
-let hex i = i |> Printf.sprintf "%x" |> string
-
-let ( !$ ) = int
+(*****************************************************************************)
+(*        Output                                                             *)
+(*****************************************************************************)
 
 let fprint out doc = ToChannel.pretty 0.75 100 out doc
 
@@ -18,10 +12,49 @@ let println doc =
   fprint stdout (doc ^^ hardline);
   flush stdout
 
+let sprintc doc =
+  let b = Buffer.create 50 in
+  ToBuffer.compact b doc;
+  Buffer.contents b
+
+let sprint doc =
+  let b = Buffer.create 50 in
+  ToBuffer.pretty 0.75 100 b doc;
+  Buffer.contents b
+
+let fatal doc =
+  fprint stderr (doc ^^ hardline);
+  flush stderr;
+  exit 1
+
+(* Usage example :
+   PP.(println @@ doc1 ^^ doc2)
+   or
+   PP.(fatal @@ doc1 ^^ doc2)
+*)
+
+(*****************************************************************************)
+(*        Common                                                             *)
+(*****************************************************************************)
+
+let space = break 1
+
+let nbspace = blank 1
+
+let int i = i |> string_of_int |> string
+
+let hex i = i |> Printf.sprintf "%x" |> string
+
+let ( !$ ) = int
+
 let array conv arr =
   surround 2 0 !^"[|" (arr |> Array.map conv |> Array.to_list |> separate (semi ^^ space)) !^"|]"
 
 let qstring s = s |> string |> dquotes
+
+(*****************************************************************************)
+(*        Unix                                                               *)
+(*****************************************************************************)
 
 let status iconv =
   Unix.(
