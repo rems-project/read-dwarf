@@ -1,3 +1,9 @@
+(** This module provide base pretty printing, i.e pretty printing from external dependencies
+    The other pretty printing convenience module are:
+    - PPI : Pretty Printing intermediary : data structures
+    - PPA : Pretty Printing all : everything
+*)
+
 include PPrint
 
 (*****************************************************************************)
@@ -52,6 +58,8 @@ let array conv arr =
 
 let qstring s = s |> string |> dquotes
 
+let erase _ = empty
+
 (*****************************************************************************)
 (*        Unix                                                               *)
 (*****************************************************************************)
@@ -66,3 +74,10 @@ let status iconv =
 let statusi = status int
 
 let statush = status hex
+
+(* TODO Do a more careful inclusion *)
+include Isla_lang.PP
+
+let loc = Isla_lang.AST.pp_lpos
+
+let lrng = Isla_lang.AST.pp_lrng

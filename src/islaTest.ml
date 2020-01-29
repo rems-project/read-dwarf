@@ -30,10 +30,6 @@ type pmode =
   | TYPE  (** Type isla output and dump var types. Also dump the deduced register file*)
   | RUN  (** Run the the isla output on a test state and print all branches and states *)
 
-module OPP = PP
-open Isla_lang
-module PP = OPP
-
 (** The way isla is called *)
 type isla_mode =
   | RAW  (** Do not call isla and take the input test as if it was isla output *)
@@ -44,12 +40,6 @@ type isla_mode =
 type imode =
   | CMD  (** Read the input as the main command line argument *)
   | FILE  (** Read the input in a file *)
-
-(** Test parsing an isla output *)
-let test_parse (s : string) =
-  let t = Isla_lang_parser.term_start Isla_lang_lexer.token @@ Lexing.from_string s in
-  print_endline "Term parsed";
-  PP.(println @@ Isla_lang_parser_pp.pp_term t)
 
 open Cmdliner
 
@@ -129,7 +119,7 @@ let pmode_term = Term.(const processing_f2m $ noparse $ typer $ run)
 let processing pmode (filename, input) : unit =
   let parse input =
     let t = Isla.parse_term_string filename input in
-    PPA.(println @@ pp_term t);
+    PPA.(println @@ pp_term erase t);
     t
   in
   let typer ast =

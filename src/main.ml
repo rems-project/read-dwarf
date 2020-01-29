@@ -18,3 +18,6 @@ let commands = [ReadDwarf.command; IslaTest.command]
 
 (** main *)
 let _ = Term.exit @@ Term.eval_choice Default.command commands
+
+module S = Smt
+module IV = Isla_var

@@ -23,9 +23,9 @@ let field_to_string rs reg = Bimap.from_ident rs.fields reg
 
 let to_string reg = Bimap.from_ident rmap reg
 
-let field_from_string rs s = Bimap.to_ident rs.fields s
+let field_of_string rs s = Bimap.to_ident rs.fields s
 
-let from_string s = Bimap.to_ident rmap s
+let of_string s = Bimap.to_ident rmap s
 
 let mem reg = Bimap.mem_id rmap reg
 
@@ -47,7 +47,7 @@ let reg_type = field_type index
 let rec struct_weak_inc s s' =
   let exception Nope in
   let field n i =
-    match (field_type s i, field_type s' (field_from_string s' n)) with
+    match (field_type s i, field_type s' (field_of_string s' n)) with
     | Plain i, Plain j when i = j -> ()
     | Struct rs, Struct rs' -> if not @@ struct_weak_inc rs rs' then raise Nope
     | _ -> raise Nope
@@ -82,6 +82,39 @@ let add_reg name typ = add_field index name typ
 
 (** Add a new register by name and throws Bimap.Exists if it already exists. return Reg.t*)
 let add_plain_reg name size = add_reg name (Plain size)
+
+(*****************************************************************************)
+(*        Path manipulation                                                  *)
+(*****************************************************************************)
+
+type path = t list
+
+let rec partial_path_to_string rs = function
+  | [] -> ""
+  | [f] -> field_to_string rs f
+  | f :: l -> (
+      let fname = field_to_string rs f in
+      match field_type rs f with
+      | Plain _ -> raise (Invalid_argument ("Invalid path given: " ^ fname ^ " is not a struct"))
+      | Struct rs' -> fname ^ "." ^ partial_path_to_string rs' l
+    )
+
+let path_to_string = partial_path_to_string index
+
+let partial_path_of_string rs s =
+  let rec ppath_of_string_list rs = function
+    | [] -> []
+    | [f] -> [field_of_string rs f]
+    | f :: l -> (
+        let fid = field_of_string rs f in
+        match field_type rs fid with
+        | Plain _ -> raise (Invalid_argument ("Invalid path given: " ^ f ^ " is not a struct"))
+        | Struct rs' -> fid :: ppath_of_string_list rs' l
+      )
+  in
+  ppath_of_string_list rs @@ String.split_on_char '.' s
+
+let path_of_string = partial_path_of_string index
 
 (*****************************************************************************)
 (*        Pretty Printing                                                    *)

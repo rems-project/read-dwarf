@@ -1,9 +1,8 @@
-(** This module include all Pretty printing modules from all over the project *)
+(** This module provide all pretty printing defined in this project. It can thus only be used in commandline files
+    The other pretty printing convenience module are:
+    - PP : Pretty Printing : StdLib and external pretty printing
+    - PPI : Pretty Printing intermediary : data structures
+*)
 
-include PP
-include Isla_lang.PP
-include Vector.PP
-include HashVector.PP
-include Bimap.PP
+include PPI
 include IslaType.PP
-include Reg.PP

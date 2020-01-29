@@ -12,9 +12,9 @@ val field_to_string : reg_struct -> t -> string
 
 val to_string : t -> string
 
-val field_from_string : reg_struct -> string -> t
+val field_of_string : reg_struct -> string -> t
 
-val from_string : string -> t
+val of_string : string -> t
 
 val mem : t -> bool
 
@@ -47,6 +47,20 @@ val add_plain_field : reg_struct -> string -> int -> t
 val add_reg : string -> typ -> t
 
 val add_plain_reg : string -> int -> t
+
+(*****************************************************************************)
+(*        Path manipulation                                                  *)
+(*****************************************************************************)
+
+type path = t list
+
+val partial_path_to_string : reg_struct -> path -> string
+
+val path_to_string : path -> string
+
+val partial_path_of_string : reg_struct -> string -> path
+
+val path_of_string : string -> path
 
 (*****************************************************************************)
 (*        Pretty Printing                                                    *)

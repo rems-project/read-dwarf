@@ -1,23 +1,18 @@
-module OPP = PP
-open Isla_lang
+open Isla
 
 type 'a vector = 'a Vector.t
 
 type 'a hvector = 'a HashVector.t
 
-type traces = term
-
-type trace = trc
-
 type type_context = ty hvector
 
 (** TODO add more diagnostic into that *)
-exception TypeError of Isla_lang.l * string
+exception TypeError of lrng * string
 
 let _ =
   Printexc.register_printer (function
     | TypeError (l, s) ->
-        Some OPP.(sprint @@ prefix 2 1 (Isla_lang.pp_l l ^^ !^": ") (!^"TypeError: " ^^ !^s))
+        Some PP.(sprint @@ prefix 2 1 (lrng l ^^ !^": ") (!^"TypeError: " ^^ !^s))
     | _ -> None)
 
 let tassert l s b = if not b then raise (TypeError (l, s))
@@ -55,9 +50,7 @@ let type_binop l (u : binop) t t' =
       | _ -> raise (TypeError (l, "Concat "))
     )
 
-let isla2reg_type : Isla_lang.ty -> Reg.typ = function
-  | Ty_Bool -> Plain 1
-  | Ty_BitVec n -> Plain n
+let isla2reg_type : ty -> Reg.typ = function Ty_Bool -> Plain 1 | Ty_BitVec n -> Plain n
 
 let rec type_valu (cont : type_context) : valu -> Reg.typ = function
   | Val_Symbolic var -> isla2reg_type @@ HashVector.get cont var
@@ -77,8 +70,9 @@ let rec type_valu (cont : type_context) : valu -> Reg.typ = function
   | Val_Poison -> Warn.fatal0 "What is valu Poison"
   | Val_String -> Warn.fatal0 "valu string not implemented"
 
-let rec type_expr (cont : type_context) : exp -> ty = function
-  | Var (var, _) -> HashVector.get cont var
+let rec type_expr (cont : type_context) : 'v lexp -> ty = function
+  | Var (Free var, _) -> HashVector.get cont var
+  | Var (_, _) -> Warn.fatal0 "Non free variable typing unimplemented"
   | Bits (str, _) ->
       Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2)
   | Bool (_, _) -> Ty_Bool
@@ -91,18 +85,18 @@ let rec type_expr (cont : type_context) : exp -> ty = function
       ti
 
 (** Add the new register found in the trace and dump old ones. *)
-let type_regs (isla_trace : trace) =
+let type_regs (isla_trace : 'v ltrc) =
   let c : type_context = HashVector.empty () in
   let (Trace (events, _)) = isla_trace in
-  let process : Isla_lang.event -> unit = function
-    | Smt (DeclareConst (var, typ), _) -> HashVector.add c var typ
-    | Smt (DefineConst (var, exp), _) -> HashVector.add c var @@ type_expr c exp
+  let process : 'v levent -> unit = function
+    | Smt (DeclareConst (Free var, typ), _) -> HashVector.add c var typ
+    | Smt (DefineConst (Free var, exp), _) -> HashVector.add c var @@ type_expr c exp
     | Smt (Assert exp, l) -> tassert l "Assertion type must be Bool" (type_expr c exp = Ty_Bool)
     | ReadReg (name, _, v, l) | WriteReg (name, _, v, l) ->
         let tv = type_valu c v in
         if Reg.mem_string name then
           tassert l "Register structure cannot change"
-          @@ Reg.type_weak_eq tv (Reg.reg_type (Reg.from_string name))
+          @@ Reg.type_weak_eq tv (Reg.reg_type (Reg.of_string name))
         else ignore @@ Reg.add_reg name tv
     | _ -> ()
   in

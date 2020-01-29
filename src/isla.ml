@@ -3,27 +3,91 @@
 open Protect
 open Unix
 
+(*****************************************************************************)
+(*        Aliases                                                            *)
+(*****************************************************************************)
+
+(* direct aliases *)
+
+include Isla_lang.AST
+
+type loc = Lexing.position
+
+(* location aliases *)
+
+type 'v lterm = ('v, lrng) term
+
+type 'v ltrc = ('v, lrng) trc
+
+type 'v levent = ('v, lrng) event
+
+type 'v lexp = ('v, lrng) exp
+
+(* string aliases *)
+
+
+type svar = string var
+
+type 'a sterm = (string, 'a) term
+
+type 'a strc = (string, 'a) trc
+
+type 'a sevent = (string, 'a) event
+
+type 'a sexp = (string, 'a) exp
+
+(* state var aliases *)
+
+type vvar = State_var.t var
+
+type 'a vterm = (State_var.t, 'a) term
+
+type 'a vtrc = (State_var.t, 'a) trc
+
+type 'a vevent = (State_var.t, 'a) event
+
+type 'a vexp = (State_var.t, 'a) exp
+
+(* raw aliases : parser output *)
+
+type rvar = string var
+
+type rterm = (string, lrng) term
+
+type rtrc = (string, lrng) trc
+
+type revent = (string, lrng) event
+
+type rexp = (string, lrng) exp
+
+(*****************************************************************************)
+(*        Isla parsing                                                       *)
+(*****************************************************************************)
+
+(** Parse a single Isla instruction output from a Lexing.lexbuf *)
+let parse_term (filename : string) (l : Lexing.lexbuf) : rterm =
+  l.lex_curr_p <- { pos_fname = filename; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+  try Isla_lang.Parser.term_start Isla_lang.Lexer.token @@ l with
+  | Isla_lang.Parser.Error -> PP.(fatal @@ loc l.lex_start_p ^^ !^": Syntax error")
+  | Isla_lang.Lexer.Error _ -> PP.(fatal @@ loc l.lex_start_p ^^ !^": Unexpected character")
+
+(** Parse a single Isla instruction output from a string *)
+let parse_term_string (filename : string) (s : string) : rterm =
+  parse_term filename @@ Lexing.from_string ~with_positions:true s
+
+(** Parse a single Isla instruction output from a channel *)
+let parse_term_channel (filename : string) (c : in_channel) : rterm =
+  parse_term filename @@ Lexing.from_channel ~with_positions:true c
+
+(*****************************************************************************)
+(*        Isla Calling                                                       *)
+(*****************************************************************************)
+
 (* TODO make that changable from CLI or environment *)
 let isla = ref "isla-footprint"
 
 (** Call the `which` shell command to get a executable position from its name *)
 let which arg = input_line @@ open_process_in @@ "which " ^ arg
-
-(** Parse a single Isla instruction output from a Lexing.lexbuf *)
-let parse_term (filename : string) (l : Lexing.lexbuf) : Isla_lang.term =
-  l.lex_curr_p <- { pos_fname = filename; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
-  try Isla_lang.Parser.term_start Isla_lang.Lexer.token @@ l with
-  | Isla_lang.Parser.Error -> PP.(fatal @@ Isla_lang.pp_lpos l.lex_start_p ^^ !^": Syntax error")
-  | Isla_lang.Lexer.Error _ ->
-      PP.(fatal @@ Isla_lang.pp_lpos l.lex_start_p ^^ !^": Unexpected character")
-
-(** Parse a single Isla instruction output from a string *)
-let parse_term_string (filename : string) (s : string) : Isla_lang.term =
-  parse_term filename @@ Lexing.from_string ~with_positions:true s
-
-(** Parse a single Isla instruction output from a channel *)
-let parse_term_channel (filename : string) (c : in_channel) : Isla_lang.term =
-  parse_term filename @@ Lexing.from_channel ~with_positions:true c
 
 (** Thrown when Isla program did not return with code 0 *)
 exception Isla_Crashed
