@@ -53,8 +53,9 @@ let hex i = i |> Printf.sprintf "%x" |> string
 
 let ( !$ ) = int
 
-let array conv arr =
-  surround 2 0 !^"[|" (arr |> Array.map conv |> Array.to_list |> separate (semi ^^ space)) !^"|]"
+let array = OCaml.array
+
+let list = OCaml.list
 
 let qstring s = s |> string |> dquotes
 

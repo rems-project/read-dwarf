@@ -100,7 +100,7 @@ let isla_f2m direct inter : isla_mode Term.ret =
   | false, true -> `Ok INT
   | _ -> `Error (false, "You cannot use -d/--direct and --i/--inter at the same time")
 
-let isla_mode_term = Term.(ret (const isla_f2m $ direct $ noparse))
+let isla_mode_term = Term.(ret (const isla_f2m $ direct $ inter))
 
 let isla_run isla_mode arch (filename, input) : string * string =
   match isla_mode with
@@ -128,14 +128,23 @@ let processing pmode (filename, input) : unit =
         let c = IslaType.type_regs t in
         PPA.(println @@ tcontext c);
         PPA.(println @@ rstruct Reg.index);
-        c
+        t
     | _ -> Warn.fatal0 "To use -t option, the trace must be linear (for now)"
+  in
+  let run trace =
+    let istate = State.make () in
+    PPA.(println @@ state istate);
+    let estate = IslaTrace.run_lin_trace istate trace in
+    PPA.(println @@ state estate)
   in
   match pmode with
   | DUMP -> input |> print_endline
   | PARSE -> input |> parse |> ignore
   | TYPE -> input |> parse |> typer |> ignore
-  | RUN -> Warn.fatal0 "-r/--run option is not yet implemented"
+  | RUN ->
+      input |> parse |> typer
+      |> IslaManip.trace_conv_var (fun _ -> failwith "hey")
+      |> run |> ignore
 
 let term = Term.(const processing $ pmode_term $ isla_term)
 

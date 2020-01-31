@@ -19,9 +19,9 @@ let index = make_struct ()
 (** register map *)
 let rmap = index.fields
 
-let field_to_string rs reg = Bimap.from_ident rs.fields reg
+let field_to_string rs reg = Bimap.of_ident rs.fields reg
 
-let to_string reg = Bimap.from_ident rmap reg
+let to_string reg = Bimap.of_ident rmap reg
 
 let field_of_string rs s = Bimap.to_ident rs.fields s
 
@@ -87,34 +87,108 @@ let add_plain_reg name size = add_reg name (Plain size)
 (*        Path manipulation                                                  *)
 (*****************************************************************************)
 
+(* TODO Put path in Reg.Path *)
+
 type path = t list
 
-let rec partial_path_to_string rs = function
-  | [] -> ""
-  | [f] -> field_to_string rs f
+let rec partial_path_to_string_list rs = function
+  | [] -> []
   | f :: l -> (
       let fname = field_to_string rs f in
       match field_type rs f with
-      | Plain _ -> raise (Invalid_argument ("Invalid path given: " ^ fname ^ " is not a struct"))
-      | Struct rs' -> fname ^ "." ^ partial_path_to_string rs' l
+      | Plain _ -> [fname]
+      | Struct rs' -> fname :: partial_path_to_string_list rs' l
     )
+
+let partial_path_to_string rs path = String.concat "." @@ partial_path_to_string_list rs path
+
+let path_to_string_list = partial_path_to_string_list index
 
 let path_to_string = partial_path_to_string index
 
-let partial_path_of_string rs s =
-  let rec ppath_of_string_list rs = function
-    | [] -> []
-    | [f] -> [field_of_string rs f]
-    | f :: l -> (
-        let fid = field_of_string rs f in
-        match field_type rs fid with
-        | Plain _ -> raise (Invalid_argument ("Invalid path given: " ^ f ^ " is not a struct"))
-        | Struct rs' -> fid :: ppath_of_string_list rs' l
-      )
-  in
-  ppath_of_string_list rs @@ String.split_on_char '.' s
+let rec partial_path_of_string_list rs = function
+  | [] -> []
+  | f :: l -> (
+      let fid = field_of_string rs f in
+      match field_type rs fid with
+      | Plain _ -> [fid]
+      | Struct rs' -> fid :: partial_path_of_string_list rs' l
+    )
+
+let partial_path_of_string rs s = partial_path_of_string_list rs @@ String.split_on_char '.' s
 
 let path_of_string = partial_path_of_string index
+
+let path_of_string_list = partial_path_of_string_list index
+
+(*****************************************************************************)
+(*        Register indexed mapping                                           *)
+(*****************************************************************************)
+
+module Map = struct
+  type 'a cell = MPlain of 'a | MStruct of 'a t
+
+  and 'a t = 'a cell array
+
+  let is_plain = function MPlain _ -> true | _ -> false
+
+  let dummy () = Array.make 0 (Obj.magic ())
+
+  let init f =
+    let rec initc root f = function
+      | Plain _ -> MPlain (f root)
+      | Struct rs -> MStruct (initm root f rs)
+    and initm root f rs =
+      rs.types |> Vector.mapi (fun i t -> initc (root @ [i]) f t) |> Vector.to_array
+    in
+    initm [] f index
+
+  let rec get_mut_cell map (path : path) =
+    let gcellc cell path =
+      match cell with
+      | MPlain _ -> failwith "get_cell error, path too long"
+      | MStruct map -> get_mut_cell map path
+    in
+    match path with
+    | [a] -> ArrayCell.make map a
+    | a :: l -> gcellc map.(a) l
+    | [] -> failwith "get_cell error, path too short"
+
+  let get_cell map path = get_mut_cell map path |> ArrayCell.get
+
+  let get map path =
+    match get_cell map path with
+    | MPlain a -> a
+    | MStruct _ -> failwith "Reg.Map.get : path too short"
+
+  let set map path a =
+    let cell = get_mut_cell map path in
+    assert (is_plain @@ ArrayCell.get cell);
+    ArrayCell.set cell (MPlain a)
+
+  let rec map f m =
+    let mapcell = function MPlain a -> MPlain (f a) | MStruct m -> MStruct (map f m) in
+    Array.map mapcell m
+
+  let copy m = map Fun.id m
+
+  module PP = struct
+    open PP
+
+    let rec rmapf rs conv rm : document =
+      rm
+      |> Array.mapi (fun i c -> (field_to_string rs i, rcell (field_type rs i) conv c))
+      |> Array.to_list |> OCaml.record ""
+
+    and rcell rt conv cell =
+      match (rt, cell) with
+      | Plain _, MPlain a -> conv a
+      | Struct rs, MStruct s -> rmapf rs conv s
+      | _ -> failwith "Reg.Map corruption"
+
+    let rmap conv cell = rmapf index conv cell
+  end
+end
 
 (*****************************************************************************)
 (*        Pretty Printing                                                    *)
@@ -131,7 +205,7 @@ module PP = struct
     surround 2 0 !^"struct{"
       (Vector.map2
          (fun name typ -> infix 2 1 !^":" (string name) (rtype typ))
-         rs.fields.from_ident rs.types
+         (Bimap.vec rs.fields) rs.types
       |> Vector.to_list
       |> separate (semi ^^ space)
       )

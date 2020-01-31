@@ -10,5 +10,4 @@ include Vector.PP
 include HashVector.PP
 include Bimap.PP
 include Reg.PP
-include State_id.PP
-include State_var.PP
+include State.PP

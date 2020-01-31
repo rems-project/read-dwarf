@@ -25,7 +25,6 @@ type 'v lexp = ('v, lrng) exp
 
 (* string aliases *)
 
-
 type svar = string var
 
 type 'a sterm = (string, 'a) term
@@ -35,18 +34,6 @@ type 'a strc = (string, 'a) trc
 type 'a sevent = (string, 'a) event
 
 type 'a sexp = (string, 'a) exp
-
-(* state var aliases *)
-
-type vvar = State_var.t var
-
-type 'a vterm = (State_var.t, 'a) term
-
-type 'a vtrc = (State_var.t, 'a) trc
-
-type 'a vevent = (State_var.t, 'a) event
-
-type 'a vexp = (State_var.t, 'a) exp
 
 (* raw aliases : parser output *)
 
@@ -82,6 +69,8 @@ let parse_term_channel (filename : string) (c : in_channel) : rterm =
 (*****************************************************************************)
 (*        Isla Calling                                                       *)
 (*****************************************************************************)
+
+(* TODO maybe move that into another file *)
 
 (* TODO make that changable from CLI or environment *)
 let isla = ref "isla-footprint"

@@ -4,7 +4,6 @@
  - Make all the test target in the Makefile work again ideally without requiring
    hafnium-verification-plan
  - (To discuss) Remove file that can be deterministically generated from the Makefile
- - Setup automated formating with dune
  - Setup documentation generation with dune.
  - Improve linksem `Dwarf` module to handle Dwarf 5.
  - Add the generation of `Og` target in addition to `O{0-2}` for testing
@@ -25,10 +24,8 @@
 
 # Content
 
- - Find a clean way to represent a state to the user.
- - Symbolically execute custom assembly
- - Try to set up the state to have a single branch for basic non-branching code.
-   - Need to figure out the intended value of a lot of system registers
+ - Symbolically execute multiple instructions through interactive isla
+ - Move the initial state from isla to readDwarf
  - Try to do some matching of manual assembly
  - Try to do some matching of Ox and Oy of `tiny_test`.
  - Specify the function API

@@ -1,3 +1,5 @@
+(* The documentation is in the mli file *)
+
 type 'a vector = 'a Vector.t
 
 type 'a t = 'a option vector

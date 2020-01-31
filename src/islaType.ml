@@ -6,15 +6,17 @@ type 'a hvector = 'a HashVector.t
 
 type type_context = ty hvector
 
-(** TODO add more diagnostic into that *)
+(** Exception that represent an Isla typing error *)
 exception TypeError of lrng * string
 
+(* Registering and pretty printer for that exception *)
 let _ =
   Printexc.register_printer (function
     | TypeError (l, s) ->
         Some PP.(sprint @@ prefix 2 1 (lrng l ^^ !^": ") (!^"TypeError: " ^^ !^s))
     | _ -> None)
 
+(** Assert some properties for type correctness. Requires a lrng and a string error message *)
 let tassert l s b = if not b then raise (TypeError (l, s))
 
 let type_unop l (u : unop) t =
@@ -60,9 +62,7 @@ let rec type_valu (cont : type_context) : valu -> Reg.typ = function
       Plain (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2)
   | Val_Struct l ->
       let rs = Reg.make_struct () in
-      List.iter
-        (fun (Struct_elem (name, v)) -> ignore @@ Reg.add_field rs name (type_valu cont v))
-        l;
+      List.iter (fun (name, v) -> ignore @@ Reg.add_field rs name (type_valu cont v)) l;
       Struct rs
   | Val_List _ -> Warn.fatal0 "valu list not implemented"
   | Val_Vector _ -> Warn.fatal0 "valu list not implemented"
@@ -84,7 +84,7 @@ let rec type_expr (cont : type_context) : 'v lexp -> ty = function
       tassert l "If and else branches must have same type" (ti = te);
       ti
 
-(** Add the new register found in the trace and dump old ones. *)
+(** Add the new register found in the trace and returns the type context for free variables *)
 let type_regs (isla_trace : 'v ltrc) =
   let c : type_context = HashVector.empty () in
   let (Trace (events, _)) = isla_trace in

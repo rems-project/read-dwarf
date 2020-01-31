@@ -58,9 +58,43 @@ val partial_path_to_string : reg_struct -> path -> string
 
 val path_to_string : path -> string
 
+val path_to_string_list : path -> string list
+
 val partial_path_of_string : reg_struct -> string -> path
 
 val path_of_string : string -> path
+
+val path_of_string_list : string list -> path
+
+(*****************************************************************************)
+(*        Register indexed mapping                                           *)
+(*****************************************************************************)
+
+module Map : sig
+  type 'a cell = MPlain of 'a | MStruct of 'a t
+
+  and 'a t = 'a cell array
+
+  val dummy : unit -> 'a t
+
+  val init : (path -> 'a) -> 'a t
+
+  val get_mut_cell : 'a t -> path -> 'a cell ArrayCell.t
+
+  val get_cell : 'a t -> path -> 'a cell
+
+  val get : 'a t -> path -> 'a
+
+  val set : 'a t -> path -> 'a -> unit
+
+  val map : ('a -> 'b) -> 'a t -> 'b t
+
+  val copy : 'a t -> 'a t
+
+  module PP : sig
+    val rmap : ('a -> PP.document) -> 'a t -> PP.document
+  end
+end
 
 (*****************************************************************************)
 (*        Pretty Printing                                                    *)
