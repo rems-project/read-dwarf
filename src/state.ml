@@ -1,13 +1,5 @@
 (** This module introduce a type to represent the state of the machine.
-    State can be registered or not.
-
-    A registered state has a unique identifier and can be referenced in the global state table.
-    Other state and variable can point to that state via id. In particular that state may have
-    it's own fresh variable as if it was a initial state.
-
-    On the other hand an unregistered state is only an flying data structure that may be destroyed
-    at any time by the gc. No one may reference to it and it cannot own fresh variables.
-*)
+ *)
 
 (*****************************************************************************)
 (*        Support types                                                      *)
