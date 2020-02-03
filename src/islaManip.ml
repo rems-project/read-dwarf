@@ -79,7 +79,7 @@ let rec valu_get valu path =
 (*****************************************************************************)
 
 (** Convert the bvi constant style like (_ bv42 6) to explicit style #b101010 *)
-let bvi_to_bv (bvi : bvi) (size :int) =
+let bvi_to_bv (bvi : bvi) (size : int) =
   if bvi > 0 then
     if size mod 4 = 0 then
       let s = Printf.sprintf "%x" bvi in

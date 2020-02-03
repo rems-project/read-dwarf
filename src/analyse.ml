@@ -259,7 +259,11 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
                 let comp_dir' =
                   match !Globals.comp_dir with
                   | None -> comp_dir
-                  | Some comp_dir'' -> match comp_dir with None -> Some comp_dir'' | Some s -> Some (Filename.concat comp_dir'' s)
+                  | Some comp_dir'' -> (
+                      match comp_dir with
+                      | None -> Some comp_dir''
+                      | Some s -> Some (Filename.concat comp_dir'' s)
+                    )
                 in
                 file ^ ":" ^ Nat_big_num.to_string n ^ " "
                 ^
@@ -770,6 +774,10 @@ let pp_test test =
   let control_flow_insns_with_targets, indirect_branches = branch_targets test in
   let t = come_from_table control_flow_insns_with_targets in
 
+  (* compute the inlining data *)
+  let iss = Dwarf.analyse_inlined_subroutines test.dwarf_static.ds_dwarf in
+  let issr = Dwarf.analyse_inlined_subroutines_by_range iss in
+
   let last_frame_info = ref "" in
   let last_var_info = ref [] in
   let last_source_info = ref "" in
@@ -800,6 +808,12 @@ let pp_test test =
           )
         else ""
       end
+    (* the inlining info for this address *)
+    ^
+    let issr_here =
+      List.filter (function (n1, n2), (m, n), is -> Nat_big_num.equal n1 addr) issr
+    in
+    Dwarf.pp_inlined_subroutines_by_range test.dwarf_static.ds_dwarf issr_here
     (* the frame info for this address *)
     ^ begin
         if !Globals.show_cfa then

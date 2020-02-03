@@ -58,7 +58,7 @@ and var = { state : t; var : ivar }
 
 (* Other isla aliases *)
 
-type svar = (var) Isla.var
+type svar = var Isla.var
 
 type event = (var, annot) Isla.event
 

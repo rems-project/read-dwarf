@@ -20,4 +20,3 @@ let nonfatal fmt s =
 let nonfatal2 fmt s t =
   Printf.printf fmt s t;
   flush stdout
-    
