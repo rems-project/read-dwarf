@@ -14,7 +14,10 @@ module Default = struct
 end
 
 (** List of all non-default commands *)
-let commands = [ReadDwarf.command; IslaTest.command]
+let pcommands = [ReadDwarf.command; IslaTest.command]
+
+(** Add the test command if tests are enabled *)
+let commands = if Tests.enable_tests then Tests.command :: pcommands else pcommands
 
 (** main *)
 let _ = Term.exit @@ Term.eval_choice Default.command commands

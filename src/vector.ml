@@ -27,3 +27,11 @@ module PP = struct
   let vector conv vec =
     surround 2 0 !^"vec[" (vec |> map conv |> to_list |> separate (semi ^^ space)) !^"]"
 end
+
+let vec_length_test () =
+  let v = empty () in
+  add_one v 1;
+  add_one v 1;
+  length v = 2
+
+let _ = Tests.add_test "vec_length" vec_length_test
