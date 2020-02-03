@@ -1,17 +1,11 @@
 open Cmdliner
 
 let setter reference term =
-  let set r t =
-    print_endline "setting";
-    r := t
-  in
+  let set r t = r := t in
   Term.(const (set reference) $ term)
 
 let add_option opt term =
-  let g a () =
-    print_endline "g";
-    a
-  in
+  let g a () = a in
   Term.(const g $ term $ opt)
 
 let add_options olist term = List.fold_left (Fun.flip add_option) term olist
@@ -60,13 +54,9 @@ let info =
   let doc = "Read and dump dwarf information" in
   Term.(info "rd" ~doc ~exits:default_exits)
 
-let options = [comp_dir; show_vars; show_cfa; show_source; objdump]
+let options = [comp_dir; show_vars; show_cfa; show_source; objdump; branch_tables]
 
 (* let full_term = add_option [comp_dir; show_vars; show_cfa; show_source; objdump] main_term *)
-let full_term =
-  Term.(
-    add_option comp_dir
-      (add_option objdump (add_option branch_tables (const Analyse.process_file)))
-    $ elf)
+let full_term = Term.(add_options options (const Analyse.process_file) $ elf)
 
 let command = (full_term, info)
