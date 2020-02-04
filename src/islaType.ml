@@ -52,14 +52,13 @@ let type_binop l (u : binop) t t' =
       | _ -> raise (TypeError (l, "Concat "))
     )
 
-let isla2reg_type : ty -> Reg.typ = function Ty_Bool -> Plain 1 | Ty_BitVec n -> Plain n
-
 let rec type_valu (cont : type_context) : valu -> Reg.typ = function
-  | Val_Symbolic var -> isla2reg_type @@ HashVector.get cont var
-  | Val_Bool _ -> Plain 1
-  | Val_I (_, size) -> Plain size
+  | Val_Symbolic var -> Plain (HashVector.get cont var)
+  | Val_Bool _ -> Plain Ty_Bool
+  | Val_I (_, size) -> Plain (Ty_BitVec size)
   | Val_Bits str ->
-      Plain (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2)
+      Plain
+        (Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2))
   | Val_Struct l ->
       let rs = Reg.make_struct () in
       List.iter (fun (name, v) -> ignore @@ Reg.add_field rs name (type_valu cont v)) l;

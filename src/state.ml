@@ -52,19 +52,19 @@ type t = {
   memory : memory; (* We'll need to add C infered types later *)
 }
 
-and exp = (var, annot) Isla.exp
+and exp = (svar, annot) Isla.exp
 
-and var = { state : t; var : ivar }
+and svar = { state : t; var : ivar }
 
 (* Other isla aliases *)
 
-type svar = var Isla.var
+type var = svar Isla.var
 
-type event = (var, annot) Isla.event
+type event = (svar, annot) Isla.event
 
-type trc = (var, annot) Isla.trc
+type trc = (svar, annot) Isla.trc
 
-type term = (var, annot) Isla.term
+type term = (svar, annot) Isla.term
 
 (*****************************************************************************)
 (*        State to id management                                             *)
@@ -84,7 +84,7 @@ let to_id (st : t) = st.id
 (*        State variable management                                          *)
 (*****************************************************************************)
 module Var = struct
-  type t = var
+  type t = svar
 
   let to_string { state; var } =
     (state |> to_id |> Id.to_string)
@@ -131,6 +131,14 @@ let make () =
   WeakMap.add id2state id state;
   state
 
+let make_of regs extra_vars asserts memory =
+  let id = !next_id in
+  let state = { id; regs; extra_vars; asserts; memory } in
+  (* Warning: here I'm creating a cyclic reference. Please be aware of that *)
+  next_id := id + 1;
+  WeakMap.add id2state id state;
+  state
+
 (** Do a deep copy of all the mutable part of the state,
     so it can be mutated without retroaction *)
 let copy state =
@@ -158,12 +166,35 @@ type reg_cell = exp Reg.Map.cell ArrayCell.t
 (** Add an assertion to a state *)
 let push_assert (s : t) (e : exp) = s.asserts <- e :: s.asserts
 
+(** Map a function on all the expression of a state and return a new state *)
+let map_exp (f : exp -> exp) s =
+  make_of (Reg.Map.map f s.regs)
+    (Vector.map (fun (t, e) -> (t, f e)) s.extra_vars)
+    (List.map f s.asserts) ()
+
+(** Iter a function on all the expression of a state *)
+let iter_exp (f : exp -> unit) s =
+  Reg.Map.iter f s.regs;
+  Vector.iter (fun (_, e) -> f e) s.extra_vars;
+  List.iter f s.asserts
+
+(** Iter a function on all the variables of a state *)
+let iter_var (f : var -> unit) s = iter_exp (IslaManip.exp_iter_var f) s
+
+(** Return the type of a state variable *)
+let svar_type {state;var} = match var with
+  | Register p -> p |> Reg.path_type |> Reg.assert_plain
+  | Extra i -> Vector.get state.extra_vars i |> fst
+
+
 (*****************************************************************************)
 (*        Pretty printing                                                    *)
 (*****************************************************************************)
 
 module PP = struct
   open PP
+  include Id.PP
+  include Var.PP
 
   let sexp exp = Isla_lang.PP.pp_exp Var.PP.svar exp
 

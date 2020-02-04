@@ -7,11 +7,15 @@
 (** The type of a register. users can do type reg = Reg.t*)
 type t = int
 
-type typ = Plain of int | Struct of reg_struct
+type typ = Plain of Isla.ty | Struct of reg_struct
 
 and reg_struct = { fields : string Bimap.t; types : typ Vector.t }
 
 let make_struct () = { fields = Bimap.make (); types = Vector.empty () }
+
+let assert_plain : typ -> Isla.ty = function
+  | Plain t -> t
+  | Struct _ -> failwith "assert_plain failed"
 
 (** The set of register is represented as a massive structure*)
 let index = make_struct ()
@@ -76,12 +80,8 @@ let add_field rs name typ =
   Vector.add_one rs.types typ;
   id
 
-let add_plain_field rs name size = add_field rs name (Plain size)
-
-let add_reg name typ = add_field index name typ
-
 (** Add a new register by name and throws Bimap.Exists if it already exists. return Reg.t*)
-let add_plain_reg name size = add_reg name (Plain size)
+let add_reg name typ = add_field index name typ
 
 (*****************************************************************************)
 (*        Path manipulation                                                  *)
@@ -120,6 +120,17 @@ let partial_path_of_string rs s = partial_path_of_string_list rs @@ String.split
 let path_of_string = partial_path_of_string index
 
 let path_of_string_list = partial_path_of_string_list index
+
+let rec partial_path_type rs = function
+  | [] -> failwith "partial_path_type: empty list"
+  | [f] -> field_type rs f
+  | f :: l -> (
+      match field_type rs f with
+      | Plain _ -> failwith "partial_path_type: invalid path"
+      | Struct rs' -> partial_path_type rs' l
+    )
+
+let path_type = partial_path_type index
 
 (*****************************************************************************)
 (*        Register indexed mapping                                           *)
@@ -172,6 +183,10 @@ module Map = struct
 
   let copy m = map Fun.id m
 
+  let rec iter f m =
+    let mapcell = function MPlain a -> f a | MStruct m -> iter f m in
+    Array.iter mapcell m
+
   module PP = struct
     open PP
 
@@ -211,5 +226,5 @@ module PP = struct
       )
       !^"}"
 
-  and rtype = function Plain i -> !^"Plain " ^^ int i | Struct s -> rstruct s
+  and rtype = function Plain i -> !^"Plain " ^^ pp_ty i | Struct s -> rstruct s
 end

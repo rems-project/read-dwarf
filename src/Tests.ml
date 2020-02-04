@@ -33,8 +33,8 @@ let success = ref true
 
 let run_test name (f : test) =
   print_string ("Running test " ^ name ^ ": ");
-  reset ();
   flush stdout;
+  reset ();
   try
     if f () then print_endline "Success"
     else begin
@@ -43,6 +43,7 @@ let run_test name (f : test) =
     end
   with e ->
     Printf.printf "Thrown: %s\n" (Printexc.to_string e);
+    flush stdout;
     success := false
 
 let run_test_name name =

@@ -1,10 +1,12 @@
 type t = int
 
-type typ = Plain of int | Struct of reg_struct
+type typ = Plain of Isla.ty | Struct of reg_struct
 
 and reg_struct
 
 val make_struct : unit -> reg_struct
+
+val assert_plain : typ -> Isla.ty
 
 val index : reg_struct
 
@@ -42,11 +44,7 @@ val type_weak_eq : typ -> typ -> bool
 
 val add_field : reg_struct -> string -> typ -> t
 
-val add_plain_field : reg_struct -> string -> int -> t
-
 val add_reg : string -> typ -> t
-
-val add_plain_reg : string -> int -> t
 
 (*****************************************************************************)
 (*        Path manipulation                                                  *)
@@ -65,6 +63,11 @@ val partial_path_of_string : reg_struct -> string -> path
 val path_of_string : string -> path
 
 val path_of_string_list : string list -> path
+
+val partial_path_type : reg_struct -> path -> typ
+
+val path_type : path -> typ
+
 
 (*****************************************************************************)
 (*        Register indexed mapping                                           *)
@@ -90,6 +93,8 @@ module Map : sig
   val map : ('a -> 'b) -> 'a t -> 'b t
 
   val copy : 'a t -> 'a t
+
+  val iter : ('a -> unit) -> 'a t -> unit
 
   module PP : sig
     val rmap : ('a -> PP.document) -> 'a t -> PP.document

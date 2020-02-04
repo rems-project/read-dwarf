@@ -50,6 +50,21 @@ let rec var_subst (subst : 'v var -> 'a -> ('v, 'a) exp) (exp : ('v, 'a) exp) : 
   | Ite (c, e, e', a) -> Ite (s c, s e, s e', a)
   | e -> e
 
+(** iterate a function on all the variable of an expression *)
+let rec exp_iter_var (f : 'v var -> unit) (exp : ('v, 'a) exp) : unit =
+  let i = exp_iter_var f in
+  match exp with
+  | Var (v, a) -> f v
+  | Binop (b, e, e', a) ->
+      i e;
+      i e'
+  | Unop (u, e, a) -> i e
+  | Ite (c, e, e', a) ->
+      i c;
+      i e;
+      i e'
+  | _ -> ()
+
 (*****************************************************************************)
 (*        Accessor list conversion                                           *)
 (*****************************************************************************)
