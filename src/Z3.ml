@@ -11,12 +11,12 @@ let declare_vars ochannel exp : unit =
   let process_var : State.var -> unit = function
     | Free _ -> failwith "Z3.declare_vars : free var"
     | State svar ->
-      if not @@ Hashtbl.mem declared @@ State.Var.to_string svar then
-      Isla.(
-        let decl = DeclareConst (State svar, State.svar_type svar) in
-        PPI.(fprint ochannel @@ pp_def PPI.svar decl ^^ hardline)
-      );
-      Hashtbl.add declared (State.Var.to_string svar) ()
+        if not @@ Hashtbl.mem declared @@ State.Var.to_string svar then begin
+          Isla.(
+            let decl = DeclareConst (State svar, State.svar_type svar) in
+            PPI.(fprint ochannel @@ pp_def PPI.svar decl ^^ hardline));
+          Hashtbl.add declared (State.Var.to_string svar) ()
+        end
   in
   IslaManip.exp_iter_var process_var exp
 

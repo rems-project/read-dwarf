@@ -182,10 +182,10 @@ let iter_exp (f : exp -> unit) s =
 let iter_var (f : var -> unit) s = iter_exp (IslaManip.exp_iter_var f) s
 
 (** Return the type of a state variable *)
-let svar_type {state;var} = match var with
+let svar_type { state; var } =
+  match var with
   | Register p -> p |> Reg.path_type |> Reg.assert_plain
   | Extra i -> Vector.get state.extra_vars i |> fst
-
 
 (*****************************************************************************)
 (*        Pretty printing                                                    *)

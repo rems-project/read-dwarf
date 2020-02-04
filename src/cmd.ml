@@ -43,7 +43,6 @@ let get_full_path (s : string) : string =
           which s with _ -> s
     )
 
-
 (*****************************************************************************)
 (*        Pipe input                                                         *)
 (*****************************************************************************)
@@ -60,7 +59,6 @@ let input_exec exec cmd cont =
   cmd.(0) <- exec;
   input cmd cont
 
-
 (*****************************************************************************)
 (*        Pipe input-output                                                  *)
 (*****************************************************************************)
@@ -76,11 +74,10 @@ let io (cmd : cmd) (out_cont : out_channel -> unit) (in_cont : in_channel -> 'a)
   in
   protect process @@ closing (output, input) cmd
 
-
 let io_test_cat () =
   let output oc = Printf.fprintf oc "test string\n" in
-  let input ic =  input_line ic in
-  let a = io [| "cat"  |] output input in
+  let input ic = input_line ic in
+  let a = io [|"cat"|] output input in
   a = "test string"
 
 let _ = Tests.add_test "Cmd.io.cat" io_test_cat
