@@ -770,12 +770,12 @@ let pp_test test =
   let p, addr, bs = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
-(*  
+
   (* hack to cut down problem size for runtime experimentation *)
   (* 14.5s with show_vars; 3.2s without.   13.3s with myconcat stubbed out, 15.2s with String.concat *)
   let rec first n xs = if n=0 then [] else match xs with (x::xs') -> x::first (n-1) xs' in
-  let instructions = first 1000 instructions in
- *)  
+  let instructions = if !Globals.clip_binary then first 1000 instructions else instructions in 
+
   (* compute the come-from data *)
   let control_flow_insns_with_targets, indirect_branches = branch_targets test in
   let t = come_from_table control_flow_insns_with_targets in
