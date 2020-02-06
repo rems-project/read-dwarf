@@ -15,17 +15,17 @@ let comp_dir =
   setter Globals.comp_dir
     Arg.(value & opt (some string) None & info ["comp_dir"] ~docv:"COMP_DIR" ~doc)
 
-let show_vars =
-  let doc = "Show variable information at each instruction" in
-  setter Globals.show_vars Arg.(value & flag & info ["show_vars"] ~doc)
+let no_vars =
+  let doc = "Do not print variable information at each instruction" in
+  setter Globals.show_vars Term.(const not $ Arg.(value & flag & info ["no-vars"] ~doc))
 
-let show_cfa =
-  let doc = "Show CFA information at each instruction" in
-  setter Globals.show_cfa Arg.(value & flag & info ["show_cfa"] ~doc)
+let no_cfa =
+  let doc = "Do not print CFA information" in
+  setter Globals.show_cfa Term.(const not $ Arg.(value & flag & info ["no-cfa"] ~doc))
 
-let show_source =
-  let doc = "Show source lines at each instruction" in
-  setter Globals.show_source Arg.(value & flag & info ["show_source"] ~doc)
+let no_source =
+  let doc = "Do not print source lines at each instruction" in
+  setter Globals.show_source Term.(const not $ Arg.(value & flag & info ["no-source"] ~doc))
 
 let objdump =
   let doc = "File containing result of objdump -d" in
@@ -54,7 +54,7 @@ let info =
   let doc = "Read and dump dwarf information" in
   Term.(info "rd" ~doc ~exits:default_exits)
 
-let options = [comp_dir; show_vars; show_cfa; show_source; objdump; branch_tables]
+let options = [comp_dir; no_vars; no_cfa; no_source; objdump; branch_tables]
 
 (* let full_term = add_option [comp_dir; show_vars; show_cfa; show_source; objdump] main_term *)
 let full_term = Term.(add_options options (const Analyse.process_file) $ elf)
