@@ -102,6 +102,4 @@ let type_regs (isla_trace : 'v ltrc) =
   List.iter process events;
   c
 
-module PP = struct
-  let tcontext = HashVector.PP.hvector Isla_lang.PP.pp_ty
-end
+let pp_tcontext = HashVector.pp PP.pp_ty

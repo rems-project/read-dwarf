@@ -29,15 +29,12 @@ let iter f bm = Hashtbl.iter f bm.to_ident
 
 let vec bm = bm.of_ident
 
-module PP = struct
-  open PP
-
-  let bimap conv hv =
+let pp conv hv =
+  PP.(
     surround 2 0 !^"bimap{"
       (hv.of_ident
       |> Vector.mapi (fun i x -> prefix 2 1 (int i ^^ !^" ->") (conv x))
       |> Vector.to_list
       |> separate (semi ^^ space)
       )
-      !^"}"
-end
+      !^"}")

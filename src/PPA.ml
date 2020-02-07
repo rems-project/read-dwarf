@@ -5,4 +5,5 @@
 *)
 
 include PPI
-include IslaType.PP
+
+let tcontext = IslaType.pp_tcontext

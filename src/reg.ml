@@ -187,44 +187,37 @@ module Map = struct
     let mapcell = function MPlain a -> f a | MStruct m -> iter f m in
     Array.iter mapcell m
 
-  module PP = struct
-    open PP
+  let rec pp_struct rs conv rm : PP.document =
+    rm
+    |> Array.mapi (fun i c -> (field_to_string rs i, pp_plain (field_type rs i) conv c))
+    |> Array.to_list |> PP.OCaml.record ""
 
-    let rec rmapf rs conv rm : document =
-      rm
-      |> Array.mapi (fun i c -> (field_to_string rs i, rcell (field_type rs i) conv c))
-      |> Array.to_list |> OCaml.record ""
+  and pp_plain rt conv cell =
+    match (rt, cell) with
+    | Plain _, MPlain a -> conv a
+    | Struct rs, MStruct s -> pp_struct rs conv s
+    | _ -> failwith "Reg.Map corruption"
 
-    and rcell rt conv cell =
-      match (rt, cell) with
-      | Plain _, MPlain a -> conv a
-      | Struct rs, MStruct s -> rmapf rs conv s
-      | _ -> failwith "Reg.Map corruption"
-
-    let rmap conv cell = rmapf index conv cell
-  end
+  let pp conv cell = pp_struct index conv cell
 end
 
 (*****************************************************************************)
 (*        Pretty Printing                                                    *)
 (*****************************************************************************)
 
-module PP = struct
-  open PP
+let pp reg = reg |> to_string |> PP.string
 
-  let reg reg = reg |> to_string |> string
+let pp_field rs reg = reg |> field_to_string rs |> PP.string
 
-  let field rs reg = reg |> field_to_string rs |> string
-
-  let rec rstruct rs =
+let rec pp_rstruct rs =
+  PP.(
     surround 2 0 !^"struct{"
       (Vector.map2
-         (fun name typ -> infix 2 1 !^":" (string name) (rtype typ))
+         (fun name typ -> infix 2 1 !^":" (string name) (pp_rtype typ))
          (Bimap.vec rs.fields) rs.types
       |> Vector.to_list
       |> separate (semi ^^ space)
       )
-      !^"}"
+      !^"}")
 
-  and rtype = function Plain i -> !^"Plain " ^^ pp_ty i | Struct s -> rstruct s
-end
+and pp_rtype = PP.(function Plain i -> !^"Plain " ^^ pp_ty i | Struct s -> pp_rstruct s)

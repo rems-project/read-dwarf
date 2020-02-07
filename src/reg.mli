@@ -95,21 +95,17 @@ module Map : sig
 
   val iter : ('a -> unit) -> 'a t -> unit
 
-  module PP : sig
-    val rmap : ('a -> PP.document) -> 'a t -> PP.document
-  end
+  val pp : ('a -> PP.document) -> 'a t -> PP.document
 end
 
 (*****************************************************************************)
 (*        Pretty Printing                                                    *)
 (*****************************************************************************)
 
-module PP : sig
-  val reg : t -> PP.document
+val pp : t -> PP.document
 
-  val field : reg_struct -> t -> PP.document
+val pp_field : reg_struct -> t -> PP.document
 
-  val rstruct : reg_struct -> PP.document
+val pp_rstruct : reg_struct -> PP.document
 
-  val rtype : typ -> PP.document
-end
+val pp_rtype : typ -> PP.document

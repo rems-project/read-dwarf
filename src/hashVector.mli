@@ -24,6 +24,4 @@ val get : 'a t -> int -> 'a
 (** Create an empty hashVector *)
 val empty : unit -> 'a t
 
-module PP : sig
-  val hvector : ('a -> PP.document) -> 'a t -> PP.document
-end
+val pp : ('a -> PP.document) -> 'a t -> PP.document

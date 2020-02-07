@@ -18,10 +18,8 @@ let get hv k = match Vector.get hv k with None -> raise Not_found | Some v -> v
 
 let empty () : 'a t = Vector.empty ()
 
-module PP = struct
-  open PP
-
-  let hvector conv hv =
+let pp conv hv =
+  PP.(
     surround 2 0 !^"hv{"
       (hv
       |> Vector.mapi (fun i x -> (i, x))
@@ -31,5 +29,4 @@ module PP = struct
            []
       |> separate (semi ^^ space)
       )
-      !^"}"
-end
+      !^"}")

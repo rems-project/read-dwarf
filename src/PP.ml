@@ -51,15 +51,32 @@ let int i = i |> string_of_int |> string
 
 let hex i = i |> Printf.sprintf "%x" |> string
 
+let ptr i = i |> Printf.sprintf "0x%x" |> string
+
+let byte c = c |> Char.code |> Printf.sprintf "%02x" |> string
+
+let hex16 i = i |> Printf.sprintf "%04x" |> string
+
+let hex32 i = i |> Printf.sprintf "%08lx" |> string
+
+let hex64 i = i |> Printf.sprintf "%016Lx" |> string
+
 let ( !$ ) = int
 
 let array = OCaml.array
 
 let list = OCaml.list
 
+let opt = OCaml.option
+
 let qstring s = s |> string |> dquotes
 
 let erase _ = empty
+
+let mapping (mappings : (document * document) list) =
+  surround 2 0 !^"{"
+    (List.map (fun (a,b) -> infix 2 1 !^"->" a b) mappings |> separate (semi ^^ space))
+    !^"}"
 
 (*****************************************************************************)
 (*        Unix                                                               *)

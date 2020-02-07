@@ -21,12 +21,7 @@ let map2 f veca vecb =
   Array.map2 f arra arrb |> of_array
 
 (** Vector pretty printer *)
-module PP = struct
-  open PP
-
-  let vector conv vec =
-    surround 2 0 !^"vec[" (vec |> map conv |> to_list |> separate (semi ^^ space)) !^"]"
-end
+let pp conv vec = PP.(!^"vec" ^^ (vec |> to_array |> array conv))
 
 let vec_length_test () =
   let v = empty () in

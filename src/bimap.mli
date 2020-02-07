@@ -20,6 +20,4 @@ val iter : ('a -> int -> unit) -> 'a t -> unit
 
 val vec : 'a t -> 'a Vector.t
 
-module PP : sig
-  val bimap : ('a -> PP.document) -> 'a t -> PP.document
-end
+val pp : ('a -> PP.document) -> 'a t -> PP.document

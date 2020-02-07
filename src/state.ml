@@ -27,9 +27,7 @@ module Id = struct
 
   let of_string = int_of_string
 
-  module PP = struct
-    let sid id = id |> to_string |> PP.string
-  end
+  let pp id = id |> to_string |> PP.string
 end
 
 type id = Id.t
@@ -106,13 +104,7 @@ module Var = struct
 
   let to_exp v = Isla.Var (Isla.State v, dummy_annot)
 
-  module PP = struct
-    let svar sv = sv |> to_string |> PP.string
-
-    (* let svar sv = match sv.var with
-     *   | Register l -> PP.list PP.int l
-     *   | _ -> PP.empty *)
-  end
+  let pp sv = sv |> to_string |> PP.string
 end
 
 (*****************************************************************************)
@@ -191,22 +183,18 @@ let svar_type { state; var } =
 (*        Pretty printing                                                    *)
 (*****************************************************************************)
 
-module PP = struct
-  open PP
-  include Id.PP
-  include Var.PP
 
-  let sexp exp = Isla_lang.PP.pp_exp Var.PP.svar exp
+let pp_sexp exp = Isla_lang.PP.pp_exp Var.pp exp
 
-  let state s =
-    !^"state"
-    ^^ OCaml.record "state"
-         [
-           ("id", Id.PP.sid s.id);
-           ("regs", Reg.Map.PP.rmap sexp s.regs);
-           ("extra_vars", !^"todo");
-           ("asserts", !^"todo");
-           ("asserts_ref", !^"todo");
-           ("memory", !^"todo");
-         ]
-end
+let pp s = PP.(
+  !^"state"
+  ^^ OCaml.record "state"
+    [
+      ("id", Id.pp s.id);
+      ("regs", Reg.Map.pp pp_sexp s.regs);
+      ("extra_vars", !^"todo");
+      ("asserts", !^"todo");
+      ("asserts_ref", !^"todo");
+      ("memory", !^"todo");
+    ]
+)
