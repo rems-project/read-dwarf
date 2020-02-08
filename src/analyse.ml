@@ -504,6 +504,8 @@ let branch_targets test =
     | (n', y) :: nys' -> if Nat_big_num.equal n n' then Some y else natural_assoc_opt n nys'
   in
 
+  let succ_addr addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
+
   let targets_of_control_flow_insn (addr : natural) (c : control_flow_insn) : (addr * string) list
       =
     match c with
@@ -511,8 +513,7 @@ let branch_targets test =
     | C_eret -> []
     | C_branch (a, s) -> [(a, s)]
     | C_branch_and_link (a, s) ->
-        let succ_addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
-        [(a, s); (succ_addr, "<return>")]
+        [(a, s); (succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
     | C_branch_cond (is, a, s) ->
         let succ_addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
         [(a, s); (succ_addr, "<fallthrough>")]
@@ -544,8 +545,8 @@ let branch_targets test =
   in
 
   (* pull out instructions from text section, assuming 4-byte insns *)
-  let p, addr, bs = Dwarf.extract_text test.elf_file in
-  let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
+  let p, text_addr, bs = Dwarf.extract_text test.elf_file in
+  let instructions : (natural * natural) list = Dwarf.words_of_byte_list text_addr bs [] in
 
   let control_flow_insn ((addr : natural), (i : natural)) : (addr * control_flow_insn) option =
     match lookup_objdump_lines addr with
@@ -576,6 +577,31 @@ let branch_targets test =
     List.map (function a, c -> (a, c, targets_of_control_flow_insn a c)) control_flow_insns
   in
 
+  let index_of_address (addr : natural) : int =
+    Nat_big_num.to_int (Nat_big_num.sub addr text_addr) / 4
+  in
+  let address_of_index (i : int) : natural =
+    Nat_big_num.add text_addr (Nat_big_num.of_int (i * 4))
+  in
+
+  let size = List.length instructions in
+
+  let control_flow_insns_with_targets_array :
+      (addr * natural (*isns*) * control_flow_insn option * (addr * int (*index*) * string) list)
+      array =
+    Array.init size (function k ->
+        (let a, i = List.nth instructions k in
+         let co = control_flow_insn (a, i) in
+         match co with
+         | None -> (a, i, None, [(succ_addr a, k + 1, "succ")])
+         | Some (a', c) ->
+             let targets = targets_of_control_flow_insn a c in
+             let targets' =
+               List.map (function a'', s'' -> (a'', index_of_address a'', s'')) targets
+             in
+             (a, i, Some c, targets')))
+  in
+
   let indirect_branches =
     List.filter
       (function
@@ -585,7 +611,11 @@ let branch_targets test =
       control_flow_insns_with_targets
   in
 
-  (control_flow_insns_with_targets, indirect_branches)
+  ( control_flow_insns_with_targets,
+    control_flow_insns_with_targets_array,
+    index_of_address,
+    address_of_index,
+    indirect_branches )
 
 let pp_branch_targets (xs : (addr * control_flow_insn * (addr * string) list) list) =
   String.concat ""
@@ -630,6 +660,138 @@ let pp_come_froms (addr : addr) (cfs : (addr * control_flow_insn * string) list)
                    ^ pp_control_flow_instruction_short c
                    ^ ")" ^ s)
              cfs)
+
+(*****************************************************************************)
+(*        call-graph                                                         *)
+(*****************************************************************************)
+
+(*module G = Graph.Pack.Digraph*)
+
+let pp_call_graph test
+    ( control_flow_insns_with_targets,
+      control_flow_insns_with_targets_array,
+      index_of_address,
+      address_of_index,
+      indirect_branches ) =
+  (* take the nodes to be all the elf symbol addresses of stt_func
+     symbol type (each with their list of elf symbol names) together
+     with all the other-address bl-targets (of which in Hf there are just
+     three, the same in O0 and O2, presumably explicit in assembly) *)
+  let elf_symbols : (natural * string list) list =
+    let elf_symbol_addresses =
+      List.sort_uniq compare
+        (List.filter_map
+           (fun (name, (typ, size, address, mb, binding)) ->
+             if typ = Elf_symbol_table.stt_func then Some address else None)
+           test.symbol_map)
+    in
+    List.map
+      (fun address ->
+        let names =
+          List.sort_uniq compare
+            (List.filter_map
+               (fun (name, (typ, size, address', mb, binding)) ->
+                 if address' = address && String.length name >= 1 && name.[0] <> '$' then
+                   Some name
+                 else None)
+               test.symbol_map)
+        in
+        (address, names))
+      elf_symbol_addresses
+  in
+
+  let extra_bl_targets' =
+    List.filter_map
+      (function
+        | a, c, ts -> (
+            match c with
+            | C_branch_and_link (a', s') ->
+                if
+                  not (List.exists (function a'', ss'' -> Nat_big_num.equal a' a'') elf_symbols)
+                then Some (a', ["FROM BL:" ^ s'])
+                else None
+            | _ -> None
+          ))
+      control_flow_insns_with_targets
+  in
+
+  let rec dedup axs acc =
+    match axs with
+    | [] -> acc
+    | (a, x) :: axs' ->
+        if not (List.exists (function a', x' -> Nat_big_num.equal a a') acc) then
+          dedup axs' ((a, x) :: acc)
+        else dedup axs' acc
+  in
+
+  let extra_bl_targets = dedup extra_bl_targets' [] in
+
+  let nodes0 =
+    List.sort
+      (function
+        | a, ss -> (
+            function a', ss' -> Nat_big_num.compare a a'
+          ))
+      (elf_symbols @ extra_bl_targets)
+  in
+
+  let nodes = List.map (function a, ss -> (a, index_of_address a, ss)) nodes0 in
+
+  let pp_node ((a, k, ss) as node) =
+    pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
+  in
+
+  let node_of_index k =
+    match List.find_opt (function a, k', ss -> k' = k) nodes with
+    | Some n -> n
+    | None ->
+        Warn.nonfatal "node_of_index %d\n" k;
+        List.hd nodes
+  in
+
+  let rec stupid_reachability (acc_reachable : int list) (acc_bl_targets : int list)
+      (todo : int list) : int list * int list =
+    match todo with
+    | [] -> (acc_reachable, acc_bl_targets)
+    | k :: todo' ->
+        if List.mem k acc_reachable then stupid_reachability acc_reachable acc_bl_targets todo'
+        else
+          let a, i, co, targets = control_flow_insns_with_targets_array.(k) in
+          let target_indices = List.map (function a'', k'', s'' -> k'') targets in
+          let non_bl_targets, bl_targets =
+            match co with
+            | Some (C_branch_and_link (_, _)) ->
+                let [t1; t2] = target_indices in
+                ([t2], [t1])
+            | _ -> (target_indices, [])
+          in
+          stupid_reachability (k :: acc_reachable)
+            (List.sort_uniq compare (bl_targets @ acc_bl_targets))
+            (non_bl_targets @ todo')
+  in
+
+  let bl_targets k =
+    let reachable, bl_targets = stupid_reachability [] [] [k] in
+    bl_targets
+  in
+
+  let call_graph =
+    List.map
+      (function (a, k, ss) as node -> (node, List.map node_of_index (bl_targets k)))
+      nodes
+  in
+
+  let pp_call_graph =
+    String.concat ""
+      (List.map
+         (function
+           | n, ns ->
+               pp_node n ^ "\n"
+               ^ String.concat "" (List.map (function n' -> "  " ^ pp_node n' ^ "\n") ns))
+         call_graph)
+  in
+
+  pp_call_graph
 
 (*
 type node = natural * string
@@ -770,14 +932,19 @@ let pp_test test =
   let p, addr, bs = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
-
   (* hack to cut down problem size for runtime experimentation *)
   (* 14.5s with show_vars; 3.2s without.   13.3s with myconcat stubbed out, 15.2s with String.concat *)
-  let rec first n xs = if n=0 then [] else match xs with (x::xs') -> x::first (n-1) xs' in
-  let instructions = if !Globals.clip_binary then first 1000 instructions else instructions in 
+  let rec first n xs = if n = 0 then [] else match xs with x :: xs' -> x :: first (n - 1) xs' in
+  let instructions = if !Globals.clip_binary then first 1000 instructions else instructions in
 
   (* compute the come-from data *)
-  let control_flow_insns_with_targets, indirect_branches = branch_targets test in
+  let ( control_flow_insns_with_targets,
+        control_flow_insns_with_targets_array,
+        index_of_address,
+        address_of_index,
+        indirect_branches ) =
+    branch_targets test
+  in
   let t = come_from_table control_flow_insns_with_targets in
 
   (* compute the inlining data *)
@@ -870,10 +1037,21 @@ let pp_test test =
     (*    ^ "\n"*)
   in
 
-  "\n************** instructions *****************\n"
+  "************** aggregate type definitions *****************\n"
+  ^ (let d = test.dwarf_static.ds_dwarf in
+     let c = Dwarf.p_context_of_d d in
+     Dwarf.pp_all_aggregate_types c d)
+  ^ "\n************** instructions *****************\n"
   ^ String.concat "" (List.map pp_instruction instructions)
   ^ "\n************** branch targets *****************\n"
   ^ pp_branch_targets control_flow_insns_with_targets
+  ^ "\n************** call graph *****************\n"
+  ^ pp_call_graph test
+      ( control_flow_insns_with_targets,
+        control_flow_insns_with_targets_array,
+        index_of_address,
+        address_of_index,
+        indirect_branches )
 
 (*****************************************************************************)
 (*        top-level                                                          *)
@@ -894,11 +1072,6 @@ let process_file (filename : string) : unit =
   in
    *)
   let test = parse_file filename in
-
-  Printf.printf "%s" "************** aggregate type definitions *****************\n";
-  let d = test.dwarf_static.ds_dwarf in
-  let c = Dwarf.p_context_of_d d in
-  Printf.printf "\n%s" (Dwarf.pp_all_aggregate_types c d);
 
   printf "%s" (pp_test test)
 

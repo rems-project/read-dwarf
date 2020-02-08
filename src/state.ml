@@ -183,18 +183,17 @@ let svar_type { state; var } =
 (*        Pretty printing                                                    *)
 (*****************************************************************************)
 
-
 let pp_sexp exp = Isla_lang.PP.pp_exp Var.pp exp
 
-let pp s = PP.(
-  !^"state"
-  ^^ OCaml.record "state"
-    [
-      ("id", Id.pp s.id);
-      ("regs", Reg.Map.pp pp_sexp s.regs);
-      ("extra_vars", !^"todo");
-      ("asserts", !^"todo");
-      ("asserts_ref", !^"todo");
-      ("memory", !^"todo");
-    ]
-)
+let pp s =
+  PP.(
+    !^"state"
+    ^^ OCaml.record "state"
+         [
+           ("id", Id.pp s.id);
+           ("regs", Reg.Map.pp pp_sexp s.regs);
+           ("extra_vars", !^"todo");
+           ("asserts", !^"todo");
+           ("asserts_ref", !^"todo");
+           ("memory", !^"todo");
+         ])

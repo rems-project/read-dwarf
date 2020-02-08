@@ -75,7 +75,7 @@ let erase _ = empty
 
 let mapping (mappings : (document * document) list) =
   surround 2 0 !^"{"
-    (List.map (fun (a,b) -> infix 2 1 !^"->" a b) mappings |> separate (semi ^^ space))
+    (List.map (fun (a, b) -> infix 2 1 !^"->" a b) mappings |> separate (semi ^^ space))
     !^"}"
 
 (*****************************************************************************)
