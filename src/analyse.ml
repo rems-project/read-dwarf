@@ -343,6 +343,8 @@ let lookup_objdump_lines (a : natural) : (natural * string) option =
 
 type addr = natural
 
+type node = addr * int * (string list)
+          
 type control_flow_insn =
   | C_ret
   | C_eret
@@ -513,7 +515,10 @@ let branch_targets test =
     | C_eret -> []
     | C_branch (a, s) -> [(a, s)]
     | C_branch_and_link (a, s) ->
-        [(a, s); (succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
+       if s = "<abort>" then (* special case because abort doesn't return *)
+         [(a, s)] 
+       else
+         [(a, s); (succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
     | C_branch_cond (is, a, s) ->
         let succ_addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
         [(a, s); (succ_addr, "<fallthrough>")]
@@ -587,8 +592,7 @@ let branch_targets test =
   let size = List.length instructions in
 
   let control_flow_insns_with_targets_array :
-      (addr * natural (*isns*) * control_flow_insn option * (addr * int (*index*) * string) list)
-      array =
+      (addr * natural (*isns*) * control_flow_insn option * ((addr * int * string) list)) array =
     Array.init size (function k ->
         (let a, i = List.nth instructions k in
          let co = control_flow_insn (a, i) in
@@ -673,6 +677,7 @@ module D = Pack.Digraph
         Error: Unbound module Pack
 *)
 
+    
 let pp_call_graph test
     ( control_flow_insns_with_targets,
       control_flow_insns_with_targets_array,
@@ -741,7 +746,7 @@ let pp_call_graph test
       (elf_symbols @ extra_bl_targets)
   in
 
-  let nodes = List.map (function a, ss -> (a, index_of_address a, ss)) nodes0 in
+  let nodes : node list = List.map (function a, ss -> (a, index_of_address a, ss)) nodes0 in
 
   let pp_node ((a, k, ss) as node) =
     pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
@@ -767,8 +772,12 @@ let pp_call_graph test
           let non_bl_targets, bl_targets =
             match co with
             | Some (C_branch_and_link (_, _)) ->
-                let [t1; t2] = target_indices in
-                ([t2], [t1])
+               (match target_indices with
+               | [t1; t2] -> 
+                  ([t2], [t1])
+               | [t1] ->
+                  ([], [t1])
+               )
             | _ -> (target_indices, [])
           in
           stupid_reachability (k :: acc_reachable)
@@ -787,17 +796,45 @@ let pp_call_graph test
       nodes
   in
 
-  let pp_call_graph =
+  let pp_call_graph_entry (n,ns) = 
+    pp_node n ^ ":\n"
+    ^ String.concat "" (List.map (function n' -> "  " ^ pp_node n' ^ "\n") ns) in
+  
+  let pp_call_graph call_graph =
     String.concat ""
-      (List.map
-         (function
-           | n, ns ->
-               pp_node n ^ "\n"
-               ^ String.concat "" (List.map (function n' -> "  " ^ pp_node n' ^ "\n") ns))
-         call_graph)
+      (List.map pp_call_graph_entry call_graph)
+  in
+  
+  let rec stupid_reachability' (acc_reachable : node list) (todo : node list) : node list =
+    match todo with
+    | [] -> acc_reachable
+    | ((a,k,ss) as n) :: todo' ->
+       if List.exists (function (a',k',ss')->k'=k) acc_reachable then
+         stupid_reachability' acc_reachable todo'
+        else
+          let (_,targets) = List.find (function ((a',k',ss'),_) -> k'=k) call_graph in
+          stupid_reachability' (n :: acc_reachable) (targets @ todo')
   in
 
-  pp_call_graph
+  let transitive_call_graph = 
+    List.map
+      (function ((a,k,ss) as n) ->
+         let (_,targets) = List.find (function ((a',k',ss'),_) -> k'=k) call_graph in
+         (n,(stupid_reachability' [] targets))
+      ) nodes in
+
+  let pp_transitive_call_graph transitive_call_graph =
+    String.concat ""
+      (List.map 
+         (function (((a,k,ss) as n),ns) ->
+            (if List.exists (function (a',k',ss')->k'=k) ns then "RECURSIVE " else "") ^ "\n"
+            ^ pp_call_graph_entry (n,ns))
+         transitive_call_graph)
+       in
+  
+  pp_call_graph call_graph
+  ^ "*************** transitive call graph **************\n"
+  ^ pp_transitive_call_graph transitive_call_graph
 
 (*
 type node = natural * string
