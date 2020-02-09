@@ -247,15 +247,15 @@ let source_line (comp_dir, dir, file) n1 =
 
 let pp_source_line so = match so with Some s -> s (*" (" ^ s ^ ")"*) | None -> "file not found"
 
-let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : string option =
-  let sls = Dwarf.source_lines_of_address ds a in
+let pp_dwarf_source_file_lines m ds sld (pp_actual_line : bool) (a : natural) : string option =
+  let sls = Dwarf.source_lines_of_address ds sld a in
   match sls with
   | [] -> None
   | _ ->
       Some
         (String.concat ", "
            (List.map
-              (fun ((comp_dir, dir, file), n, lnr) ->
+              (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
                 let comp_dir' =
                   match !Globals.comp_dir with
                   | None -> comp_dir
@@ -265,7 +265,7 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
                       | Some s -> Some (Filename.concat comp_dir'' s)
                     )
                 in
-                file ^ ":" ^ Nat_big_num.to_string n ^ " "
+                file ^ ":" ^ Nat_big_num.to_string n ^ " (" ^ subprogram_name ^ ")"
                 ^
                 if pp_actual_line then
                   pp_source_line (source_line (comp_dir', dir, file) (Nat_big_num.to_int n))
@@ -343,8 +343,8 @@ let lookup_objdump_lines (a : natural) : (natural * string) option =
 
 type addr = natural
 
-type node = addr * int * (string list)
-          
+type node = addr * int * string list
+
 type control_flow_insn =
   | C_ret
   | C_eret
@@ -515,10 +515,9 @@ let branch_targets test =
     | C_eret -> []
     | C_branch (a, s) -> [(a, s)]
     | C_branch_and_link (a, s) ->
-       if s = "<abort>" then (* special case because abort doesn't return *)
-         [(a, s)] 
-       else
-         [(a, s); (succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
+        if s = "<abort>" then (* special case because abort doesn't return *)
+          [(a, s)]
+        else [(a, s); (succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
     | C_branch_cond (is, a, s) ->
         let succ_addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
         [(a, s); (succ_addr, "<fallthrough>")]
@@ -592,7 +591,7 @@ let branch_targets test =
   let size = List.length instructions in
 
   let control_flow_insns_with_targets_array :
-      (addr * natural (*isns*) * control_flow_insn option * ((addr * int * string) list)) array =
+      (addr * natural (*isns*) * control_flow_insn option * (addr * int * string) list) array =
     Array.init size (function k ->
         (let a, i = List.nth instructions k in
          let co = control_flow_insn (a, i) in
@@ -677,7 +676,6 @@ module D = Pack.Digraph
         Error: Unbound module Pack
 *)
 
-    
 let pp_call_graph test
     ( control_flow_insns_with_targets,
       control_flow_insns_with_targets_array,
@@ -771,13 +769,9 @@ let pp_call_graph test
           let target_indices = List.map (function a'', k'', s'' -> k'') targets in
           let non_bl_targets, bl_targets =
             match co with
-            | Some (C_branch_and_link (_, _)) ->
-               (match target_indices with
-               | [t1; t2] -> 
-                  ([t2], [t1])
-               | [t1] ->
-                  ([], [t1])
-               )
+            | Some (C_branch_and_link (_, _)) -> (
+                match target_indices with [t1; t2] -> ([t2], [t1]) | [t1] -> ([], [t1])
+              )
             | _ -> (target_indices, [])
           in
           stupid_reachability (k :: acc_reachable)
@@ -796,44 +790,44 @@ let pp_call_graph test
       nodes
   in
 
-  let pp_call_graph_entry (n,ns) = 
-    pp_node n ^ ":\n"
-    ^ String.concat "" (List.map (function n' -> "  " ^ pp_node n' ^ "\n") ns) in
-  
-  let pp_call_graph call_graph =
-    String.concat ""
-      (List.map pp_call_graph_entry call_graph)
+  let pp_call_graph_entry (n, ns) =
+    pp_node n ^ ":\n" ^ String.concat "" (List.map (function n' -> "  " ^ pp_node n' ^ "\n") ns)
   in
-  
+
+  let pp_call_graph call_graph = String.concat "" (List.map pp_call_graph_entry call_graph) in
+
   let rec stupid_reachability' (acc_reachable : node list) (todo : node list) : node list =
     match todo with
     | [] -> acc_reachable
-    | ((a,k,ss) as n) :: todo' ->
-       if List.exists (function (a',k',ss')->k'=k) acc_reachable then
-         stupid_reachability' acc_reachable todo'
+    | ((a, k, ss) as n) :: todo' ->
+        if List.exists (function a', k', ss' -> k' = k) acc_reachable then
+          stupid_reachability' acc_reachable todo'
         else
-          let (_,targets) = List.find (function ((a',k',ss'),_) -> k'=k) call_graph in
+          let _, targets = List.find (function (a', k', ss'), _ -> k' = k) call_graph in
           stupid_reachability' (n :: acc_reachable) (targets @ todo')
   in
 
-  let transitive_call_graph = 
+  let transitive_call_graph =
     List.map
-      (function ((a,k,ss) as n) ->
-         let (_,targets) = List.find (function ((a',k',ss'),_) -> k'=k) call_graph in
-         (n,(stupid_reachability' [] targets))
-      ) nodes in
+      (function
+        | (a, k, ss) as n ->
+            let _, targets = List.find (function (a', k', ss'), _ -> k' = k) call_graph in
+            (n, stupid_reachability' [] targets))
+      nodes
+  in
 
   let pp_transitive_call_graph transitive_call_graph =
     String.concat ""
-      (List.map 
-         (function (((a,k,ss) as n),ns) ->
-            (if List.exists (function (a',k',ss')->k'=k) ns then "RECURSIVE " else "") ^ "\n"
-            ^ pp_call_graph_entry (n,ns))
+      (List.map
+         (function
+           | ((a, k, ss) as n), ns ->
+               (if List.exists (function a', k', ss' -> k' = k) ns then "RECURSIVE " else "")
+               ^ "\n"
+               ^ pp_call_graph_entry (n, ns))
          transitive_call_graph)
-       in
-  
-  pp_call_graph call_graph
-  ^ "*************** transitive call graph **************\n"
+  in
+
+  pp_call_graph call_graph ^ "*************** transitive call graph **************\n"
   ^ pp_transitive_call_graph transitive_call_graph
 
 (*
@@ -971,6 +965,8 @@ type node = natural * string
 let pp_test test =
   init_objdump ();
 
+  let sld = Dwarf.subprogram_line_extents test.dwarf_static.ds_dwarf in
+
   (* pull out instructions from text section, assuming 4-byte insns *)
   let p, addr, bs = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
@@ -994,11 +990,85 @@ let pp_test test =
   let iss = Dwarf.analyse_inlined_subroutines test.dwarf_static.ds_dwarf in
   let issr = Dwarf.analyse_inlined_subroutines_by_range iss in
 
+  (* walk over instructions annotating with inlining data *)
+  let rec f issr_current issr_rest label_last max_labels instructions acc =
+    match instructions with
+    | [] -> (List.rev_append acc [], max_labels)
+    | (((addr : natural), (i : natural)) as instruction) :: instructions' ->
+        let issr_still_current =
+          List.filter
+            (function label, ((n1, n2), (m, n), is) -> Nat_big_num.less addr n2)
+            issr_current
+        in
+
+        let rec find_first discard p acc xs =
+          match xs with
+          | [] -> (List.rev_append acc [], xs)
+          | x :: xs' ->
+              if discard x then find_first discard p acc xs'
+              else if p x then find_first discard p (x :: acc) xs'
+              else (List.rev_append acc [], xs)
+        in
+
+        let issr_starting_here0, issr_rest' =
+          find_first
+            (function (n1, n2), (m, n), is -> Nat_big_num.less_equal n2 addr)
+            (function (n1, n2), (m, n), is -> Nat_big_num.equal n1 addr)
+            [] issr_rest
+        in
+
+        let rec enlabel labels_in_use label_last acc issr_new =
+          match issr_new with
+          | [] -> (List.rev_append acc [], label_last)
+          | issr :: issr_new' ->
+              if List.length labels_in_use >= 26 then Warn.fatal "%s" "inlining depth > 26";
+              let rec fresh_label l =
+                let l = (l + 1) mod 26 in
+                if not (List.mem l labels_in_use) then l else fresh_label l
+              in
+              let l = fresh_label label_last in
+              enlabel (l :: labels_in_use) l ((l, issr) :: acc) issr_new'
+        in
+
+        let issr_starting_here, label_last' =
+          enlabel
+            (List.map (function label, _ -> label) issr_current)
+            label_last [] issr_starting_here0
+        in
+
+        let issr_current' = issr_still_current @ issr_starting_here in
+
+        let max_labels' = max max_labels (List.length issr_current') in
+
+        let pp_label label = String.make 1 (Char.chr (label + Char.code 'a')) in
+
+        let ppd_labels =
+          String.concat "" (List.map (function label, _ -> pp_label label) issr_current')
+        in
+
+        let ppd_new_inlining =
+          String.concat ""
+            (List.map
+               (function
+                 | label, x ->
+                     pp_label label ^ ": "
+                     ^ Dwarf.pp_inlined_subroutines_by_range test.dwarf_static.ds_dwarf sld [x])
+               issr_starting_here)
+        in
+
+        let acc' = (instruction, ppd_labels, ppd_new_inlining) :: acc in
+
+        f issr_current' issr_rest' label_last' max_labels' instructions' acc'
+  in
+
+  let instructions_with_inlining, max_labels = f [] issr 25 0 instructions [] in
+  let pp_label_prefix s = s ^ String.make (max_labels - String.length s) ' ' ^ " " in
+
   let last_frame_info = ref "" in
   let last_var_info = ref [] in
   let last_source_info = ref "" in
 
-  let pp_instruction ((addr : natural), (i : natural)) =
+  let pp_instruction (((addr : natural), (i : natural)), ppd_labels, ppd_new_inlining) =
     (* the come_froms for this address, calculated first to determine whether this is the start of a basic block *)
     let come_froms' = come_froms t addr in
 
@@ -1009,12 +1079,20 @@ let pp_test test =
     (if come_froms' <> [] || elf_symbols <> [] then "\n" else "")
     ^ String.concat ""
         (List.map (fun (s : string) -> pp_addr addr ^ " <" ^ s ^ ">:\n") elf_symbols)
+    (* the new inlining info for this address *)
+    ^ ppd_new_inlining
+    (*    let issr_here =
+      List.filter (function (n1, n2), (m, n), is -> Nat_big_num.equal n1 addr) issr
+    in
+    Dwarf.pp_inlined_subroutines_by_range test.dwarf_static.ds_dwarf issr_here*)
     (* the source file lines (if any) associated to this address *)
     ^ begin
         if !Globals.show_source then
           let source_info =
-            match pp_dwarf_source_file_lines () test.dwarf_static true addr with
-            | Some s -> s ^ "\n"
+            match pp_dwarf_source_file_lines () test.dwarf_static sld true addr with
+            | Some s ->
+                (* the inlining label prefix *)
+                pp_label_prefix ppd_labels ^ s ^ "\n"
             | None -> ""
           in
           if source_info = !last_source_info then "" (*"unchanged\n"*)
@@ -1024,12 +1102,6 @@ let pp_test test =
           )
         else ""
       end
-    (* the inlining info for this address *)
-    ^
-    let issr_here =
-      List.filter (function (n1, n2), (m, n), is -> Nat_big_num.equal n1 addr) issr
-    in
-    Dwarf.pp_inlined_subroutines_by_range test.dwarf_static.ds_dwarf issr_here
     (* the frame info for this address *)
     ^ begin
         if !Globals.show_cfa then
@@ -1037,7 +1109,8 @@ let pp_test test =
           if frame_info = !last_frame_info then "" (*"CFA: unchanged\n"*)
           else (
             last_frame_info := frame_info;
-            frame_info
+            (* the inlining label prefix *)
+            pp_label_prefix ppd_labels ^ frame_info
           )
         else ""
       end
@@ -1051,6 +1124,8 @@ let pp_test test =
         )
         else ""
       end
+    (* the inlining label prefix *)
+    ^ pp_label_prefix ppd_labels
     (* the address and (hex) instruction *)
     ^ pp_addr addr
     ^ ":  " ^ pp_addr i
@@ -1085,7 +1160,7 @@ let pp_test test =
      let c = Dwarf.p_context_of_d d in
      Dwarf.pp_all_aggregate_types c d)
   ^ "\n************** instructions *****************\n"
-  ^ String.concat "" (List.map pp_instruction instructions)
+  ^ String.concat "" (List.map pp_instruction instructions_with_inlining)
   ^ "\n************** branch targets *****************\n"
   ^ pp_branch_targets control_flow_insns_with_targets
   ^ "\n************** call graph *****************\n"
