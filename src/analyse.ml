@@ -1187,6 +1187,15 @@ let process_file (filename : string) : unit =
        test
   in
    *)
+
+  (* copy emacs syntax highlighting blob to output. sometime de-hard-code the filename*)
+  begin
+    match read_source_file "emacs-highlighting" with
+    | MyFail _ -> ()
+    | Ok lines ->
+       Array.iter (function s -> Printf.printf "%s\n" s) lines
+  end;
+  
   let test = parse_file filename in
 
   printf "%s" (pp_test test)

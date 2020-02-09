@@ -1,0 +1,15 @@
+% add the following four lines to .emacs to turn on colour highlighting
+%
+% (global-hi-lock-mode 1)
+% ;; always highlight any Hi-Lock patterns it finds in the file:
+% (setq hi-lock-file-patterns-policy #'(lambda (dummy) t)) 
+% (global-font-lock-mode 1)
+%
+%
+% Hi-lock: (("^.*\\(?:inlined from\\).*$" (0 (quote hi-red-b) prepend)))
+% Hi-lock: (("^.*\\(?:^[0-9a-f]* <.*>\\:$\\).*$" (0 (quote hi-green) prepend)))
+% Hi-lock: (("^.*\\(?:\\.c\\:\\).*$" (0 (quote font-lock-comment-face) prepend)))
+% Hi-lock: (("^ .*\\(?:>,var\\).*$" (0 (quote font-lock-constant-face) prepend)))
+% Hi-lock: (("^ .*\\(?:>,param\\).*$" (0 (quote font-lock-constant-face) prepend)))
+% Hi-lock: (("^-.*\\(?:>,var\\).*$" (0 (quote file-name-shadow) prepend)))
+% Hi-lock: (("^-.*\\(?:>,param\\).*$" (0 (quote file-name-shadow) prepend)))
