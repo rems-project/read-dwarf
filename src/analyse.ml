@@ -247,8 +247,8 @@ let source_line (comp_dir, dir, file) n1 =
 
 let pp_source_line so = match so with Some s -> s (*" (" ^ s ^ ")"*) | None -> "file not found"
 
-let pp_dwarf_source_file_lines m ds sld (pp_actual_line : bool) (a : natural) : string option =
-  let sls = Dwarf.source_lines_of_address ds sld a in
+let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : string option =
+  let sls = Dwarf.source_lines_of_address ds a in
   match sls with
   | [] -> None
   | _ ->
@@ -965,8 +965,6 @@ type node = natural * string
 let pp_test test =
   init_objdump ();
 
-  let sld = Dwarf.subprogram_line_extents test.dwarf_static.ds_dwarf in
-
   (* pull out instructions from text section, assuming 4-byte insns *)
   let p, addr, bs = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
@@ -1052,7 +1050,7 @@ let pp_test test =
                (function
                  | label, x ->
                      pp_label label ^ ": "
-                     ^ Dwarf.pp_inlined_subroutines_by_range test.dwarf_static.ds_dwarf sld [x])
+                     ^ Dwarf.pp_inlined_subroutines_by_range test.dwarf_static [x])
                issr_starting_here)
         in
 
@@ -1089,7 +1087,7 @@ let pp_test test =
     ^ begin
         if !Globals.show_source then
           let source_info =
-            match pp_dwarf_source_file_lines () test.dwarf_static sld true addr with
+            match pp_dwarf_source_file_lines () test.dwarf_static true addr with
             | Some s ->
                 (* the inlining label prefix *)
                 pp_label_prefix ppd_labels ^ s ^ "\n"
