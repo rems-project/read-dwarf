@@ -255,7 +255,7 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
       Some
         (String.concat ", "
            (List.map
-              (fun (comp_dir, dir, file, n, lnr) ->
+              (fun ((comp_dir, dir, file), n, lnr) ->
                 let comp_dir' =
                   match !Globals.comp_dir with
                   | None -> comp_dir
