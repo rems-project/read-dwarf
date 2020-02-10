@@ -665,6 +665,20 @@ let pp_come_froms (addr : addr) (cfs : (addr * control_flow_insn * string) list)
              cfs)
 
 (*****************************************************************************)
+(*        pp control-flow graph                                              *)
+(*****************************************************************************)
+
+(* pp to dot a CFG that shows only the conditional and unconditional branches, ignoring bl and ret *)
+(*
+let pp_cfg test
+    ( control_flow_insns_with_targets,
+      control_flow_insns_with_targets_array,
+      index_of_address,
+      address_of_index,
+      indirect_branches ) =
+ *)
+
+(*****************************************************************************)
 (*        call-graph                                                         *)
 (*****************************************************************************)
 (*module P = Pack*)
@@ -1192,13 +1206,9 @@ let process_file (filename : string) : unit =
   begin
     match read_source_file "emacs-highlighting" with
     | MyFail _ -> ()
-    | Ok lines ->
-       Array.iter (function s -> Printf.printf "%s\n" s) lines
+    | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines
   end;
-  
+
   let test = parse_file filename in
 
   printf "%s" (pp_test test)
-
-(*  pp_cfg test*)
-(*printf "%s" (pp_test test)*)
