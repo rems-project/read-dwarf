@@ -31,24 +31,19 @@
 ### Simulation
 
  - Handle read-mem and write-mem calls
- - Chose representation of memory in state
-   - Global trace
-   - Split on memory types ?
+ - Memory is represented as a global trace: list of memory event from latest to oldest
+   The only optimization is:
+     if someone reads from constant memory (rodata) then they receive a concrete value.
+       (This is mostly to handle naively jump tables)
+     if they write to it: UB
 
 #### C type and location inference
   - Basic C type inference on linear traces
-  - Memory types: 
-    - rodata (read only static global),
-    - data (mutable static globals, inlcude bss)
-    - heap (managed by mpool, single block, should have exact same layout in both cases)
-    - upper stack (stack above function entry sp: hopefully immutable)
-    - lower stack (scratch value, hopefully we'll never match on this)
-  - For now we'll only deal with lower stack
 
 ### Matching
   - Finding the simulation relation on global variables.
-  - First try : Just match elf symbols with size and suppose heap has same layout.
-
+  - First try : Just match elf symbols with size and index lower stack with start sp
+    and handle all the rest symbolically.
 
 ## Control-flow management
   - Start by handling that the exponential way and wait until it blows up
@@ -57,9 +52,20 @@
 
 ## Function calling API
   - Add a format to specify the calling convention
-  - See if we need to deal with writing things on the ancestor stack or if we have that immutable.
 
+# Current task stack for Thibaut. This is the short term task list
 
-## Loop management
-  - TODO
+It is a stack because the topmost element may explode into a lot of other elements.
+
+- Update isla and fix stuff
+- Add support for online isla
+- Add support for running multiple instruction from an ELF file into a new subcommand
+- Add support for state memory manipulation
+- Add support for concrete to symbol offset rewrite 
+  if concrete value is <sym+off> then it is replaced by (bvadd sym off)
+- Add support for rodata detection
+- Add support for parsing of isla memory operations
+- Add support for memory operations execution in islaTrace
+- Add support for memory manipulation in Z3. (Mem = Array Addr Byte) 
+  includes support for more Z3 syntax, including custom types.
 
