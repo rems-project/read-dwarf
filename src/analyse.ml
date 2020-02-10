@@ -994,6 +994,11 @@ let pp_test test =
   let rec first n xs = if n = 0 then [] else match xs with x :: xs' -> x :: first (n - 1) xs' in
   let instructions = if !Globals.clip_binary then first 1000 instructions else instructions in
 
+  let elf_symbols_array =
+    Array.of_list
+      (List.map (function (addr, i) -> elf_symbols_of_address test addr) instructions)
+  in
+
   (* compute the come-from data *)
   let ( control_flow_insns_with_targets,
         control_flow_insns_with_targets_array,
@@ -1003,6 +1008,9 @@ let pp_test test =
     branch_targets test
   in
   let t = come_from_table control_flow_insns_with_targets in
+  let come_froms_array =
+    Array.of_list (List.map (function (addr, i) -> come_froms t addr) instructions)
+  in
 
   (* compute the inlining data *)
   let iss = Dwarf.analyse_inlined_subroutines test.dwarf_static.ds_dwarf in
@@ -1074,24 +1082,86 @@ let pp_test test =
                issr_starting_here)
         in
 
-        let acc' = (instruction, ppd_labels, ppd_new_inlining) :: acc in
+        let acc' = (ppd_labels, ppd_new_inlining) :: acc in
 
         f issr_current' issr_rest' label_last' max_labels' instructions' acc'
   in
 
-  let (instructions_with_inlining, max_labels) = f [] issr 25 0 instructions [] in
+  let (inlining_list, max_labels) = f [] issr 25 0 instructions [] in
+  let inlining_array = Array.of_list inlining_list in
+
   let pp_label_prefix s = s ^ String.make (max_labels - String.length s) ' ' ^ " " in
 
+  (* pp to dot a CFG that shows only the conditional and unconditional branches, ignoring bl and ret *)
+  let pp_cfg () =
+    let is_control_flow_target k = elf_symbols_array.(k) <> [] || come_froms_array.(k) <> [] in
+
+    let pp_node (addr, i, s) = "\"" ^ pp_addr addr ^ "\"" in
+    let pp_edge ((addr, i, s) as n) ((addr', i', s') as n') =
+      pp_node n ^ " -> " ^ pp_node n' ^ ";\n"
+    in
+
+    let rec outgoing_targets k =
+      let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
+      let targets' =
+        match co with
+        | None -> outgoing_targets (k + 1)
+        | Some c -> (
+            match c with
+            | C_ret -> []
+            | C_eret -> []
+            | C_branch (a, s) -> targets
+            | C_branch_and_link (a, s) ->
+                if (*stop at bl to nonreturn*) List.length targets = 1 then []
+                else (* ignore bl; just go to successor *) outgoing_targets (k + 1)
+            | C_branch_cond (is, a, s) -> targets
+            | C_branch_register r -> targets
+            | C_smc_hvc s -> outgoing_targets (k + 1)
+          )
+      in
+      targets'
+    in
+    let outgoing_edges k =
+      let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
+      let n = (addr, i, "") in
+      String.concat ""
+        (List.map (function (addr', i', s') as n' -> pp_edge n n') (outgoing_targets k))
+    in
+
+    let c = open_out "foo.dot" in
+    Printf.fprintf c "digraph g {\n";
+    Printf.fprintf c "rankdir=\"LR\";\n";
+    for k = 0 to List.length instructions - 1 do
+      ( match elf_symbols_array.(k) with
+      | [] -> ()
+      | ss ->
+          let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
+          let n = (addr, i, "") in
+          let s = List.hd (List.rev ss) in
+          Printf.fprintf c "%s [label=\"%s\"];\n" (pp_node n) s
+      );
+      if is_control_flow_target k then Printf.fprintf c "%s" (outgoing_edges k) else ()
+    done;
+    Printf.fprintf c "}\n";
+    let _ = close_out c in
+    ()
+  in
+
+  pp_cfg ();
+
+  (* plumbing to print diffs from one instruction to the next *)
   let last_frame_info = ref "" in
   let last_var_info = ref [] in
   let last_source_info = ref "" in
 
-  let pp_instruction (((addr : natural), (i : natural)), ppd_labels, ppd_new_inlining) =
+  let pp_instruction ((addr : natural), (i : natural)) =
     (* the come_froms for this address, calculated first to determine whether this is the start of a basic block *)
-    let come_froms' = come_froms t addr in
+    let k = index_of_address addr in
+    let come_froms' = come_froms_array.(k) in
+    let (ppd_labels, ppd_new_inlining) = inlining_array.(k) in
 
     (* the elf symbols at this address, if any (and reset the last_var_info if any) *)
-    let elf_symbols = elf_symbols_of_address test addr in
+    let elf_symbols = elf_symbols_array.(k) in
     (match elf_symbols with [] -> () | _ -> last_var_info := []);
 
     (if come_froms' <> [] || elf_symbols <> [] then "\n" else "")
@@ -1178,7 +1248,7 @@ let pp_test test =
      let c = Dwarf.p_context_of_d d in
      Dwarf.pp_all_aggregate_types c d)
   ^ "\n************** instructions *****************\n"
-  ^ String.concat "" (List.map pp_instruction instructions_with_inlining)
+  ^ String.concat "" (List.map pp_instruction instructions)
   ^ "\n************** branch targets *****************\n"
   ^ pp_branch_targets control_flow_insns_with_targets
   ^ "\n************** call graph *****************\n"
