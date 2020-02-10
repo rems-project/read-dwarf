@@ -2,7 +2,7 @@
 
 (executable
  (name main)
- (libraries linksem isla-lang cmdliner pprint res))
+ (libraries linksem isla-lang cmdliner pprint res ocamlgraph))
 
 (env
  (dev

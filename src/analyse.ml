@@ -515,7 +515,7 @@ let branch_targets test =
     | C_eret -> []
     | C_branch (a, s) -> [(a, s)]
     | C_branch_and_link (a, s) ->
-        if s = "<abort>" then (* special case because abort doesn't return *)
+        if List.mem s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then (* special case non-return functions*)
           [(a, s)]
         else [(a, s); (succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
     | C_branch_cond (is, a, s) ->
@@ -545,13 +545,16 @@ let branch_targets test =
             in
             f 0
       )
-    | C_smc_hvc s -> []
+    | C_smc_hvc s -> [(succ_addr addr, "<C_smc_hvc successor>")]
   in
 
   (* pull out instructions from text section, assuming 4-byte insns *)
   let p, text_addr, bs = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.words_of_byte_list text_addr bs [] in
 
+  (*
+  Printf.printf "instructions=%d unique instructions=%d\n"  (List.length instructions) (List.length (List.sort_uniq compare (List.map (function (a,i)->Nat_big_num.to_int i) instructions))); exit 1;
+  *)
   let control_flow_insn ((addr : natural), (i : natural)) : (addr * control_flow_insn) option =
     match lookup_objdump_lines addr with
     | Some (i, s) -> (
@@ -681,7 +684,7 @@ let pp_cfg test
 (*****************************************************************************)
 (*        call-graph                                                         *)
 (*****************************************************************************)
-(*module P = Pack*)
+module P = Graph.Pack
 (*
         Warning 49: no cmi file was found in path for module Pack 
  *)
