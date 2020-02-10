@@ -40,7 +40,8 @@ type id = Id.t
 type ivar = Register of Reg.path  (** sid:REG.FIELD.INNER *) | Extra of int  (** sid:f42 *)
 
 (** Represent the state of the machine.
-    Should only be mutated when running a trace on a newly instantiated state *)
+    Should only be mutated for initialization purpose
+    i.e you should only mutate it if you have just created it using make or copy*)
 type t = {
   id : id;
   mutable regs : exp Reg.Map.t;
@@ -126,7 +127,6 @@ let make () =
 let make_of regs extra_vars asserts memory =
   let id = !next_id in
   let state = { id; regs; extra_vars; asserts; memory } in
-  (* Warning: here I'm creating a cyclic reference. Please be aware of that *)
   next_id := id + 1;
   WeakMap.add id2state id state;
   state

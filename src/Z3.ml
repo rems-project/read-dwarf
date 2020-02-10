@@ -6,6 +6,7 @@ let isla = ref "z3"
 (** The call number for Z3 *)
 let call_num = ref 0
 
+(** Declare all the variables in exp in the (declare-const ...) format on ochannel *)
 let declare_vars ochannel exp : unit =
   let declared = Hashtbl.create 10 in
   let process_var : State.var -> unit = function
@@ -20,6 +21,7 @@ let declare_vars ochannel exp : unit =
   in
   IslaManip.exp_iter_var process_var exp
 
+(** Simplify exp using Z3 *)
 let simplify (exp : State.exp) : State.exp =
   let filename = "Z3 output " ^ string_of_int !call_num in
   call_num := !call_num + 1;
