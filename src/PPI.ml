@@ -27,3 +27,7 @@ let svar = State.Var.pp
 let sexp = State.pp_sexp
 
 let state = State.pp
+
+let byteseq = BytesSeq.pp
+
+let byteseq32le = BytesSeq.pp32le
