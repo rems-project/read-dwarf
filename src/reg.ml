@@ -52,8 +52,8 @@ let rec struct_weak_inc s s' =
   let exception Nope in
   let field n i =
     match (field_type s i, field_type s' (field_of_string s' n)) with
-    | Plain i, Plain j when i = j -> ()
-    | Struct rs, Struct rs' -> if not @@ struct_weak_inc rs rs' then raise Nope
+    | (Plain i, Plain j) when i = j -> ()
+    | (Struct rs, Struct rs') -> if not @@ struct_weak_inc rs rs' then raise Nope
     | _ -> raise Nope
   in
   try
@@ -66,8 +66,8 @@ let struct_weak_eq s s' = struct_weak_inc s s' && struct_weak_inc s' s
 
 let type_weak_eq t t' =
   match (t, t') with
-  | Plain n, Plain m when n = m -> true
-  | Struct rs, Struct rs' when struct_weak_eq rs rs' -> true
+  | (Plain n, Plain m) when n = m -> true
+  | (Struct rs, Struct rs') when struct_weak_eq rs rs' -> true
   | _ -> false
 
 (*****************************************************************************)
@@ -194,8 +194,8 @@ module Map = struct
 
   and pp_plain rt conv cell =
     match (rt, cell) with
-    | Plain _, MPlain a -> conv a
-    | Struct rs, MStruct s -> pp_struct rs conv s
+    | (Plain _, MPlain a) -> conv a
+    | (Struct rs, MStruct s) -> pp_struct rs conv s
     | _ -> failwith "Reg.Map corruption"
 
   let pp conv cell = pp_struct index conv cell

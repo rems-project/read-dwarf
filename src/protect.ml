@@ -18,7 +18,7 @@ let protect (f : unit -> 'a) (p : unit -> unit) : 'a =
   let resf = try Ok (f ()) with e -> Error e in
   let resp = try Ok (p ()) with e -> Error e in
   match (resf, resp) with
-  | Ok a, Ok () -> a
-  | Ok _, Error e -> raise e
-  | Error e, Ok () -> raise e
-  | Error ef, Error ep -> raise (Protect_both (ef, ep))
+  | (Ok a, Ok ()) -> a
+  | (Ok _, Error e) -> raise e
+  | (Error e, Ok ()) -> raise e
+  | (Error ef, Error ep) -> raise (Protect_both (ef, ep))

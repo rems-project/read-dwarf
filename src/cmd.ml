@@ -66,7 +66,7 @@ let input_exec exec cmd cont =
 let io (cmd : cmd) (out_cont : out_channel -> unit) (in_cont : in_channel -> 'a) : 'a =
   cmd.(0) <- get_full_path cmd.(0);
   (* PP.(println @@ array string cmd); *)
-  let output, input = open_process_args cmd.(0) cmd in
+  let (output, input) = open_process_args cmd.(0) cmd in
   let process () =
     out_cont input;
     flush input;

@@ -104,9 +104,9 @@ let input_term = Term.(ret (const input $ imode_term $ instr))
 (** Convert various flag describe the mode of operation into the mode of operation *)
 let isla_f2m direct inter : isla_mode Term.ret =
   match (direct, inter) with
-  | false, false -> `Ok CMD
-  | true, false -> `Ok RAW
-  | false, true -> `Ok INT
+  | (false, false) -> `Ok CMD
+  | (true, false) -> `Ok RAW
+  | (false, true) -> `Ok INT
   | _ -> `Error (false, "You cannot use -d/--direct and --i/--inter at the same time")
 
 let isla_mode_term = Term.(ret (const isla_f2m $ direct $ inter))

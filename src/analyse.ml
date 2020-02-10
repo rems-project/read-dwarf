@@ -90,9 +90,9 @@ let parse_file (filename : string) : test =
 
   (*  Debug.print_string "elf segments etc\n";*)
   match (elf_epi, elf_file) with
-  | Sail_interface.ELF_Class_32 _, _ -> Warn.fatal "%s" "cannot handle ELF_Class_32"
-  | _, Elf_file.ELF_File_32 _ -> Warn.fatal "%s" "cannot handle ELF_File_32"
-  | Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1 ->
+  | (Sail_interface.ELF_Class_32 _, _) -> Warn.fatal "%s" "cannot handle ELF_Class_32"
+  | (_, Elf_file.ELF_File_32 _) -> Warn.fatal "%s" "cannot handle ELF_File_32"
+  | (Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1) ->
       (* remove all the auto generated segments (they contain only 0s) *)
       let segments =
         Lem_list.mapMaybe
@@ -213,10 +213,10 @@ let source_line (comp_dir, dir, file) n1 =
   | None -> (
       let filename =
         match (comp_dir, dir, file) with
-        | Some cd, Some d, f -> Filename.concat cd (Filename.concat d f)
-        | Some cd, None, f -> Filename.concat cd f
-        | None, Some d, f -> Filename.concat d f
-        | None, None, f -> f
+        | (Some cd, Some d, f) -> Filename.concat cd (Filename.concat d f)
+        | (Some cd, None, f) -> Filename.concat cd f
+        | (None, Some d, f) -> Filename.concat d f
+        | (None, None, f) -> f
       in
       match read_source_file filename with
       | Ok lines ->
@@ -289,10 +289,10 @@ let aof ((a : natural), (cfa : string), (regs : (string * string) list)) = a
 
 let rec f (aof : 'b -> natural) (a : natural) (last : 'b option) (bs : 'b list) : 'b option =
   match (last, bs) with
-  | None, [] -> None
-  | Some b', [] -> if Nat_big_num.greater_equal a (aof b') then Some b' else None
-  | None, b'' :: bs' -> f aof a (Some b'') bs'
-  | Some b', b'' :: bs' ->
+  | (None, []) -> None
+  | (Some b', []) -> if Nat_big_num.greater_equal a (aof b') then Some b' else None
+  | (None, b'' :: bs') -> f aof a (Some b'') bs'
+  | (Some b', b'' :: bs') ->
       if Nat_big_num.less a (aof b') then None
       else if Nat_big_num.greater_equal a (aof b') && Nat_big_num.less a (aof b'') then Some b'
       else f aof a (Some b'') bs'
@@ -303,7 +303,7 @@ let pp_frame_info (test : test) (addr : natural) : string =
   | None -> "<no frame info for this address>\n"
   | Some ((a : natural), (cfa : string), (regs : (string * string) list)) ->
       pp_addr a ^ " " ^ "CFA:" ^ cfa ^ " "
-      ^ String.concat " " (List.map (function rname, rinfo -> rname ^ ":" ^ rinfo) regs)
+      ^ String.concat " " (List.map (function (rname, rinfo) -> rname ^ ":" ^ rinfo) regs)
       ^ "\n"
 
 (*****************************************************************************)
@@ -324,7 +324,7 @@ let init_objdump () =
             let parse_line (s : string) : (natural * (natural * string)) option =
               (*          if String.length s >=9 && s.[8] = ':' then *)
               match Scanf.sscanf s " %x: %x %n" (fun a i n -> (a, i, n)) with
-              | a, i, n ->
+              | (a, i, n) ->
                   let s' = String.sub s n (String.length s - n) in
                   Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
               | exception _ -> None
@@ -393,7 +393,7 @@ let parse_addr (s : string) : natural = Scanf.sscanf s "%Lx" (fun i64 -> Nat_big
 
 let parse_target s =
   match Scanf.sscanf s "%s %s" (fun s1 s2 -> (s1, s2)) with
-  | s1, s2 -> Some (parse_addr s1, s2)
+  | (s1, s2) -> Some (parse_addr s1, s2)
   | exception _ -> None
 
 let parse_drop_one s =
@@ -402,7 +402,7 @@ let parse_drop_one s =
         let s' = String.sub s n (String.length s - n) in
         (s1, s'))
   with
-  | s1, s' -> Some s'
+  | (s1, s') -> Some s'
   | exception _ -> None
 
 let parse_control_flow_instruction s mnemonic s' =
@@ -467,7 +467,7 @@ let branch_targets test =
         | Ok lines ->
             let parse_line (s : string) : (natural * (natural * natural)) option =
               match Scanf.sscanf s " %x: %x %x " (fun a_br a_table n -> (a_br, a_table, n)) with
-              | a_br, a_table, n ->
+              | (a_br, a_table, n) ->
                   Some
                     (Nat_big_num.of_int a_br, (Nat_big_num.of_int a_table, Nat_big_num.of_int n))
               | exception _ -> Warn.fatal "couldn't parse branch table data file line: \"%s\"\n" s
@@ -515,7 +515,8 @@ let branch_targets test =
     | C_eret -> []
     | C_branch (a, s) -> [(a, s)]
     | C_branch_and_link (a, s) ->
-        if List.mem s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then (* special case non-return functions*)
+        if List.mem s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then
+          (* special case non-return functions*)
           [(a, s)]
         else [(a, s); (succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
     | C_branch_cond (is, a, s) ->
@@ -549,7 +550,7 @@ let branch_targets test =
   in
 
   (* pull out instructions from text section, assuming 4-byte insns *)
-  let p, text_addr, bs = Dwarf.extract_text test.elf_file in
+  let (p, text_addr, bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.words_of_byte_list text_addr bs [] in
 
   (*
@@ -563,7 +564,7 @@ let branch_targets test =
               let s' = String.sub s n (String.length s - n) in
               (mnemonic, s'))
         with
-        | mnemonic, s' -> (
+        | (mnemonic, s') -> (
             (*           if (String.length mnemonic >=2 && String.sub s 0 2 ="b.") || List.mem mnemonic ["b"; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then*)
             match parse_control_flow_instruction s mnemonic s' with
             | None -> None (*Warn.fatal "parse error %s\n" s*)
@@ -581,7 +582,7 @@ let branch_targets test =
   in
 
   let control_flow_insns_with_targets : (addr * control_flow_insn * (addr * string) list) list =
-    List.map (function a, c -> (a, c, targets_of_control_flow_insn a c)) control_flow_insns
+    List.map (function (a, c) -> (a, c, targets_of_control_flow_insn a c)) control_flow_insns
   in
 
   let index_of_address (addr : natural) : int =
@@ -596,14 +597,14 @@ let branch_targets test =
   let control_flow_insns_with_targets_array :
       (addr * natural (*isns*) * control_flow_insn option * (addr * int * string) list) array =
     Array.init size (function k ->
-        (let a, i = List.nth instructions k in
+        (let (a, i) = List.nth instructions k in
          let co = control_flow_insn (a, i) in
          match co with
          | None -> (a, i, None, [(succ_addr a, k + 1, "succ")])
          | Some (a', c) ->
              let targets = targets_of_control_flow_insn a c in
              let targets' =
-               List.map (function a'', s'' -> (a'', index_of_address a'', s'')) targets
+               List.map (function (a'', s'') -> (a'', index_of_address a'', s'')) targets
              in
              (a, i, Some c, targets')))
   in
@@ -611,7 +612,7 @@ let branch_targets test =
   let indirect_branches =
     List.filter
       (function
-        | a, c, ts -> (
+        | (a, c, ts) -> (
             match c with C_branch_register _ -> true | _ -> false
           ))
       control_flow_insns_with_targets
@@ -627,9 +628,9 @@ let pp_branch_targets (xs : (addr * control_flow_insn * (addr * string) list) li
   String.concat ""
     (List.map
        (function
-         | a, c, ts ->
+         | (a, c, ts) ->
              pp_addr a ^ ":  " ^ pp_control_flow_instruction c ^ " -> "
-             ^ String.concat "," (List.map (function a', s -> pp_addr a' ^ "" ^ s ^ "") ts)
+             ^ String.concat "," (List.map (function (a', s) -> pp_addr a' ^ "" ^ s ^ "") ts)
              ^ "\n")
        xs)
 
@@ -638,10 +639,10 @@ let come_from_table (xs : (addr * control_flow_insn * (addr * string) list) list
   let t = Hashtbl.create 1000 in
   List.iter
     (function
-      | a, c, ts ->
+      | (a, c, ts) ->
           List.iter
             (function
-              | a', s ->
+              | (a', s) ->
                   let aint' = Nat_big_num.to_int a' in
                   (* let prev = Hashtbl.find t aint' in *)
                   let come_from = (a, c, s) in
@@ -661,7 +662,7 @@ let pp_come_froms (addr : addr) (cfs : (addr * control_flow_insn * string) list)
       ^ String.concat ","
           (List.map
              (function
-               | a, c, s ->
+               | (a, c, s) ->
                    pp_come_from_addr_wrt addr c a ^ "("
                    ^ pp_control_flow_instruction_short c
                    ^ ")" ^ s)
@@ -685,6 +686,7 @@ let pp_cfg test
 (*        call-graph                                                         *)
 (*****************************************************************************)
 module P = Graph.Pack
+
 (*
         Warning 49: no cmi file was found in path for module Pack 
  *)
@@ -729,11 +731,12 @@ let pp_call_graph test
   let extra_bl_targets' =
     List.filter_map
       (function
-        | a, c, ts -> (
+        | (a, c, ts) -> (
             match c with
             | C_branch_and_link (a', s') ->
                 if
-                  not (List.exists (function a'', ss'' -> Nat_big_num.equal a' a'') elf_symbols)
+                  not
+                    (List.exists (function (a'', ss'') -> Nat_big_num.equal a' a'') elf_symbols)
                 then Some (a', ["FROM BL:" ^ s'])
                 else None
             | _ -> None
@@ -745,7 +748,7 @@ let pp_call_graph test
     match axs with
     | [] -> acc
     | (a, x) :: axs' ->
-        if not (List.exists (function a', x' -> Nat_big_num.equal a a') acc) then
+        if not (List.exists (function (a', x') -> Nat_big_num.equal a a') acc) then
           dedup axs' ((a, x) :: acc)
         else dedup axs' acc
   in
@@ -755,20 +758,20 @@ let pp_call_graph test
   let nodes0 =
     List.sort
       (function
-        | a, ss -> (
-            function a', ss' -> Nat_big_num.compare a a'
+        | (a, ss) -> (
+            function (a', ss') -> Nat_big_num.compare a a'
           ))
       (elf_symbols @ extra_bl_targets)
   in
 
-  let nodes : node list = List.map (function a, ss -> (a, index_of_address a, ss)) nodes0 in
+  let nodes : node list = List.map (function (a, ss) -> (a, index_of_address a, ss)) nodes0 in
 
   let pp_node ((a, k, ss) as node) =
     pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
   in
 
   let node_of_index k =
-    match List.find_opt (function a, k', ss -> k' = k) nodes with
+    match List.find_opt (function (a, k', ss) -> k' = k) nodes with
     | Some n -> n
     | None ->
         Warn.nonfatal "node_of_index %d\n" k;
@@ -782,9 +785,9 @@ let pp_call_graph test
     | k :: todo' ->
         if List.mem k acc_reachable then stupid_reachability acc_reachable acc_bl_targets todo'
         else
-          let a, i, co, targets = control_flow_insns_with_targets_array.(k) in
-          let target_indices = List.map (function a'', k'', s'' -> k'') targets in
-          let non_bl_targets, bl_targets =
+          let (a, i, co, targets) = control_flow_insns_with_targets_array.(k) in
+          let target_indices = List.map (function (a'', k'', s'') -> k'') targets in
+          let (non_bl_targets, bl_targets) =
             match co with
             | Some (C_branch_and_link (_, _)) -> (
                 match target_indices with [t1; t2] -> ([t2], [t1]) | [t1] -> ([], [t1])
@@ -797,7 +800,7 @@ let pp_call_graph test
   in
 
   let bl_targets k =
-    let reachable, bl_targets = stupid_reachability [] [] [k] in
+    let (reachable, bl_targets) = stupid_reachability [] [] [k] in
     bl_targets
   in
 
@@ -817,10 +820,10 @@ let pp_call_graph test
     match todo with
     | [] -> acc_reachable
     | ((a, k, ss) as n) :: todo' ->
-        if List.exists (function a', k', ss' -> k' = k) acc_reachable then
+        if List.exists (function (a', k', ss') -> k' = k) acc_reachable then
           stupid_reachability' acc_reachable todo'
         else
-          let _, targets = List.find (function (a', k', ss'), _ -> k' = k) call_graph in
+          let (_, targets) = List.find (function ((a', k', ss'), _) -> k' = k) call_graph in
           stupid_reachability' (n :: acc_reachable) (targets @ todo')
   in
 
@@ -828,7 +831,7 @@ let pp_call_graph test
     List.map
       (function
         | (a, k, ss) as n ->
-            let _, targets = List.find (function (a', k', ss'), _ -> k' = k) call_graph in
+            let (_, targets) = List.find (function ((a', k', ss'), _) -> k' = k) call_graph in
             (n, stupid_reachability' [] targets))
       nodes
   in
@@ -837,8 +840,8 @@ let pp_call_graph test
     String.concat ""
       (List.map
          (function
-           | ((a, k, ss) as n), ns ->
-               (if List.exists (function a', k', ss' -> k' = k) ns then "RECURSIVE " else "")
+           | (((a, k, ss) as n), ns) ->
+               (if List.exists (function (a', k', ss') -> k' = k) ns then "RECURSIVE " else "")
                ^ "\n"
                ^ pp_call_graph_entry (n, ns))
          transitive_call_graph)
@@ -983,7 +986,7 @@ let pp_test test =
   init_objdump ();
 
   (* pull out instructions from text section, assuming 4-byte insns *)
-  let p, addr, bs = Dwarf.extract_text test.elf_file in
+  let (p, addr, bs) = Dwarf.extract_text test.elf_file in
   let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
   (* hack to cut down problem size for runtime experimentation *)
@@ -1012,7 +1015,7 @@ let pp_test test =
     | (((addr : natural), (i : natural)) as instruction) :: instructions' ->
         let issr_still_current =
           List.filter
-            (function label, ((n1, n2), (m, n), is) -> Nat_big_num.less addr n2)
+            (function (label, ((n1, n2), (m, n), is)) -> Nat_big_num.less addr n2)
             issr_current
         in
 
@@ -1025,10 +1028,10 @@ let pp_test test =
               else (List.rev_append acc [], xs)
         in
 
-        let issr_starting_here0, issr_rest' =
+        let (issr_starting_here0, issr_rest') =
           find_first
-            (function (n1, n2), (m, n), is -> Nat_big_num.less_equal n2 addr)
-            (function (n1, n2), (m, n), is -> Nat_big_num.equal n1 addr)
+            (function ((n1, n2), (m, n), is) -> Nat_big_num.less_equal n2 addr)
+            (function ((n1, n2), (m, n), is) -> Nat_big_num.equal n1 addr)
             [] issr_rest
         in
 
@@ -1045,9 +1048,9 @@ let pp_test test =
               enlabel (l :: labels_in_use) l ((l, issr) :: acc) issr_new'
         in
 
-        let issr_starting_here, label_last' =
+        let (issr_starting_here, label_last') =
           enlabel
-            (List.map (function label, _ -> label) issr_current)
+            (List.map (function (label, _) -> label) issr_current)
             label_last [] issr_starting_here0
         in
 
@@ -1058,14 +1061,14 @@ let pp_test test =
         let pp_label label = String.make 1 (Char.chr (label + Char.code 'a')) in
 
         let ppd_labels =
-          String.concat "" (List.map (function label, _ -> pp_label label) issr_current')
+          String.concat "" (List.map (function (label, _) -> pp_label label) issr_current')
         in
 
         let ppd_new_inlining =
           String.concat ""
             (List.map
                (function
-                 | label, x ->
+                 | (label, x) ->
                      pp_label label ^ ": "
                      ^ Dwarf.pp_inlined_subroutines_by_range test.dwarf_static [x])
                issr_starting_here)
@@ -1076,7 +1079,7 @@ let pp_test test =
         f issr_current' issr_rest' label_last' max_labels' instructions' acc'
   in
 
-  let instructions_with_inlining, max_labels = f [] issr 25 0 instructions [] in
+  let (instructions_with_inlining, max_labels) = f [] issr 25 0 instructions [] in
   let pp_label_prefix s = s ^ String.make (max_labels - String.length s) ' ' ^ " " in
 
   let last_frame_info = ref "" in
@@ -1157,12 +1160,12 @@ let pp_test test =
       end
     ^ begin
         match
-          List.find_opt (function a, c, ts -> Nat_big_num.equal a addr) indirect_branches
+          List.find_opt (function (a, c, ts) -> Nat_big_num.equal a addr) indirect_branches
         with
         | Some (a, c, ts) ->
             " -> "
             ^ String.concat ","
-                (List.map (function a', s -> pp_target_addr_wrt addr c a' ^ "" ^ s ^ "") ts)
+                (List.map (function (a', s) -> pp_target_addr_wrt addr c a' ^ "" ^ s ^ "") ts)
             ^ " "
         | None -> ""
       end

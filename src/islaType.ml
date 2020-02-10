@@ -21,12 +21,12 @@ let tassert l s b = if not b then raise (TypeError (l, s))
 
 let type_unop l (u : unop) t =
   match (u, t) with
-  | Not, Ty_Bool -> Ty_Bool
-  | Bvnot, Ty_BitVec _ | Bvneg, Ty_BitVec _ -> t
-  | Bvredand, Ty_BitVec _ | Bvredor, Ty_BitVec _ -> Ty_Bool
-  | Extract (b, a), Ty_BitVec n when a < b && b <= n -> Ty_BitVec (b + 1 - a)
-  | ZeroExtend m, Ty_BitVec n -> Ty_BitVec (n + m)
-  | SignExtend m, Ty_BitVec n -> Ty_BitVec (n + m)
+  | (Not, Ty_Bool) -> Ty_Bool
+  | (Bvnot, Ty_BitVec _) | (Bvneg, Ty_BitVec _) -> t
+  | (Bvredand, Ty_BitVec _) | (Bvredor, Ty_BitVec _) -> Ty_Bool
+  | (Extract (b, a), Ty_BitVec n) when a < b && b <= n -> Ty_BitVec (b + 1 - a)
+  | (ZeroExtend m, Ty_BitVec n) -> Ty_BitVec (n + m)
+  | (SignExtend m, Ty_BitVec n) -> Ty_BitVec (n + m)
   | _ -> raise (TypeError (l, "Unary operator"))
 
 let type_binop l (u : binop) t t' =
@@ -43,12 +43,14 @@ let type_binop l (u : binop) t t' =
   | Bvcomp _ -> if t = t' && t != Ty_Bool then Ty_Bool else raise (TypeError (l, "Bvcomp"))
   (* Shifts *)
   | Bvshl | Bvlshr | Bvashr -> (
-      match (t, t') with Ty_BitVec n, Ty_BitVec m -> t | _ -> raise (TypeError (l, "Bv shifts"))
+      match (t, t') with
+      | (Ty_BitVec n, Ty_BitVec m) -> t
+      | _ -> raise (TypeError (l, "Bv shifts"))
     )
   (* Concatenation *)
   | Concat -> (
       match (t, t') with
-      | Ty_BitVec n, Ty_BitVec m -> Ty_BitVec (n + m)
+      | (Ty_BitVec n, Ty_BitVec m) -> Ty_BitVec (n + m)
       | _ -> raise (TypeError (l, "Concat "))
     )
 

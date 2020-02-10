@@ -85,8 +85,8 @@ let string_of_accessor_list = function Nil -> [] | Cons l -> List.map string_of_
 
 let rec valu_get valu path =
   match (valu, path) with
-  | _, [] -> valu
-  | Val_Struct s, a :: l -> valu_get (List.assoc a s) l
+  | (_, []) -> valu
+  | (Val_Struct s, a :: l) -> valu_get (List.assoc a s) l
   | _ -> failwith "islaManip.valu_get: Invalid path in IslaManip.valu_get"
 
 (*****************************************************************************)
