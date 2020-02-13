@@ -1118,8 +1118,8 @@ let pp_test test =
 
   let pp_label_prefix s = s ^ String.make (max_labels - String.length s) ' ' ^ " " in
 
-  (* pp to dot a CFG that shows only the conditional and indirect branches, ignoring bl and ret *)
-  let pp_cfg () =
+  (* pp to dot a CFG, showing conditional and indirect branches, and bl.*)
+  let pp_cfg f =
 
     (* the source nodes are the addresses which are either
        - elf symbols
@@ -1140,58 +1140,80 @@ let pp_test test =
 
     let is_control_flow_target k = elf_symbols_array.(k) <> [] || List.exists source_node_come_from come_froms_array.(k) in
 
-    let pp_node_name (addr, i, s) = "\"" ^ pp_addr addr ^ "\"" in
-    let pp_edge ((addr, i, s) as n) ((addr', i', s') as n') =
-      pp_node_name n ^ " -> " ^ pp_node_name n' ^ ";\n"
+        (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
+    let margin = "[margin=\"0.03,0.02\"]" in 
+    let nodesep = "[nodesep=\"0.25\"]" in (*graphviz default *)
+    let nodesep = "[nodesep=\"0.1\"]" in 
+
+    let pp_node_name_source addr = "\"" ^ pp_addr addr ^ "\"" in
+    let pp_node_name_branch_and_link addr = "\"" ^ "bl_" ^ pp_addr addr ^ "\"" in
+    let pp_edge nn nn' =
+      nn ^ " -> " ^ nn' ^ nodesep ^ ";\n"
     in
 
-    let rec outgoing_targets k =
+    let k_max = Array.length elf_symbols_array in
+
+    (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
+    
+    let rec graphette_source k =
       let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
-      let targets' =
-        match co with
-        | None -> outgoing_targets (k + 1)
-        | Some c -> (
+      let ss = elf_symbols_array.(k) in
+      let s = match ss with [] -> pp_addr addr | _ -> List.hd (List.rev ss) in
+      let nn = pp_node_name_source addr in 
+      Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
+      ^ graphette_body [] nn k 
+
+    and graphette_body visited nn_last k =
+      
+      (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
+       if k >= k_max then "" else
+         let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
+         match co with
+         | None -> graphette_body visited nn_last (k + 1)
+         | Some c -> 
             match c with
-            | C_ret -> []
-            | C_eret -> []
-            | C_branch (a, s) -> targets
+            | C_ret -> ""
+            | C_eret -> ""
+            | C_branch (a, s) ->
+               let k' = index_of_address a in
+               if List.mem (nn_last,k') visited then ""
+               else 
+                 graphette_body ((nn_last,k')::visited) nn_last k'
             | C_branch_and_link (a, s) ->
-                if (*stop at bl to nonreturn*) List.length targets = 1 then []
-                else (* ignore bl; just go to successor *) outgoing_targets (k + 1)
-            | C_branch_cond (is, a, s) -> targets
-            | C_branch_register r -> targets
-            | C_smc_hvc s -> outgoing_targets (k + 1)
-          )
-      in
-      targets'
+               let nn = pp_node_name_branch_and_link addr in 
+               Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
+               ^ pp_edge nn_last nn
+               ^ if List.filter (function | (T_branch_and_link_successor,_,_,_) -> true | _ -> false) targets = [] then
+                   ""
+                 else
+                   graphette_body visited nn (k+1)
+            | C_branch_cond (_, _, _) | C_branch_register _ ->
+               String.concat "" (List.map (function addr' ->  let nn = pp_node_name_source addr' in pp_edge nn_last nn) (List.sort_uniq compare (List.map (function (tk,addr',c,s) -> addr') targets)))
+            | C_smc_hvc s -> graphette_body visited nn_last (k + 1) 
     in
-    let outgoing_edges k =
-      let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
-      let n = (addr, i, "") in
-      String.concat ""
-        (List.map (function (tk', addr', i', s') -> let n' = (addr',i',s') in pp_edge n n') (outgoing_targets k))
-    in
-
-    let c = open_out "foo.dot" in
+    let c = open_out f in
     Printf.fprintf c "digraph g {\n";
     Printf.fprintf c "rankdir=\"LR\";\n";
-    for k = 0 to List.length instructions - 1 do
-      ( match elf_symbols_array.(k) with
-      | [] -> ()
-      | ss ->
-          let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
-          let n = (addr, i, "") in
-          let s = List.hd (List.rev ss) in
-          Printf.fprintf c "%s [label=\"%s\"];\n" (pp_node_name n) s
+    let filter_ni g n =
+      let rec filter_ni' g n k =
+        (if k>=n then ""
+         else
+           match g k with
+           | Some x -> x ^ filter_ni' g n (k+1)
+           | None -> filter_ni' g n (k+1)) in
+      filter_ni' g n 0 in
+    Printf.fprintf c "%s"
+      (filter_ni
+         (function k -> 
+            if is_control_flow_target k then Some (graphette_source k) else None)
+         k_max
       );
-      if is_control_flow_target k then Printf.fprintf c "%s" (outgoing_edges k) else ()
-    done;
     Printf.fprintf c "}\n";
     let _ = close_out c in
     ()
   in
 
-  pp_cfg ();
+  (match !Globals.dot_file with Some f -> pp_cfg f | None -> ());
 
   (* plumbing to print diffs from one instruction to the next *)
   let last_frame_info = ref "" in

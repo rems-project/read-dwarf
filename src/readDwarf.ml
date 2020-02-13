@@ -58,7 +58,13 @@ let info =
   let doc = "Read and dump dwarf information" in
   Term.(info "rd" ~doc ~exits:default_exits)
 
-let options = [comp_dir; no_vars; no_cfa; no_source; objdump; branch_tables; clip_binary]
+let dot_file =
+  let doc = "File to output dot CFG to" in
+  setter Globals.dot_file
+    Arg.(value & opt (some string) None & info ["dot_file"] ~docv:"DOT_FILE" ~doc)
+
+  
+let options = [comp_dir; no_vars; no_cfa; no_source; objdump; branch_tables; clip_binary; dot_file]
 
 (* let full_term = add_option [comp_dir; show_vars; show_cfa; show_source; objdump] main_term *)
 let full_term = Term.(add_options options (const Analyse.process_file) $ elf)
