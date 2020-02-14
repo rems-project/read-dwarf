@@ -364,7 +364,7 @@ type target_kind =
   | T_branch_cond_successor
   | T_branch_register
   | T_smc_hvc_successor
-        
+
 let pp_control_flow_instruction c =
   match c with
   | C_ret -> "ret"
@@ -396,7 +396,6 @@ let pp_target_kind_short = function
   | T_branch_register -> "br"
   | T_smc_hvc_successor -> "smc-hvc-succ"
 
-        
 let highlight c =
   match c with
   | C_ret | C_eret | C_branch_and_link (_, _) | C_smc_hvc _ -> false
@@ -531,8 +530,8 @@ let branch_targets test =
 
   let succ_addr addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
 
-  let targets_of_control_flow_insn (addr : natural) (c : control_flow_insn) : (target_kind * addr * string) list
-      =
+  let targets_of_control_flow_insn (addr : natural) (c : control_flow_insn) :
+      (target_kind * addr * string) list =
     match c with
     | C_ret -> []
     | C_eret -> []
@@ -541,7 +540,11 @@ let branch_targets test =
         if List.mem s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then
           (* special case non-return functions*)
           [(T_branch_and_link_call_noreturn, a, s)]
-        else [(T_branch_and_link_call, a, s); (T_branch_and_link_successor, succ_addr addr, "<return>")] (* we rely later on the ordering of these *)
+        else
+          [
+            (T_branch_and_link_call, a, s);
+            (T_branch_and_link_successor, succ_addr addr, "<return>");
+          ] (* we rely later on the ordering of these *)
     | C_branch_cond (is, a, s) ->
         let succ_addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
         [(T_branch_cond_branch, a, s); (T_branch_cond_successor, succ_addr, "<fallthrough>")]
@@ -604,7 +607,8 @@ let branch_targets test =
     List.filter_map control_flow_insn instructions
   in
 
-  let control_flow_insns_with_targets : (addr * control_flow_insn * (target_kind * addr * string) list) list =
+  let control_flow_insns_with_targets :
+      (addr * control_flow_insn * (target_kind * addr * string) list) list =
     List.map (function (a, c) -> (a, c, targets_of_control_flow_insn a c)) control_flow_insns
   in
 
@@ -618,7 +622,12 @@ let branch_targets test =
   let size = List.length instructions in
 
   let control_flow_insns_with_targets_array :
-      (addr * natural (*isns*) * control_flow_insn option * (target_kind * addr * int * string) list) array =
+      ( addr
+      * natural (*isns*)
+      * control_flow_insn option
+      * (target_kind * addr * int * string) list
+      )
+      array =
     Array.init size (function k ->
         (let (a, i) = List.nth instructions k in
          let co = control_flow_insn (a, i) in
@@ -627,7 +636,9 @@ let branch_targets test =
          | Some (a', c) ->
              let targets = targets_of_control_flow_insn a c in
              let targets' =
-               List.map (function (tk, a'', s'') -> (tk, a'', index_of_address a'', s'')) targets
+               List.map
+                 (function (tk, a'', s'') -> (tk, a'', index_of_address a'', s''))
+                 targets
              in
              (a, i, Some c, targets')))
   in
@@ -647,13 +658,15 @@ let branch_targets test =
     address_of_index,
     indirect_branches )
 
-let pp_branch_targets (xs : (addr * control_flow_insn * (target_kind * addr * string) list) list) =
+let pp_branch_targets (xs : (addr * control_flow_insn * (target_kind * addr * string) list) list)
+    =
   String.concat ""
     (List.map
        (function
          | (a, c, ts) ->
              pp_addr a ^ ":  " ^ pp_control_flow_instruction c ^ " -> "
-             ^ String.concat "," (List.map (function (tk, a', s) -> pp_addr a' ^ "" ^ s ^ "") ts)
+             ^ String.concat ","
+                 (List.map (function (tk, a', s) -> pp_addr a' ^ "" ^ s ^ "") ts)
              ^ "\n")
        xs)
 
@@ -677,7 +690,8 @@ let come_from_table (xs : (addr * control_flow_insn * (target_kind * addr * stri
 let come_froms t addr : (target_kind * addr * control_flow_insn * string) list =
   List.rev (Hashtbl.find_all t (Nat_big_num.to_int addr))
 
-let pp_come_froms (addr : addr) (cfs : (target_kind * addr * control_flow_insn * string) list) : string =
+let pp_come_froms (addr : addr) (cfs : (target_kind * addr * control_flow_insn * string) list) :
+    string =
   match cfs with
   | [] -> ""
   | _ ->
@@ -686,10 +700,10 @@ let pp_come_froms (addr : addr) (cfs : (target_kind * addr * control_flow_insn *
           (List.map
              (function
                | (tk, a, c, s) ->
-                   pp_come_from_addr_wrt addr c a ^ "("
-                   ^ pp_target_kind_short tk
+                   pp_come_from_addr_wrt addr c a ^ "(" ^ pp_target_kind_short tk
                    (*^ pp_control_flow_instruction_short c*)
-                   ^ ")" ^ s)
+                   ^ ")"
+                   ^ s)
              cfs)
 
 (*****************************************************************************)
@@ -1120,94 +1134,101 @@ let pp_test test =
 
   (* pp to dot a CFG, showing conditional and indirect branches, and bl.*)
   let pp_cfg f =
-
     (* the source nodes are the addresses which are either
        - elf symbols
        - the branch target (but not the successor) of a C_branch_and_link
        - the targets (branch and fall-through) of a C_branch_cond, and/or
        - the targets of a C_branch_register *)
+    let source_node_come_from (tk, addr, c, s) =
+      match tk with
+      | T_plain_successor -> false
+      | T_branch -> false
+      | T_branch_and_link_call -> true
+      | T_branch_and_link_call_noreturn -> true
+      | T_branch_and_link_successor -> false
+      | T_branch_cond_branch -> true
+      | T_branch_cond_successor -> true
+      | T_branch_register -> true
+      | T_smc_hvc_successor -> false
+    in
 
-    let source_node_come_from (tk,addr,c,s) = match tk with
-    | T_plain_successor -> false
-    | T_branch -> false
-    | T_branch_and_link_call -> true
-    | T_branch_and_link_call_noreturn -> true
-    | T_branch_and_link_successor -> false
-    | T_branch_cond_branch -> true
-    | T_branch_cond_successor -> true
-    | T_branch_register -> true
-    | T_smc_hvc_successor -> false in
+    let is_control_flow_target k =
+      elf_symbols_array.(k) <> [] || List.exists source_node_come_from come_froms_array.(k)
+    in
 
-    let is_control_flow_target k = elf_symbols_array.(k) <> [] || List.exists source_node_come_from come_froms_array.(k) in
-
-        (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
-    let margin = "[margin=\"0.03,0.02\"]" in 
-    let nodesep = "[nodesep=\"0.25\"]" in (*graphviz default *)
-    let nodesep = "[nodesep=\"0.1\"]" in 
+    (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
+    let margin = "[margin=\"0.03,0.02\"]" in
+    let nodesep = "[nodesep=\"0.25\"]" in
+    (*graphviz default *)
+    let nodesep = "[nodesep=\"0.1\"]" in
 
     let pp_node_name_source addr = "\"" ^ pp_addr addr ^ "\"" in
     let pp_node_name_branch_and_link addr = "\"" ^ "bl_" ^ pp_addr addr ^ "\"" in
-    let pp_edge nn nn' =
-      nn ^ " -> " ^ nn' ^ nodesep ^ ";\n"
-    in
+    let pp_edge nn nn' = nn ^ " -> " ^ nn' ^ nodesep ^ ";\n" in
 
     let k_max = Array.length elf_symbols_array in
 
     (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
-    
     let rec graphette_source k =
       let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
       let ss = elf_symbols_array.(k) in
       let s = match ss with [] -> pp_addr addr | _ -> List.hd (List.rev ss) in
-      let nn = pp_node_name_source addr in 
+      let nn = pp_node_name_source addr in
       Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
-      ^ graphette_body [] nn k 
-
+      ^ graphette_body [] nn k
     and graphette_body visited nn_last k =
-      
       (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
-       if k >= k_max then "" else
-         let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
-         match co with
-         | None -> graphette_body visited nn_last (k + 1)
-         | Some c -> 
+      if k >= k_max then ""
+      else
+        let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
+        match co with
+        | None -> graphette_body visited nn_last (k + 1)
+        | Some c -> (
             match c with
             | C_ret -> ""
             | C_eret -> ""
             | C_branch (a, s) ->
-               let k' = index_of_address a in
-               if List.mem (nn_last,k') visited then ""
-               else 
-                 graphette_body ((nn_last,k')::visited) nn_last k'
+                let k' = index_of_address a in
+                if List.mem (nn_last, k') visited then ""
+                else graphette_body ((nn_last, k') :: visited) nn_last k'
             | C_branch_and_link (a, s) ->
-               let nn = pp_node_name_branch_and_link addr in 
-               Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
-               ^ pp_edge nn_last nn
-               ^ if List.filter (function | (T_branch_and_link_successor,_,_,_) -> true | _ -> false) targets = [] then
-                   ""
-                 else
-                   graphette_body visited nn (k+1)
+                let nn = pp_node_name_branch_and_link addr in
+                Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
+                ^ pp_edge nn_last nn
+                ^
+                if
+                  List.filter
+                    (function (T_branch_and_link_successor, _, _, _) -> true | _ -> false)
+                    targets
+                  = []
+                then ""
+                else graphette_body visited nn (k + 1)
             | C_branch_cond (_, _, _) | C_branch_register _ ->
-               String.concat "" (List.map (function addr' ->  let nn = pp_node_name_source addr' in pp_edge nn_last nn) (List.sort_uniq compare (List.map (function (tk,addr',c,s) -> addr') targets)))
-            | C_smc_hvc s -> graphette_body visited nn_last (k + 1) 
+                String.concat ""
+                  (List.map
+                     (function
+                       | addr' ->
+                           let nn = pp_node_name_source addr' in
+                           pp_edge nn_last nn)
+                     (List.sort_uniq compare
+                        (List.map (function (tk, addr', c, s) -> addr') targets)))
+            | C_smc_hvc s -> graphette_body visited nn_last (k + 1)
+          )
     in
     let c = open_out f in
     Printf.fprintf c "digraph g {\n";
     Printf.fprintf c "rankdir=\"LR\";\n";
     let filter_ni g n =
       let rec filter_ni' g n k =
-        (if k>=n then ""
-         else
-           match g k with
-           | Some x -> x ^ filter_ni' g n (k+1)
-           | None -> filter_ni' g n (k+1)) in
-      filter_ni' g n 0 in
+        if k >= n then ""
+        else match g k with Some x -> x ^ filter_ni' g n (k + 1) | None -> filter_ni' g n (k + 1)
+      in
+      filter_ni' g n 0
+    in
     Printf.fprintf c "%s"
       (filter_ni
-         (function k -> 
-            if is_control_flow_target k then Some (graphette_source k) else None)
-         k_max
-      );
+         (function k -> if is_control_flow_target k then Some (graphette_source k) else None)
+         k_max);
     Printf.fprintf c "}\n";
     let _ = close_out c in
     ()
@@ -1301,7 +1322,9 @@ let pp_test test =
         | Some (a, c, ts) ->
             " -> "
             ^ String.concat ","
-                (List.map (function (tk, a', s) -> pp_target_addr_wrt addr c a' ^ "" ^ s ^ "") ts)
+                (List.map
+                   (function (tk, a', s) -> pp_target_addr_wrt addr c a' ^ "" ^ s ^ "")
+                   ts)
             ^ " "
         | None -> ""
       end
