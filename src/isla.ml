@@ -10,6 +10,7 @@ include Isla_lang.AST
 module Lexer = Isla_lang.Lexer
 module Parser = Isla_lang.Parser
 
+(** {!Bimap.t} test*)
 type loc = Lexing.position
 
 (* location aliases *)

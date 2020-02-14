@@ -1,25 +1,26 @@
-(** This module represent a byte sub view on a Bytes.t object.
-    Contrary to Bytes it is a non-owning immutable view.
-    It do not prevent the original Bytes from being modified,
+(** This module represent a byte sub view on a bytes object.
+    Contrary to [Bytes] it is a non-owning immutable view.
+    It do not prevent the original bytes from being modified,
     and the changes will be propagated in the view.
-    It is additional sugar on top of Linksem's Byte_sequence_wrapper *)
+    It is additional sugar on top of Linksem's [Byte_sequence_wrapper] *)
 
+(* TODO make this include manually and make a mli file *)
 include Byte_sequence_wrapper
 
-type t = Byte_sequence_wrapper.byte_sequence
+type t = byte_sequence
 
-(** See Bytes.blit *)
-let blit (bs : t) (srcoff : int) (dst : Bytes.t) (dstoff : int) (len : int) =
+(** See [Bytes.blit] *)
+let blit (bs : t) (srcoff : int) (dst : bytes) (dstoff : int) (len : int) =
   if srcoff < 0 || srcoff + len > bs.len then
     raise (Invalid_argument "BytesSeq.blit : out of bounds ")
   else Bytes.blit bs.bytes (bs.start + srcoff) dst dstoff len
 
-(** Convert a string to a BytesSeq.t *)
+(** Convert a string to a BytesSeq.t as raw data *)
 let of_string s =
   (* This is safe because a BytesSeq is immutable *)
   of_bytes (Bytes.unsafe_of_string s)
 
-(** Convert a hex string like A4B767DF into a BytesSeq *)
+(** Convert a hex string like A4B767DF into a {!BytesSeq.t} *)
 let of_hex hexstr : t =
   let len = String.length hexstr in
   if len mod 2 == 1 then failwith "from_hex, string length must be even";
@@ -90,7 +91,7 @@ let back i bs =
          (Printf.sprintf "Cannot take the last %d bytes of a bytesseq of size %d" i bs.len))
   else { bytes = bs.bytes; start = bs.start + bs.len - i; len = i }
 
-(** tells if a byteseq fits this size (bs.len mod size = 0) *)
+(** Tells if a byteseq fits this size (bs.len mod size = 0) *)
 let fit size bs = bs.len mod size = 0
 
 (** Trail is the part of the byte seq that do not fit in the regular size pattern *)

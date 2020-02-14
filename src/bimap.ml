@@ -1,10 +1,9 @@
-(** This module provide a structure to allow internalizing (with integers) of some type *)
+(* The documentation is in the mli file *)
 
 type 'a vector = 'a Vector.t
 
 type 'a t = { to_ident : ('a, int) Hashtbl.t; of_ident : 'a vector }
 
-(** Thrown when someone add something to a bimap and it already exists. *)
 exception Exists
 
 let make () : 'a t = { to_ident = Hashtbl.create 0; of_ident = Vector.empty () }

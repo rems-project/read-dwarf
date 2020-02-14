@@ -2,17 +2,18 @@
     In particular, all information about file layout is intentionally list
     I use basic ints for speed. It it fails for some reason, I'll move to int64s
 *)
+
+(** The type of a segment *)
 type t = {
   data : BytesSeq.t;
   addr : int;
-  (* if size > BytesSeq.length data then the rest is 0. TODO make a cleaner interface for that *)
-  size : int;
+  size : int;  (** redundant with {!BytesSeq.length} data *)
   read : bool;
   write : bool;
   execute : bool;
 }
 
-(** Loads a Segment.t using a linksem interpreted segment. *)
+(** Loads a {!Segment.t} using a linksem interpreted segment. *)
 let of_linksem (lseg : Elf_interpreted_segment.elf64_interpreted_segment) : t =
   let size = Z.to_int lseg.elf64_segment_memsz in
   let bytes = Bytes.create size in

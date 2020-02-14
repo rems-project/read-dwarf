@@ -28,7 +28,7 @@ let closing_in channel cmd () = check_status cmd @@ close_process_in channel
     Throw Crash if the process did not return 0 *)
 let closing channels cmd () = check_status cmd @@ close_process channels
 
-(** Call the `which` shell command to get a executable position from its name.
+(** Call the [which] shell command to get a executable position from its name.
     May throw Crash if the command fails*)
 let which arg =
   let channel = open_process_in @@ "which " ^ arg in
@@ -91,7 +91,7 @@ module Server = struct
   (** This type holds all the data about the server subprocess *)
   type t = { name : string; pid : int; socket : file_descr; sock_path : string }
 
-  (** Make a new socket, bind it to a temporary file name using `name`
+  (** Make a new socket, bind it to a temporary file name using the name provided
       and then listen to it *)
   let make_socket name =
     let sock_fd = Unix.(socket PF_UNIX SOCK_STREAM 0) in
@@ -106,10 +106,10 @@ module Server = struct
     Unix.listen sock_fd 1;
     (sock_fd, sock_path)
 
-  (** Start the server named `name` subprocess and wait for it to connect to the socket.
-      Then build the Server.t object.
-      the `cmdf` argument must take a socket name and give a valid command line to call
-      the subprocess.
+  (** Start the server with provided name and wait for it to connect to the socket.
+      Then build the {!Server.t} object.
+      the second argument must take a socket name and give a valid command line to call
+      the server subprocess.
   *)
   let start name (cmdf : string -> cmd) : t =
     let (sock_fd, sock_path) = make_socket name in
@@ -129,7 +129,7 @@ module Server = struct
     Unix.unlink server.sock_path;
     Printf.printf "Connection with %s closed\n" server.name
 
-  (** `read_exact sock size` reads exactly size bytes on sock and return them as a Bytes *)
+  (** [read_exact sock size] reads exactly size bytes on sock and return them as a Bytes *)
   let read_exact sock_fd exact =
     let rec read_exact_offset buff ofs =
       let nbytes = Unix.read sock_fd buff ofs (exact - ofs) in

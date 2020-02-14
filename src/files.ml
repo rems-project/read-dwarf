@@ -15,7 +15,7 @@ let read_all (i : in_channel) : string =
   in
   read_all_bytes i (Bytes.create 100) 0 100
 
-(** `read_file s` return the content of file s *)
+(** [read_file s] return the content of file s *)
 let read_file (f : string) : string =
   let c = open_in f in
   Protect.protect (fun () -> read_all c) (fun () -> close_in c)

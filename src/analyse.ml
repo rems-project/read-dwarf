@@ -149,9 +149,8 @@ let marshal_from_file filename : test option =
 (*****************************************************************************)
 
 (** 'safe_open_in filename f' will open filename, pass it to f and cloth
- * the channel at the end or when an exception is raised
- * TODO use Protect.protect
- *)
+    the channel at the end or when an exception is raised
+    TODO use Protect.protect *)
 let safe_open_in (filename : string) (f : in_channel -> 'a) : 'a =
   let chan = open_in filename in
   let res =

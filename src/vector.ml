@@ -1,7 +1,39 @@
-(** This module is a rename of Res.array for the day we want to remove the Res dependency *)
-include Res.Array
+(* The documentation is in the mli file *)
 
-(** ensure vec size v make the vector at least size size. Add value v at the end *)
+open Res.Array
+
+type 'a t = 'a Res.Array.t
+
+let length = length
+
+let empty = empty
+
+let map = map
+
+let get = get
+
+let set = set
+
+let map = map
+
+let mapi = mapi
+
+let iter = iter
+
+let to_list = to_list
+
+let fold_left = fold_left
+
+let add_one = add_one
+
+let remove_one = remove_one
+
+let remove_n = remove_n
+
+let to_array = to_array
+
+let of_array = of_array
+
 let ensure vec size v =
   let len = length vec in
   if size > len then
@@ -10,8 +42,6 @@ let ensure vec size v =
     done
   else ()
 
-(** resize vec size v make the vector of size size.
-    If this is an expansion, add value v to the end *)
 let resize vec size v =
   let len = length vec in
   if size < len then remove_n vec (len - size) else ensure vec size v
@@ -20,7 +50,6 @@ let map2 f veca vecb =
   let arra = to_array veca and arrb = to_array vecb in
   Array.map2 f arra arrb |> of_array
 
-(** Vector pretty printer *)
 let pp conv vec = PP.(!^"vec" ^^ (vec |> to_array |> array conv))
 
 let vec_length_test () =

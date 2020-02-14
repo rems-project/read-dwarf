@@ -8,11 +8,11 @@ module SymTbl = Sym.Table
     The end goal is that this type contains more interpreted information than Analyse.test i.e
     interpreted enough so that they can be directly used into the symbolic execution
 
-    In fine, all the interpretated graphs, C types, comes_from, ... will go into this type
+    Hopefully, all the interpretated CFG, C types, comes_from, ... will go into this type
 *)
 type t = { symbols : SymTbl.t; segments : Segment.t list }
 
-(** Parse an ELF file to create a ElfFile.t. Uses Analyse.parse_file *)
+(** Parse an ELF file to create a {!ElfFile.t}. Uses {!Analyse.parse_file} *)
 let of_file (file : string) =
   let f = Analyse.parse_file file in
   let segments = List.map Segment.of_linksem f.segments in

@@ -1,5 +1,7 @@
 _build/*
+_build-doc/*
 read-dwarf
+doc.html
 **/.merlin
 tiny_test/ARMv8-*
 tiny_test/native-*

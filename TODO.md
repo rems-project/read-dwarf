@@ -3,7 +3,6 @@
  - Find a name other than "read-dwarf"
  - Make all the test target in the Makefile work again ideally without requiring
    hafnium-verification-plan
- - Setup documentation generation with dune.
  - Add the generation of `Og` target in addition to `O{0-2}` for testing
  - Package this thing with opam and dune to check it works.
  - Package isla-lang properly (need to change ott package also to include menhir lib).

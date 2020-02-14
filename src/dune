@@ -2,6 +2,7 @@
 
 (executable
  (name main)
+ (public_name read-dwarf)
  (libraries linksem isla-lang cmdliner pprint res ocamlgraph))
 
 (env
