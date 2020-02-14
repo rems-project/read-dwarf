@@ -1,14 +1,40 @@
 (** This module represent a byte sub view on a Bytes.t object.
+    Contrary to Bytes it is a non-owning immutable view.
+    It do not prevent the original Bytes from being modified,
+    and the changes will be propagated in the view.
     It is additional sugar on top of Linksem's Byte_sequence_wrapper *)
 
 include Byte_sequence_wrapper
 
 type t = Byte_sequence_wrapper.byte_sequence
 
+(** See Bytes.blit *)
 let blit (bs : t) (srcoff : int) (dst : Bytes.t) (dstoff : int) (len : int) =
   if srcoff < 0 || srcoff + len > bs.len then
     raise (Invalid_argument "BytesSeq.blit : out of bounds ")
   else Bytes.blit bs.bytes (bs.start + srcoff) dst dstoff len
+
+(** Convert a string to a BytesSeq.t *)
+let of_string s =
+  (* This is safe because a BytesSeq is immutable *)
+  of_bytes (Bytes.unsafe_of_string s)
+
+(** Convert a hex string like A4B767DF into a BytesSeq *)
+let of_hex hexstr : t =
+  let len = String.length hexstr in
+  if len mod 2 == 1 then failwith "from_hex, string length must be even";
+  let reslen = len / 2 in
+  let res = Bytes.create reslen in
+  let inc = Scanf.Scanning.from_string hexstr in
+  for i = 0 to reslen - 1 do
+    Scanf.bscanf inc "%2x" (fun v -> Bytes.set_uint8 res i v)
+  done;
+  of_bytes res
+
+let _ =
+  Tests.add_test "BytesSeq.of_hex" (fun () ->
+      let bs = of_hex "2a615B7c" in
+      to_string bs = "*a[|")
 
 (*****************************************************************************)
 (*         Getters                                                           *)
@@ -36,7 +62,7 @@ let get64le bs i = gen_get 8 Bytes.get_int64_le bs i
 
 let get64be bs i = gen_get 8 Bytes.get_int64_be bs i
 
-(** Extract a sub range of a byte sequence *)
+(** Extract a sub range of a byte sequence. This is O(1) *)
 let sub bs start len : t =
   if start >= 0 && len >= 0 && start + len <= bs.len then
     { bytes = bs.bytes; start = bs.start + start; len }
@@ -148,6 +174,8 @@ let to_list64be bs = gen_to_list fold_left64be bs
 (*****************************************************************************)
 
 let pp bs = bs |> to_char_list |> List.map PP.byte |> PP.separate PP.space
+
+let ppc bs = bs |> to_char_list |> List.map PP.byte |> PP.separate PP.empty
 
 let pp16le bs : PP.document =
   PP.(

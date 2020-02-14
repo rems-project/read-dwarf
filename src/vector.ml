@@ -29,4 +29,4 @@ let vec_length_test () =
   add_one v 1;
   length v = 2
 
-let _ = Tests.add_test "vec_length" vec_length_test
+let _ = Tests.add_test "Vector.length" vec_length_test

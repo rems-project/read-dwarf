@@ -1,6 +1,5 @@
 (** This file about testing interaction with Isla mostly for single instructions *)
 
-open Isla
 open Files
 
 (* possible options :
@@ -35,36 +34,37 @@ type pmode =
   | RUN  (** Run the the isla output on a test state and print all branches and states *)
   | SIMP  (** Run the the isla output on a test state and also print a simplified version *)
 
-(** The way isla is called *)
+(** The input syntax *)
 type isla_mode =
   | RAW  (** Do not call isla and take the input test as if it was isla output *)
-  | CMD  (** Call isla by setting the request on the command line *)
-  | INT  (** Call isla in an interactive session and send the request *)
+  | ASM  (** Call isla with text assembly *)
+  | HEX  (** Call isla with text hexadecimal as binary encoding of instruction *)
+  | BIN  (** Call isla with actually binary (for now 4 bytes) *)
 
 (** The way input is taken *)
 type imode =
   | CMD  (** Read the input as the main command line argument *)
   | FILE  (** Read the input in a file *)
+  | ELF of string  (** Read the input from an elf symbol + offset. implies BIN for isla_mode *)
 
 open Cmdliner
+open CommonOpt
 
-let arch =
-  let doc = "Overrides the default architecture to use in isla" in
-  let env = Arg.env_var "ISLA_ARCH" ~doc in
-  let doc = "Architecture to be analysed" in
-  Arg.(value & opt non_dir_file "aarch64.ir" & info ["a"; "arch"] ~env ~docv:"ARCH_IR" ~doc)
-
-let instr =
-  let doc = "Instruction to be analysed (or other things depending on options)" in
-  Arg.(required & pos 0 (some string) None & info [] ~docv:"INSTR" ~doc)
+let arg =
+  let doc = "May argument, may be a text instruction, an isla dump or a file" in
+  Arg.(required & pos 0 (some string) None & info [] ~docv:"INSTR_OR_FILE" ~doc)
 
 let direct =
-  let doc = "Input direct isla output syntax instead of an instruction" in
+  let doc = "Input direct isla output syntax and bypass isla" in
   Arg.(value & flag & info ["d"; "direct"] ~doc)
 
-let inter =
-  let doc = "Call isla via it's interactive piped interface and not via the cli" in
-  Arg.(value & flag & info ["i"; "interactive"] ~doc)
+let bin =
+  let doc = "Supply a instruction in raw binary form (should probably get it from file or elf)" in
+  Arg.(value & flag & info ["b"; "bin"] ~doc)
+
+let hex =
+  let doc = "Supply a instruction in hexadecimal. Do not put Ox in front" in
+  Arg.(value & flag & info ["h"; "hex"] ~doc)
 
 let noparse =
   let doc = "Do not try to parse isla output. Just dump it" in
@@ -86,10 +86,19 @@ let file =
   let doc = "Add to interpret main argument as a file instead of raw text" in
   Arg.(value & flag & info ["f"; "file"] ~doc)
 
-(** Input flag to mode conversion *)
-let input_f2m file : imode = if file then FILE else CMD
+let sym =
+  let doc = "The main argument would be an elf file and you should supply a symbol like main+4" in
+  Arg.(value & opt (some string) None & info ["sym"] ~doc)
 
-let imode_term = Term.(const input_f2m $ file)
+(** Input flag to mode conversion *)
+let input_f2m file sym : imode Term.ret =
+  match (file, sym) with
+  | (true, None) -> `Ok FILE
+  | (false, Some s) -> `Ok (ELF s)
+  | (false, None) -> `Ok CMD
+  | _ -> `Error (false, "You can't supply -f/--file and --sym at the same time")
+
+let imode_term = Term.(ret (const input_f2m $ file $ sym))
 
 (** Input takes the imode and the main argument and returns the filename and input string *)
 let input imode (arg : string) : (string * string) Term.ret =
@@ -98,28 +107,55 @@ let input imode (arg : string) : (string * string) Term.ret =
   | FILE -> (
       try `Ok (arg, read_file arg) with e -> `Error (false, Printexc.to_string e)
     )
+  | ELF s ->
+      let filename = s ^ " in " ^ arg in
+      let elf = ElfFile.of_file arg in
+      let (sym, off) = ElfFile.SymTbl.sym_offset_of_string elf.symbols s in
+      `Ok (filename, BytesSeq.to_string (BytesSeq.sub sym.data off (off + 4)))
 
-let input_term = Term.(ret (const input $ imode_term $ instr))
+let input_term = Term.(ret (const input $ imode_term $ arg))
 
-(** Convert various flag describe the mode of operation into the mode of operation *)
-let isla_f2m direct inter : isla_mode Term.ret =
-  match (direct, inter) with
-  | (false, false) -> `Ok CMD
-  | (true, false) -> `Ok RAW
-  | (false, true) -> `Ok INT
-  | _ -> `Error (false, "You cannot use -d/--direct and --i/--inter at the same time")
+(** Convert various flag describe the mode of operation into the mode of operation
+    If sym is activated, then the default mode is BIN and not ASM *)
+let isla_f2m direct hex bin sym : isla_mode Term.ret =
+  match (direct, hex, bin) with
+  | (false, false, false) -> if sym = None then `Ok ASM else `Ok BIN
+  | (true, false, false) -> `Ok RAW
+  | (false, true, false) -> `Ok HEX
+  | (false, false, true) -> `Ok BIN
+  | _ -> `Error (false, "You cannot use -d/--direct, -b/--bin or -h/--hex at the same time")
 
-let isla_mode_term = Term.(ret (const isla_f2m $ direct $ inter))
+let isla_mode_term = Term.(ret (const isla_f2m $ direct $ hex $ bin $ sym))
 
+let isla_mode_to_request imode input =
+  match imode with
+  | ASM -> IslaServer.TEXT_ASM input
+  | HEX -> IslaServer.ASM (BytesSeq.of_hex input)
+  | BIN -> IslaServer.ASM (BytesSeq.of_string input)
+  | _ -> Warn.fatal0 "impossible"
+
+(** Run isla and return a text trace with a filename
+    (if mode is RAW than just return the trace and filename without isla)
+
+    If isla return multiple traces, just silently pick the first non-exceptional one *)
 let isla_run isla_mode arch (filename, input) : string * string =
   match isla_mode with
   | RAW -> (filename, input)
-  | CMD ->
-      (filename ^ " through isla", isla_cmd [|""; "-a"; arch; "-i"; input; "-t"; "1"|] read_all)
-  | INT -> raise @@ Failure "Interactive isla interaction is not yet implemented"
+  | _ ->
+      IslaServer.(
+        Random.self_init ();
+        start arch;
+        let msg : string =
+          match request (isla_mode_to_request isla_mode input) with
+          | Traces l -> List.assoc true l
+          | _ -> failwith "isla did not send back traces"
+        in
+        stop ();
+        (filename ^ " through isla-client", msg))
 
-let isla_term = Term.(const isla_run $ isla_mode_term $ arch $ input_term)
+let isla_term = Term.(func_option isla_client isla_run $ isla_mode_term $ arch $ input_term)
 
+(** How far into the processing pipeline we go. We just pick the deepest option chosen *)
 let processing_f2m noparse typer run simp =
   if simp then SIMP
   else if run then RUN
@@ -129,27 +165,27 @@ let processing_f2m noparse typer run simp =
 
 let pmode_term = Term.(const processing_f2m $ noparse $ typer $ run $ simp)
 
+(** Does the actual processing of the trace *)
 let processing pmode (filename, input) : unit =
   let parse input =
-    let t = Isla.parse_term_string filename input in
-    PPA.(println @@ pp_term string t);
+    let t = Isla.parse_trc_string filename input in
+    let t = IslaManip.remove_ignored t in
+    (* TODO make filter an intermediate step *)
+    PPA.(println @@ pp_trc string t);
     t
   in
-  let typer ast =
-    match ast with
-    | Traces [t] ->
-        let c = IslaType.type_regs t in
-        PPA.(println @@ tcontext c);
-        PPA.(println @@ rstruct Reg.index);
-        t
-    | _ -> Warn.fatal0 "To use -t option, the trace must be linear (for now)"
+  let typer t =
+    let c = IslaType.type_regs t in
+    PPA.(println @@ tcontext c);
+    PPA.(println @@ rstruct Reg.index);
+    t
   in
   let run trace =
-    let istate = State.make () in
-    PPA.(println @@ state istate);
-    let estate = IslaTrace.run_lin_trace istate trace in
-    PPA.(println @@ state estate);
-    estate
+    let init_state = State.make () in
+    PPA.(println @@ state init_state);
+    let end_state = IslaTrace.run_trc init_state trace in
+    PPA.(println @@ state end_state);
+    end_state
   in
   match pmode with
   | DUMP -> input |> print_endline
@@ -157,17 +193,17 @@ let processing pmode (filename, input) : unit =
   | TYPE -> input |> parse |> typer |> ignore
   | RUN ->
       input |> parse |> typer
-      |> IslaManip.trace_conv_var (fun _ -> failwith "hey")
+      |> IslaManip.trace_conv_svar (fun _ -> failwith "hey")
       |> run |> ignore
   | SIMP ->
       input |> parse |> typer
-      |> IslaManip.trace_conv_var (fun _ -> failwith "hey")
+      |> IslaManip.trace_conv_svar (fun _ -> failwith "hey")
       |> run |> State.map_exp SMT.simplify |> PPA.state |> PPA.println
 
-let term = Term.(const processing $ pmode_term $ isla_term)
+let term = Term.(func_option z3 processing $ pmode_term $ isla_term)
 
 let info =
   let doc = "Test the isla interaction" in
-  Term.(info "isla-test" ~doc ~exits:default_exits)
+  Term.(info "isla-test" ~doc ~exits)
 
 let command = (term, info)

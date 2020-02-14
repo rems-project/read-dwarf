@@ -6,6 +6,8 @@
 
 include PPrint
 
+let ( $ ) = ( @@ )
+
 (*****************************************************************************)
 (*        Output                                                             *)
 (*****************************************************************************)
@@ -46,6 +48,8 @@ let fatal doc =
 let space = break 1
 
 let nbspace = blank 1
+
+let bool b = if b then !^"true" else !^"false"
 
 let int i = i |> string_of_int |> string
 

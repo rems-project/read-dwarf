@@ -104,8 +104,9 @@ module Table = struct
   let string_of_sym_offset (sym, off) = sym.name ^ "+" ^ string_of_int off
 
   (** Transform a symbol + offset string into the actual symbol and the integer offset *)
-  let sym_offset_to_string t s =
+  let sym_offset_of_string t s =
     match String.split_on_char '+' s with
+    | [ssym] -> (of_name t (String.trim ssym), 0)
     | [ssym; soff] -> (of_name t (String.trim ssym), soff |> String.trim |> int_of_string)
     | _ -> failwith "sym_offset_to_string: wrong format"
 

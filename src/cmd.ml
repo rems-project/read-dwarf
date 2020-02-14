@@ -81,3 +81,96 @@ let io_test_cat () =
   a = "test string"
 
 let _ = Tests.add_test "Cmd.io.cat" io_test_cat
+
+(*****************************************************************************)
+(*        Socket management                                                  *)
+(*****************************************************************************)
+
+(** This submodule is to manage another process as request server, like isla *)
+module Server = struct
+  (** This type holds all the data about the server subprocess *)
+  type t = { name : string; pid : int; socket : file_descr; sock_path : string }
+
+  (** Make a new socket, bind it to a temporary file name using `name`
+      and then listen to it *)
+  let make_socket name =
+    let sock_fd = Unix.(socket PF_UNIX SOCK_STREAM 0) in
+    let sock_path =
+      Filename.concat (Filename.get_temp_dir_name ())
+        (Printf.sprintf "%s-%d.socket" name (Random.bits ()))
+    in
+    Printf.printf "New socket : %s\n" sock_path;
+    (* TODO logging system *)
+    Unix.(bind sock_fd (ADDR_UNIX sock_path));
+    at_exit (fun () -> try Unix.unlink sock_path with Unix_error _ -> ());
+    Unix.listen sock_fd 1;
+    (sock_fd, sock_path)
+
+  (** Start the server named `name` subprocess and wait for it to connect to the socket.
+      Then build the Server.t object.
+      the `cmdf` argument must take a socket name and give a valid command line to call
+      the subprocess.
+  *)
+  let start name (cmdf : string -> cmd) : t =
+    let (sock_fd, sock_path) = make_socket name in
+    let cmd = cmdf sock_path in
+    cmd.(0) <- get_full_path cmd.(0);
+    let pid = Unix.(create_process cmd.(0) cmd stdin stdout stderr) in
+    let (sock_fd, _) = Unix.accept sock_fd in
+    print_endline ("Connected to " ^ name);
+    (* TODO logging system *)
+    { name; pid; socket = sock_fd; sock_path }
+
+  (** Stop the cut the connection, wait for the subprocess to die and then delete the socket *)
+  let stop server =
+    Printf.printf "Closing connection with %s\n" server.name;
+    shutdown server.socket SHUTDOWN_ALL;
+    ignore @@ waitpid [] server.pid;
+    Unix.unlink server.sock_path;
+    Printf.printf "Connection with %s closed\n" server.name
+
+  (** `read_exact sock size` reads exactly size bytes on sock and return them as a Bytes *)
+  let read_exact sock_fd exact =
+    let rec read_exact_offset buff ofs =
+      let nbytes = Unix.read sock_fd buff ofs (exact - ofs) in
+      let ofs = ofs + nbytes in
+      if ofs = exact then ()
+      else if ofs > exact then failwith "Read too many bytes"
+      else read_exact_offset buff ofs
+    in
+    let buff = Bytes.create exact in
+    read_exact_offset buff 0;
+    buff
+
+  (** Read a string from the server with the 32 bit size then content format *)
+  let read_string server =
+    let sock_fd = server.socket in
+    let header = read_exact sock_fd 4 in
+    let length = Int32.to_int (Bytes.get_int32_le header 0) in
+    let body = read_exact sock_fd length in
+    let str = Bytes.unsafe_to_string body in
+    (* Printf.printf "Read string \"%s\" from %s\n" str server.name; *)
+    (* flush Stdlib.stdout; *)
+    str
+
+  (** Read a single byte from the server*)
+  let read_byte server : int =
+    let sock_fd = server.socket in
+    let header = read_exact sock_fd 1 in
+    let c = Char.code (Bytes.get header 0) in
+    (* Printf.printf "Read byte \"%d\" from %s\n" c server.name; *)
+    (* flush Stdlib.stdout; *)
+    c
+
+  (** Send a string to the server with the 32 bit size then content format *)
+  let write_string server str =
+    (* Printf.printf "Writing \"%s\" to %s\n" str server.name; *)
+    (* flush Stdlib.stdout; *)
+    let sock_fd = server.socket in
+    let len = String.length str in
+    let msg = Bytes.create (len + 4) in
+    Bytes.set_int32_le msg 0 (Int32.of_int len);
+    Bytes.blit_string str 0 msg 4 len;
+    let _ = Unix.write sock_fd msg 0 (len + 4) in
+    ()
+end

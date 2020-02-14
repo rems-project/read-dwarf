@@ -63,8 +63,6 @@ type event = (svar, annot) Isla.event
 
 type trc = (svar, annot) Isla.trc
 
-type term = (svar, annot) Isla.term
-
 (*****************************************************************************)
 (*        State to id management                                             *)
 (*****************************************************************************)

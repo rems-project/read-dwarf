@@ -1,17 +1,34 @@
 # Build system and maintenance (optional but nice to have stuff)
 
  - Find a name other than "read-dwarf"
- - Switch to `Logs` for logging instead of mixing debug and warn.
  - Make all the test target in the Makefile work again ideally without requiring
    hafnium-verification-plan
- - (To discuss) Remove file that can be deterministically generated from the Makefile
  - Setup documentation generation with dune.
- - Improve linksem `Dwarf` module to handle Dwarf 5 if required.
  - Add the generation of `Og` target in addition to `O{0-2}` for testing
- - Try to have the program automatically create/cache the objdump instead
-   of asking it as a command line parameter.
  - Package this thing with opam and dune to check it works.
- - Package isla-lang properly (need to change ott package also).
+ - Package isla-lang properly (need to change ott package also to include menhir lib).
+
+## Internal infrastructure
+
+ - Try to have read-dwarf automatically create/cache the objdump instead
+   of asking it as a command line parameter.
+ - Switch to `Logs` for logging instead of mixing debug and warn.
+ - Add prefix to external output or error coming from servers like isla or z3 with sed
+ - Add test dependencies and ordering to Tests.ml
+ - Add test parameters to Test.ml
+ - Add dumping of stack trace for unknown exceptions
+ - Add slow-test/fast test distinction (isla version is a slow test)
+ - Add regexp test filtering
+ - Think about removing PPrint and using StdLib.Format (and Fmt) instead
+   - Need to test performance,
+   - Need to swap ott pp generation to StdLib.Format, which is good for portability
+
+## Linksem
+
+ - Learn which test to run
+ - Remove useless conversions in the Uint32 to Natural thing
+ - Fix the my_concat inefficiency
+ - See what could be moved to nat instead of natural
 
 # Required Plumbing
 
@@ -53,19 +70,37 @@
 ## Function calling API
   - Add a format to specify the calling convention
 
-# Current task stack for Thibaut. This is the short term task list
+# Current task stacks for Thibaut. This is the short term task list
 
-It is a stack because the topmost element may explode into a lot of other elements.
-
-- Update isla and fix stuff
-- Add support for online isla
+- Add logging system with backtraces on fatal errors.
+- Decide whether to stick with PPrint or swap to StdLib.Format
 - Add support for running multiple instruction from an ELF file into a new subcommand
+
+
+
+## Memory stack
+
 - Add support for state memory manipulation
-- Add support for concrete to symbol offset rewrite 
+- Add support for concrete to symbol offset rewrite
   if concrete value is <sym+off> then it is replaced by (bvadd sym off)
 - Add support for rodata detection
 - Add support for parsing of isla memory operations
 - Add support for memory operations execution in islaTrace
-- Add support for memory manipulation in Z3. (Mem = Array Addr Byte) 
+- Add support for memory manipulation in Z3. (Mem = Array Addr Byte)
   includes support for more Z3 syntax, including custom types.
 
+## Ctype stack
+
+- Design the internal concept a CType (Mostly based on Dwarf types)
+- Internalize the Dwarf Ctype information for object symbols
+- Lookup system to get the type of symbol +offset object
+- Internalize the Dwarf Ctype information for function symbols
+- General system to get quickly dwarf types of some machine position at any PC
+  and in particular at function entry.
+- Do basic Ctype propagation
+- Fallback Ctype system: if propagation fails, fallback on dwarf information
+
+## Control flow stack
+
+- Build a trace tree from a set of normal traces
+- Add isla support to set the pc before running an instruction

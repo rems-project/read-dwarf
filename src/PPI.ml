@@ -30,4 +30,6 @@ let state = State.pp
 
 let byteseq = BytesSeq.pp
 
+let byteseqc = BytesSeq.ppc
+
 let byteseq32le = BytesSeq.pp32le

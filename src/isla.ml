@@ -14,8 +14,6 @@ type loc = Lexing.position
 
 (* location aliases *)
 
-type 'v lterm = ('v, lrng) term
-
 type 'v ltrc = ('v, lrng) trc
 
 type 'v levent = ('v, lrng) event
@@ -26,8 +24,6 @@ type 'v lexp = ('v, lrng) exp
 
 type svar = string var
 
-type 'a sterm = (string, 'a) term
-
 type 'a strc = (string, 'a) trc
 
 type 'a sevent = (string, 'a) event
@@ -37,8 +33,6 @@ type 'a sexp = (string, 'a) exp
 (* raw aliases : parser output *)
 
 type rvar = string var
-
-type rterm = (string, lrng) term
 
 type rtrc = (string, lrng) trc
 
@@ -70,16 +64,16 @@ let parse_exp_string (filename : string) (s : string) : rexp =
 let parse_exp_channel (filename : string) (c : in_channel) : rexp =
   parse_exp filename @@ Lexing.from_channel ~with_positions:true c
 
-(** Parse a single Isla instruction output from a Lexing.lexbuf *)
-let parse_term : string -> Lexing.lexbuf -> rterm = parse Parser.term_start
+(** Parse an Isla trace from a Lexing.lexbuf *)
+let parse_trc : string -> Lexing.lexbuf -> rtrc = parse Parser.trc_start
 
-(** Parse a single Isla instruction output from a string *)
-let parse_term_string (filename : string) (s : string) : rterm =
-  parse_term filename @@ Lexing.from_string ~with_positions:true s
+(** Parse an Isla trace from a string *)
+let parse_trc_string (filename : string) (s : string) : rtrc =
+  parse_trc filename @@ Lexing.from_string ~with_positions:true s
 
-(** Parse a single Isla instruction output from a channel *)
-let parse_term_channel (filename : string) (c : in_channel) : rterm =
-  parse_term filename @@ Lexing.from_channel ~with_positions:true c
+(** Parse an Isla trace from a channel *)
+let parse_trc_channel (filename : string) (c : in_channel) : rtrc =
+  parse_trc filename @@ Lexing.from_channel ~with_positions:true c
 
 let _ =
   Tests.add_test "Isla.parse.exp.var.state" (fun () ->
@@ -97,17 +91,4 @@ let _ =
   Tests.add_test "Isla.parse.exp.and" (fun () ->
       let s = "(and v1 v2)" in
       let exp = parse_exp_string "test string in Isla.parse.exp.and" s in
-      match exp with Binop (And, Var (Free 1, _), Var (Free 2, _), _) -> true | _ -> false)
-
-(*****************************************************************************)
-(*        Isla Calling                                                       *)
-(*****************************************************************************)
-
-(* TODO maybe move that into another file *)
-
-(* TODO make that changable from CLI or environment *)
-let isla = ref "isla-footprint"
-
-(* args.(0) must be empty *)
-(* cont will be called on the channel. It may return something *)
-let isla_cmd args cont = Cmd.input_exec !isla args cont
+      match exp with Manyop (And, [Var (Free 1, _); Var (Free 2, _)], _) -> true | _ -> false)

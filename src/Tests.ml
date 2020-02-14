@@ -4,6 +4,9 @@
 *)
 
 open Cmdliner
+open CommonOpt
+
+let arch_ref = ref "aarch64.ir"
 
 let enable_tests = true
 
@@ -65,16 +68,16 @@ let test_cmd tests =
   end
   else Error (`Msg "Some test failed")
 
-let test_term = Term.(const test_cmd $ tests_arg)
+let test_term = Term.(func_options (setter arch_ref arch :: comopts) test_cmd $ tests_arg)
 
 let term = Term.(term_result test_term)
 
 let info =
   let doc = "Run the unit tests" in
-  Term.(info "test" ~doc ~exits:default_exits)
+  Term.(info "test" ~doc ~exits)
 
 let command = (term, info)
 
 let true_test () = true
 
-let _ = add_test "true_test" true_test
+let _ = add_test "Tests.true_test" true_test
