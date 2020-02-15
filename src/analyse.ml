@@ -37,7 +37,7 @@ let pp_symbol_map (symbol_map : Elf_file.global_symbol_init_info) =
 (*        use linksem to parse ELF file and extract DWARF info               *)
 (*****************************************************************************)
 
-let parse_file (filename : string) : test =
+let parse_elf_file (filename : string) : test =
   (* call ELF analyser on file *)
   let info = Sail_interface.populate_and_obtain_global_symbol_init_info filename in
 
@@ -304,45 +304,36 @@ let pp_frame_info frame_info_array k : string =
 (*        pull disassembly out of an objdump -d file                         *)
 (*****************************************************************************)
 
-let objdump_lines :
-    (natural (*addr*) * (natural (*insn/data*) * string)) (*remainder*) list option ref =
-  ref None
-
-let parse_objdump lines =
-  let parse_line (s : string) : (natural * (natural * string)) option =
+let parse_objdump_lines lines =
+  let parse_line (s : string) : (natural * natural * string) option =
     match Scanf.sscanf s " %x: %x %n" (fun a i n -> (a, i, n)) with
     | (a, i, n) ->
         let s' = String.sub s n (String.length s - n) in
-        Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
+        Some (Nat_big_num.of_int a, Nat_big_num.of_int i, s')
     | exception _ -> None
   in
   List.filter_map parse_line (Array.to_list lines)
 
-let init_objdump () =
-  if !objdump_lines <> None then ()
-  else
-    match !Globals.objdump_d with
-    | None -> ()
-    | Some filename -> (
-        match read_file_lines filename with
-        | MyFail s -> Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename
-        | Ok lines -> objdump_lines := Some (parse_objdump lines)
-      )
+let parse_objdump_file filename_objdump_d =
+  match read_file_lines filename_objdump_d with
+  | MyFail s -> Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
+  | Ok lines -> parse_objdump_lines lines
 
-let mk_objdump_lines_array instructions : (natural * string) option array =
+let mk_objdump_lines_array parsed_objdump_lines instructions :
+    (addr * natural (*insn/data*) * string) option array =
   Array.of_list
     (List.map
        (function
          | (addr, i) -> (
-             match !objdump_lines with
-             | Some lines -> List.assoc_opt addr lines
-             (* TODO: warn if multiple lines?*)
-             | None -> None
+             match List.filter (function (a, i, s) -> a = addr) parsed_objdump_lines with
+             | [l] -> Some l
+             | [] -> None
+             | l :: ls ->
+                 Warn.nonfatal "Warning: multiple objdump lines for the same address:%s\n"
+                   (pp_addr addr);
+                 Some l
            ))
        instructions)
-
-let lookup_objdump_lines (a : natural) : (natural * string) option =
-  match !objdump_lines with Some lines -> List.assoc_opt a lines | None -> None
 
 (*****************************************************************************)
 (*   parse control-flow instruction asm from objdump and branch table data   *)
@@ -463,29 +454,22 @@ let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
   else if List.mem mnemonic ["smc"; "hvc"] then C_smc_hvc s'
   else C_plain
 
-let mk_control_flow_insns_with_targets_array test instructions index_of_address address_of_index
-    size :
+let mk_control_flow_insns_with_targets_array test instructions objdump_lines_array
+    index_of_address address_of_index filename_branch_table size :
     (addr * instruction * control_flow_insn * (target_kind * addr * index * string) list) array =
-  init_objdump ();
-
   (* read in and parse branch-table description file *)
   let branch_data : (natural (*a_br*) * (natural (*a_table*) * natural)) (*size*) list =
-    match !Globals.branch_table_data_file with
-    | None -> [] (*None*)
-    (*Warn.fatal "no branch table data file\n"*)
-    | Some filename -> (
-        match read_file_lines filename with
-        | MyFail s -> Warn.fatal2 "%s\ncouldn't read branch table data file: \"%s\"\n" s filename
-        | Ok lines ->
-            let parse_line (s : string) : (natural * (natural * natural)) option =
-              match Scanf.sscanf s " %x: %x %x " (fun a_br a_table n -> (a_br, a_table, n)) with
-              | (a_br, a_table, n) ->
-                  Some
-                    (Nat_big_num.of_int a_br, (Nat_big_num.of_int a_table, Nat_big_num.of_int n))
-              | exception _ -> Warn.fatal "couldn't parse branch table data file line: \"%s\"\n" s
-            in
-            List.filter_map parse_line (List.tl (Array.to_list lines))
-      )
+    match read_file_lines filename_branch_table with
+    | MyFail s ->
+        Warn.fatal2 "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
+    | Ok lines ->
+        let parse_line (s : string) : (natural * (natural * natural)) option =
+          match Scanf.sscanf s " %x: %x %x " (fun a_br a_table n -> (a_br, a_table, n)) with
+          | (a_br, a_table, n) ->
+              Some (Nat_big_num.of_int a_br, (Nat_big_num.of_int a_table, Nat_big_num.of_int n))
+          | exception _ -> Warn.fatal "couldn't parse branch table data file line: \"%s\"\n" s
+        in
+        List.filter_map parse_line (List.tl (Array.to_list lines))
   in
 
   (* pull out .rodata section from ELF *)
@@ -557,9 +541,9 @@ let mk_control_flow_insns_with_targets_array test instructions index_of_address 
       (targets_of_control_flow_insn_without_index addr c)
   in
 
-  let control_flow_insn ((addr : natural), (i : natural)) : control_flow_insn =
-    match lookup_objdump_lines addr with
-    | Some (i, s) -> (
+  let control_flow_insn (k : index) ((addr : natural), (i : natural)) : control_flow_insn =
+    match objdump_lines_array.(k) with
+    | Some (a, i, s) -> (
         match
           Scanf.sscanf s "%s %n" (fun mnemonic n ->
               let s' = String.sub s n (String.length s - n) in
@@ -567,7 +551,7 @@ let mk_control_flow_insns_with_targets_array test instructions index_of_address 
         with
         | (mnemonic, s') -> parse_control_flow_instruction s mnemonic s'
       )
-    | None -> Warn.fatal "control_flow_insn: lookup_objdump_lines failed for %s" (pp_addr addr)
+    | None -> Warn.fatal "control_flow_insn: no objdump for %s" (pp_addr addr)
   in
 
   let control_flow_insns_with_targets_array :
@@ -575,7 +559,7 @@ let mk_control_flow_insns_with_targets_array test instructions index_of_address 
       array =
     Array.init size (function k ->
         let (a, i) = List.nth instructions k in
-        let c = control_flow_insn (a, i) in
+        let c = control_flow_insn k (a, i) in
         let targets = targets_of_control_flow_insn a c in
         (a, i, c, targets))
   in
@@ -1059,6 +1043,7 @@ type analysis = {
   instructions : (addr * instruction) list;
   size : int;
   elf_symbols_array : string list array;
+  objdump_lines_array : (addr (*address*) * natural (*insn/data*) * string) option array;
   frame_info_array :
     (addr (*addr*) * string (*cfa*) * (string (*rname*) * string) (*rinfo*) list) option array;
   control_flow_insns_with_targets_array :
@@ -1070,9 +1055,7 @@ type analysis = {
   pp_inlining_label_prefix : string -> string;
 }
 
-let analyse_test test =
-  init_objdump ();
-
+let analyse_test test filename_objdump_d filename_branch_table =
   (* pull out instructions from text section, assuming 4-byte insns *)
   let (p, text_addr, bs) = Dwarf.extract_text test.elf_file in
   let instructions : (addr * instruction) list = Dwarf.words_of_byte_list text_addr bs [] in
@@ -1094,14 +1077,18 @@ let analyse_test test =
   (*
   Printf.printf "instructions=%d unique instructions=%d\n"  (List.length instructions) (List.length (List.sort_uniq compare (List.map (function (a,i)->Nat_big_num.to_int i) instructions))); exit 1;
   *)
+  let objdump_lines_array =
+    mk_objdump_lines_array (parse_objdump_file filename_objdump_d) instructions
+  in
+
   let elf_symbols_array = mk_elf_symbols_array test instructions in
 
   let frame_info_array = mk_frame_info_array test instructions in
 
   (* compute the basic control-flow data *)
   let control_flow_insns_with_targets_array =
-    mk_control_flow_insns_with_targets_array test instructions index_of_address address_of_index
-      size
+    mk_control_flow_insns_with_targets_array test instructions objdump_lines_array
+      index_of_address address_of_index filename_branch_table size
   in
   let indirect_branches = mk_indirect_branches control_flow_insns_with_targets_array in
   let come_froms_array = mk_come_from_array control_flow_insns_with_targets_array in
@@ -1117,6 +1104,7 @@ let analyse_test test =
       instructions;
       size;
       elf_symbols_array;
+      objdump_lines_array;
       frame_info_array;
       control_flow_insns_with_targets_array;
       indirect_branches;
@@ -1209,8 +1197,8 @@ let pp_instruction test an ((addr : natural), (i : natural)) =
   (* the dissassembly from objdump, if it exists *)
   ^ "  "
   ^ begin
-      match lookup_objdump_lines addr with
-      | Some (i', s) ->
+      match an.objdump_lines_array.(k) with
+      | Some (a', i', s) ->
           if i = i' then s
           else
             Warn.fatal2 "instruction mismatch - linksem: %s vs objdump: %s\n" (pp_addr i)
@@ -1237,14 +1225,6 @@ let pp_instruction test an ((addr : natural), (i : natural)) =
 (*****************************************************************************)
 
 let pp_test_analysis test an =
-  (* output CFG dot file *)
-  ( match !Globals.dot_file with
-  | Some dot_file ->
-      pp_cfg an.elf_symbols_array an.control_flow_insns_with_targets_array an.come_froms_array
-        an.index_of_address dot_file
-  | None -> ()
-  );
-
   "************** aggregate type definitions *****************\n"
   ^ (let d = test.dwarf_static.ds_dwarf in
      let c = Dwarf.p_context_of_d d in
@@ -1267,30 +1247,61 @@ let pp_test_analysis test an =
 (*        top-level                                                          *)
 (*****************************************************************************)
 
-let process_file (filename : string) : unit =
+let process_file () : unit =
+  (*filename_objdump_d filename_branch_tables (filename_elf : string) : unit =*)
+
+  (* todo: make idiomatic Cmdliner :-(  *)
+  let filename_elf =
+    match !Globals.elf with Some s -> s | None -> Warn.fatal0 "no --elf option\n"
+  in
+
+  let filename_objdump_d =
+    match !Globals.objdump_d with Some s -> s | None -> Warn.fatal0 "no --objdump-d option\n"
+  in
+
+  let filename_branch_tables =
+    match !Globals.branch_table_data_file with
+    | Some s -> s
+    | None -> Warn.fatal0 "no --branch-tables option\n"
+  in
+
+  let filename_out_file_option = !Globals.out_file in
+
   (* try caching linksem output - though linksem only takes 5s, so scarcely worth the possible confusion. It's recomputing the variable info that takes the time *)
   (*
   let filename_marshalled = filename ^ ".linksem-marshalled" in
   let test =
     match marshal_from_file filename_marshalled with
     | None ->
-       let test = parse_file filename in
+       let test = parse_elf_file filename in
        marshal_to_file filename_marshalled test;
        test
     | Some test ->
        test
   in
    *)
+  let test = parse_elf_file filename_elf in
+
+  let an = analyse_test test filename_objdump_d filename_branch_tables in
+
+  (* output CFG dot file *)
+  ( match !Globals.dot_file with
+  | Some dot_file ->
+      pp_cfg an.elf_symbols_array an.control_flow_insns_with_targets_array an.come_froms_array
+        an.index_of_address dot_file
+  | None -> ()
+  );
+
+  (* output annotated objdump *)
+  let c = match filename_out_file_option with Some f -> open_out f | None -> stdout in
 
   (* copy emacs syntax highlighting blob to output. sometime de-hard-code the filename*)
   begin
     match read_file_lines "emacs-highlighting" with
     | MyFail _ -> ()
-    | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines
+    | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
   end;
 
-  let test = parse_file filename in
+  Printf.fprintf c "%s" (pp_test_analysis test an);
 
-  let an = analyse_test test in
-
-  printf "%s" (pp_test_analysis test an)
+  match filename_out_file_option with Some f -> close_out c | None -> ()

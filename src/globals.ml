@@ -1,6 +1,10 @@
+let elf = ref (None : string option)
+
 let comp_dir = ref (None : string option)
 
 let dot_file = ref (None : string option)
+
+let out_file = ref (None : string option)
 
 let objdump_d = ref (None : string option)
 
