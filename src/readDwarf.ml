@@ -40,6 +40,26 @@ let elf =
   setter Globals.elf
     Arg.(value & opt (some non_dir_file) None & info ["elf"] ~docv:"ELF_FILE" ~doc)
 
+
+let objdump_d2 =
+  let doc = "Second: File containing result of objdump -d" in
+  setter Globals.objdump_d2
+    Arg.(value & opt (some non_dir_file) None & info ["objdump-d2"] ~docv:"OBJDUMP_FILE" ~doc)
+
+let branch_tables2 =
+  let doc = "Second: File containing branch table base addresses and sizes" in
+  setter Globals.branch_table_data_file2
+    Arg.(
+      value
+      & opt (some non_dir_file) None
+      & info ["branch-tables2"] ~docv:"BRANCH_TABLES_FILE" ~doc)
+
+let elf2 =
+  let doc = "Second: ELF file whose dwarf is to be dumped" in
+  setter Globals.elf2
+    Arg.(value & opt (some non_dir_file) None & info ["elf2"] ~docv:"ELF_FILE" ~doc)
+
+  
 let out_file =
   let doc = "file for output (optional)" in
   setter Globals.out_file
@@ -63,6 +83,9 @@ let options =
     elf;
     objdump_d;
     branch_tables;
+    elf2;
+    objdump_d2;
+    branch_tables2;
     clip_binary;
     out_file;
     dot_file;

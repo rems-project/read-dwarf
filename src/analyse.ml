@@ -339,9 +339,8 @@ let mk_objdump_lines_array parsed_objdump_lines instructions :
 (*   parse control-flow instruction asm from objdump and branch table data   *)
 (*****************************************************************************)
 
-type node = addr * index * string list
-
 type control_flow_insn =
+  | C_no_instruction
   | C_plain
   | C_ret
   | C_eret
@@ -366,6 +365,7 @@ type target_kind =
 
 let pp_control_flow_instruction c =
   match c with
+  | C_no_instruction -> "no instruction"
   | C_plain -> "plain"
   | C_ret -> "ret"
   | C_eret -> "eret"
@@ -377,6 +377,7 @@ let pp_control_flow_instruction c =
 
 let pp_control_flow_instruction_short c =
   match c with
+  | C_no_instruction -> "no instruction"
   | C_plain -> "plain"
   | C_ret -> "ret"
   | C_eret -> "eret"
@@ -492,6 +493,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
   let targets_of_control_flow_insn_without_index (addr : natural) (c : control_flow_insn) :
       (target_kind * addr * string) list =
     match c with
+    | C_no_instruction -> []
     | C_plain -> [(T_plain_successor, succ_addr addr, "")]
     | C_ret -> []
     | C_eret -> []
@@ -551,7 +553,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
         with
         | (mnemonic, s') -> parse_control_flow_instruction s mnemonic s'
       )
-    | None -> Warn.fatal "control_flow_insn: no objdump for %s" (pp_addr addr)
+    | None -> C_no_instruction (*Warn.fatal "control_flow_insn: no objdump for %s" (pp_addr addr)*)
   in
 
   let control_flow_insns_with_targets_array :
@@ -577,6 +579,7 @@ let mk_indirect_branches control_flow_insns_with_targets_array =
 
 let highlight c =
   match c with
+  | C_no_instruction -> false
   | C_plain | C_ret | C_eret | C_branch_and_link (_, _) | C_smc_hvc _ -> false
   | C_branch (_, _) | C_branch_cond (_, _, _) | C_branch_register _ -> true
 
@@ -652,40 +655,202 @@ let pp_come_froms (addr : addr)
 (*        pp control-flow graph                                              *)
 (*****************************************************************************)
 
-(* pp to dot a CFG that shows only the conditional and unconditional branches, ignoring bl and ret *)
-(*
-let pp_cfg test
-    ( control_flow_insns_with_targets,
-      control_flow_insns_with_targets_array,
-      index_of_address,
-      address_of_index,
-      indirect_branches ) =
- *)
+(* pp to dot a CFG that shows the conditional and unconditional branches, ignoring bl and ret *)
 
+type cfg_node_kind =
+  | CFG_node_source (* elf symbol or other bl target *)
+  | CFG_node_branch_cond
+  | CFG_node_branch_register
+  | CFG_node_branch_and_link
+  (*  | CFG_node_bl_noreturn*)
+  | CFG_node_smc_hvc
+  | CFG_node_ret
+  | CFG_node_eret
+  
 (* pp to dot a CFG, showing conditional and indirect branches, and bl nodes*)
-let pp_cfg elf_symbols_array control_flow_insns_with_targets_array come_froms_array
-    index_of_address dot_file =
-  (* the source nodes are the addresses which are either
+let mk_cfg elf_symbols_array control_flow_insns_with_targets_array come_froms_array
+    index_of_address =
+
+  (* the graphette source nodes are the addresses which are either
        - elf symbols
        - the branch target (but not the successor) of a C_branch_and_link
        - the targets (branch and fall-through) of a C_branch_cond, and/or
        - the targets of a C_branch_register *)
-  let source_node_come_from (tk, addr, k, c, s) =
+  let is_graphette_source_target (tk, addr, k, c, s) =
     match tk with
     | T_plain_successor -> false
     | T_branch -> false
     | T_branch_and_link_call -> true
     | T_branch_and_link_call_noreturn -> true
     | T_branch_and_link_successor -> false
-    | T_branch_cond_branch -> true
-    | T_branch_cond_successor -> true
-    | T_branch_register -> true
+    | T_branch_cond_branch -> false
+    | T_branch_cond_successor -> false
+    | T_branch_register -> false
     | T_smc_hvc_successor -> false
   in
 
-  let is_control_flow_target k =
-    elf_symbols_array.(k) <> [] || List.exists source_node_come_from come_froms_array.(k)
+  let is_graphette_source k =
+    elf_symbols_array.(k) <> [] || List.exists is_graphette_source_target come_froms_array.(k)
   in
+
+  let is_graph_non_source_node k =
+    let (addr, i, c, targets) = control_flow_insns_with_targets_array.(k) in
+    match c with
+      | C_no_instruction -> false
+      | C_plain -> false
+      | C_ret -> true
+      | C_eret -> true
+      | C_branch (a, s) -> false
+      | C_branch_and_link (a, s) -> true
+      | C_smc_hvc s -> true
+      | C_branch_cond _ -> true
+      | C_branch_register _ -> true in
+    
+  
+  (* we make up an additional node for all ELF symbols and bl targets; all others are just the address *)
+  let node_name_source addr = "source_" ^ pp_addr addr in
+  let node_name addr = pp_addr addr in
+
+  let rec next_non_source_node_name visited k =
+    let (addr, i, c, targets) = control_flow_insns_with_targets_array.(k) in
+    match c with
+    | C_plain -> 
+       begin
+         match targets with
+         | [(tk, addr', k', s)] -> next_non_source_node_name visited k'
+         | _ -> Warn.fatal "non-unique plain targets at %s" (pp_addr addr)
+       end
+    | C_branch (a, s) ->
+       begin
+         match targets with
+         | [(tk, addr', k', s)] ->
+            if List.mem k' visited then
+              node_name addr' (* TODO: something more useful *)
+            else
+              next_non_source_node_name (k'::visited) k'
+         | _ -> Warn.fatal "non-unique branch targets at %s" (pp_addr addr)
+       end
+    | _ -> node_name addr
+  in
+
+  
+  let k_max = Array.length elf_symbols_array in
+
+  (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
+  let graphette_source k =
+    let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
+    let ss = elf_symbols_array.(k) in
+    let (s,nn) = match ss with [] -> (pp_addr addr,node_name addr) | _ -> (List.hd (List.rev ss), node_name_source addr) in
+    let label = s in 
+    let node = (nn,CFG_node_source, label, addr, k) in
+    let nn' = next_non_source_node_name [] k in
+    let edge = (nn,nn') in
+    ([node], [edge]) in
+
+  let sink_node addr s ckn k = 
+    let nn = node_name addr in
+    let label = s in
+    let node = (nn,CFG_node_ret, label, addr, k) in
+(*    let nn' = next_non_source_node_name [] k in
+    let edge = (nn,nn') in*)
+    ([node], []) in
+
+  let simple_edge addr s ckn k = 
+    let nn = node_name addr in
+    let label = s in
+    let node = (nn,CFG_node_ret, label, addr, k) in
+    let nn' = next_non_source_node_name [] k in
+    let edge = (nn,nn') in
+    ([node], [edge]) in
+  
+  let graphette_normal k =
+    (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
+    let (addr, i, c, targets) = control_flow_insns_with_targets_array.(k) in
+    match c with
+    | C_no_instruction -> Warn.fatal0 "graphette_normal on C_no_instruction" (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
+    | C_plain -> Warn.fatal0 "graphette_normal on C_plain" (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
+    | C_branch _ -> Warn.fatal0 "graphette_normal on C_branch" (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
+    | C_ret -> sink_node addr "ret" CFG_node_ret k
+    | C_eret -> sink_node addr "eret" CFG_node_eret k
+    | C_branch_and_link (a, s) ->
+       let nn = node_name addr in
+       let label = s in
+       let node = (nn, CFG_node_branch_and_link, label, addr, k) in
+       let edges = 
+         List.filter_map 
+           (function
+            | (T_branch_and_link_successor, a', k', s') ->
+               let nn' = next_non_source_node_name [] k' in
+               Some (nn,nn')
+            | _ -> None)
+           targets in
+       ([node],edges)
+
+    | C_smc_hvc s ->
+       let nn = node_name addr in
+       let label = "smc/hvc " ^ s in
+       let node = (nn, CFG_node_smc_hvc, label, addr, k) in
+       let edges = 
+         List.filter_map 
+           (function
+            | (T_smc_hvc_successor, a', k', s') ->
+               let nn' = next_non_source_node_name [] k' in
+               Some (nn,nn')
+            | _ -> None)
+           targets in
+       ([node],edges)
+
+    | C_branch_cond (mnemonic, a, s) -> 
+       let nn = node_name addr in
+       let label = pp_addr addr in
+       let node = (nn, CFG_node_branch_cond, label, addr, k) in
+       let edges = 
+         List.map
+           (function
+              (tk,addr',k',s') ->
+              let nn' = next_non_source_node_name [] k' in
+              (nn,nn'))
+           targets in
+       ([node],edges)
+          
+    | C_branch_register _ -> 
+       let nn = node_name addr in
+       let label = pp_addr addr in
+       let node = (nn, CFG_node_branch_register, label, addr, k) in
+       let edges = 
+         List.sort_uniq compare (List.map
+           (function
+              (tk,addr',k',s') ->
+              let nn' = next_non_source_node_name [] k' in
+              (nn,nn'))
+           targets) in
+       ([node],edges)
+  in
+       
+  let rec mk_graph acc_nodes_source acc_nodes acc_edges n k =
+    if k >= n then (acc_nodes_source, acc_nodes, acc_edges)
+    else
+      let (acc_nodes_source', acc_nodes', acc_edges') =
+        if is_graphette_source k then
+          let (nodes_source, edges) = graphette_source k in
+          (nodes_source @ acc_nodes_source, acc_nodes, edges @ acc_edges)
+        else
+          (acc_nodes_source, acc_nodes, acc_edges) in
+      let (acc_nodes_source'', acc_nodes'', acc_edges'') =
+        if is_graph_non_source_node k then
+          let (nodes, edges) = graphette_normal k in
+          (acc_nodes_source',                   nodes @ acc_nodes', edges @ acc_edges')
+        else
+          (acc_nodes_source', acc_nodes', acc_edges')
+      in
+      mk_graph acc_nodes_source'' acc_nodes'' acc_edges'' n (k+1) 
+  in
+  let ((nodes_source, nodes,edges) as graph) = mk_graph [] [] [] k_max 0 in
+
+  graph
+
+
+let pp_cfg ((nodes_source, nodes,edges) as graph) dot_file = 
 
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
   let margin = "[margin=\"0.03,0.02\"]" in
@@ -693,68 +858,20 @@ let pp_cfg elf_symbols_array control_flow_insns_with_targets_array come_froms_ar
   (*graphviz default *)
   let nodesep = "[nodesep=\"0.1\"]" in
 
-  let pp_node_name_source addr = "\"" ^ pp_addr addr ^ "\"" in
-  let pp_node_name_branch_and_link addr = "\"" ^ "bl_" ^ pp_addr addr ^ "\"" in
-  let pp_edge nn nn' = nn ^ " -> " ^ nn' ^ nodesep ^ ";\n" in
 
-  let k_max = Array.length elf_symbols_array in
-
-  (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
-  let rec graphette_source k =
-    let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
-    let ss = elf_symbols_array.(k) in
-    let s = match ss with [] -> pp_addr addr | _ -> List.hd (List.rev ss) in
-    let nn = pp_node_name_source addr in
-    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin ^ graphette_body [] nn k
-  and graphette_body visited nn_last k =
-    (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
-    if k >= k_max then ""
-    else
-      let (addr, i, c, targets) = control_flow_insns_with_targets_array.(k) in
-      match c with
-      | C_plain -> graphette_body visited nn_last (k + 1)
-      | C_ret -> ""
-      | C_eret -> ""
-      | C_branch (a, s) ->
-          let k' = index_of_address a in
-          if List.mem (nn_last, k') visited then ""
-          else graphette_body ((nn_last, k') :: visited) nn_last k'
-      | C_branch_and_link (a, s) ->
-          let nn = pp_node_name_branch_and_link addr in
-          Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
-          ^ pp_edge nn_last nn
-          ^
-          if
-            List.filter
-              (function (T_branch_and_link_successor, _, _, _) -> true | _ -> false)
-              targets
-            = []
-          then ""
-          else graphette_body visited nn (k + 1)
-      | C_branch_cond (_, _, _) | C_branch_register _ ->
-          String.concat ""
-            (List.map
-               (function
-                 | addr' ->
-                     let nn = pp_node_name_source addr' in
-                     pp_edge nn_last nn)
-               (List.sort_uniq compare (List.map (function (tk, addr', c, s) -> addr') targets)))
-      | C_smc_hvc s -> graphette_body visited nn_last (k + 1)
-  in
+  let pp_node_name nn = "\"" ^ nn ^ "\"" in
+  let pp_edge (nn,nn') = pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep ^ ";\n" in
+  let pp_node (nn,cnk,label,addr,k) =
+    let shape = match cnk with CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]" | _ -> "" in
+    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s;\n" (pp_node_name nn) label label margin shape in
+  
   let c = open_out dot_file in
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
-  let filter_ni g n =
-    let rec filter_ni' g n k =
-      if k >= n then ""
-      else match g k with Some x -> x ^ filter_ni' g n (k + 1) | None -> filter_ni' g n (k + 1)
-    in
-    filter_ni' g n 0
-  in
-  Printf.fprintf c "%s"
-    (filter_ni
-       (function k -> if is_control_flow_target k then Some (graphette_source k) else None)
-       k_max);
+  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes_source;
+  Printf.fprintf c "{ rank=min; %s }\n" (String.concat "" (List.map (function (nn,_,_,_,_) -> pp_node_name nn ^ ";") nodes_source));
+  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes;
+  List.iter (function (nn,nn') -> Printf.fprintf c "%s\n" (pp_edge (nn,nn'))) edges;
   Printf.fprintf c "}\n";
   let _ = close_out c in
   ()
@@ -764,14 +881,10 @@ let pp_cfg elf_symbols_array control_flow_insns_with_targets_array come_froms_ar
 (*****************************************************************************)
 module P = Graph.Pack
 
-(*
-        Warning 49: no cmi file was found in path for module Pack 
- *)
-(*
-module D = Pack.Digraph
-        Error: Unbound module Pack
-*)
+type call_graph_node = addr * index * string list
 
+
+         
 let pp_call_graph test
     (control_flow_insns_with_targets_array, index_of_address, address_of_index, indirect_branches)
     =
@@ -851,7 +964,7 @@ let pp_call_graph test
       (elf_symbols @ extra_bl_targets)
   in
 
-  let nodes : node list = List.map (function (a, ss) -> (a, index_of_address a, ss)) nodes0 in
+  let nodes : call_graph_node list = List.map (function (a, ss) -> (a, index_of_address a, ss)) nodes0 in
 
   let pp_node ((a, k, ss) as node) =
     pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
@@ -911,7 +1024,7 @@ let pp_call_graph test
 
   let pp_call_graph call_graph = String.concat "" (List.map pp_call_graph_entry call_graph) in
 
-  let rec stupid_reachability' (acc_reachable : node list) (todo : node list) : node list =
+  let rec stupid_reachability' (acc_reachable : call_graph_node list) (todo : call_graph_node list) : call_graph_node list =
     match todo with
     | [] -> acc_reachable
     | ((a, k, ss) as n) :: todo' ->
@@ -1286,9 +1399,10 @@ let process_file () : unit =
 
   (* output CFG dot file *)
   ( match !Globals.dot_file with
-  | Some dot_file ->
-      pp_cfg an.elf_symbols_array an.control_flow_insns_with_targets_array an.come_froms_array
-        an.index_of_address dot_file
+    | Some dot_file ->
+       let graph = mk_cfg an.elf_symbols_array an.control_flow_insns_with_targets_array an.come_froms_array
+                     an.index_of_address in
+       pp_cfg graph dot_file
   | None -> ()
   );
 

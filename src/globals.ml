@@ -8,6 +8,12 @@ let out_file = ref (None : string option)
 
 let objdump_d = ref (None : string option)
 
+let dot_file2 = ref (None : string option)
+
+let out_file2 = ref (None : string option)
+
+let objdump_d2 = ref (None : string option)
+              
 (*let objdump_rodata = ref (None : string option)*)
 let branch_table_data_file = ref (None : string option)
 
