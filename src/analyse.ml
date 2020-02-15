@@ -145,7 +145,7 @@ let marshal_from_file filename : test option =
   | e -> raise e
 
 (*****************************************************************************)
-(*        pretty-print source lines for an address                           *)
+(*        read file of text lines                                            *)
 (*****************************************************************************)
 
 (** 'safe_open_in filename f' will open filename, pass it to f and cloth
@@ -164,7 +164,7 @@ let safe_open_in (filename : string) (f : in_channel -> 'a) : 'a =
 
 type 'a ok_or_fail = Ok of 'a | MyFail of string
 
-let read_source_file (name : string) : string array ok_or_fail =
+let read_file_lines (name : string) : string array ok_or_fail =
   let read_lines chan =
     let lines = ref [] in
     let () =
@@ -178,17 +178,11 @@ let read_source_file (name : string) : string array ok_or_fail =
   in
   match safe_open_in name read_lines with
   | lines -> Ok lines
-  | exception Sys_error s -> MyFail (Printf.sprintf "read_source_file Sys_error \"%s\"\n" s)
+  | exception Sys_error s -> MyFail (Printf.sprintf "read_file_lines Sys_error \"%s\"\n" s)
 
-(*
-let rec read_source_file2 (names: string list) (err_acc:string) : string array ok_or_fail =
-  match names with
-  | [] -> MyFail ("not found:\n"^err_acc)
-  | name::names' ->
-     match read_source_file name with
-     | Ok lines -> Ok lines
-     | MyFail err -> read_source_file2 names' (err_acc^err)
-     *)
+(*****************************************************************************)
+(*        find and pretty-print source lines for addresses                   *)
+(*****************************************************************************)
 
 let source_file_cache =
   ref ([] : ((string option * string option * string) * string array option) list)
@@ -217,7 +211,7 @@ let source_line (comp_dir, dir, file) n1 =
         | (None, Some d, f) -> Filename.concat d f
         | (None, None, f) -> f
       in
-      match read_source_file filename with
+      match read_file_lines filename with
       | Ok lines ->
           source_file_cache := ((comp_dir, dir, file), Some lines) :: !source_file_cache;
           access_lines lines n
@@ -228,21 +222,6 @@ let source_line (comp_dir, dir, file) n1 =
           Warn.nonfatal2 "filename %s %s" filename s;
           None
     )
-
-(*
-     let filenames = match !Globals.dwarf_source_dirs with
-     | [] -> [file]
-     | _ -> List.map (fun s -> Filename.concat s file) !Globals.dwarf_source_dirs in
-     match read_source_file2 filenames "" with
-     | Ok lines ->
-        source_file_cache := (file, Some lines) :: !source_file_cache;
-        access_lines lines n
-     | MyFail s ->
-(*        source_file_cache := (file, None) :: !source_file_cache;
-          None *)
-         source_file_cache := (file, None) :: !source_file_cache;
-         (Warn.nonfatal "%s" s; None)
- *)
 
 let pp_source_line so = match so with Some s -> s (*" (" ^ s ^ ")"*) | None -> "file not found"
 
@@ -280,6 +259,9 @@ let elf_symbols_of_address (test : test) (addr : natural) : string list =
     (fun (name, (typ, size, address, mb, binding)) -> if address = addr then Some name else None)
     test.symbol_map
 
+let mk_elf_symbols_array test instructions : string list array =
+  Array.of_list (List.map (function (addr, i) -> elf_symbols_of_address test addr) instructions)
+
 (*****************************************************************************)
 (*        look up address in frame info                                      *)
 (*****************************************************************************)
@@ -296,9 +278,17 @@ let rec f (aof : 'b -> natural) (a : natural) (last : 'b option) (bs : 'b list) 
       else if Nat_big_num.greater_equal a (aof b') && Nat_big_num.less a (aof b'') then Some b'
       else f aof a (Some b'') bs'
 
-let pp_frame_info (test : test) (addr : natural) : string =
+let mk_frame_info_array test instructions :
+    (natural (*addr*) * string (*cfa*) * (string (*rname*) * string) (*rinfo*) list) option array
+    =
+  Array.of_list
+    (List.map
+       (function (addr, i) -> f aof addr None test.dwarf_semi_pp_frame_info)
+       instructions)
+
+let pp_frame_info frame_info_array k : string =
   (* assuming the dwarf_semi_pp_frame_info has monotonically increasing addresses - always true? *)
-  match f aof addr None test.dwarf_semi_pp_frame_info with
+  match frame_info_array.(k) with
   | None -> "<no frame info for this address>\n"
   | Some ((a : natural), (cfa : string), (regs : (string * string) list)) ->
       pp_addr a ^ " " ^ "CFA:" ^ cfa ^ " "
@@ -309,7 +299,19 @@ let pp_frame_info (test : test) (addr : natural) : string =
 (*        pull disassembly out of an objdump -d file                         *)
 (*****************************************************************************)
 
-let objdump_lines : (natural * (natural * string)) list option ref = ref None
+let objdump_lines :
+    (natural (*addr*) * (natural (*insn/data*) * string)) (*remainder*) list option ref =
+  ref None
+
+let parse_objdump lines =
+  let parse_line (s : string) : (natural * (natural * string)) option =
+    match Scanf.sscanf s " %x: %x %n" (fun a i n -> (a, i, n)) with
+    | (a, i, n) ->
+        let s' = String.sub s n (String.length s - n) in
+        Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
+    | exception _ -> None
+  in
+  List.filter_map parse_line (Array.to_list lines)
 
 let init_objdump () =
   if !objdump_lines <> None then ()
@@ -317,34 +319,38 @@ let init_objdump () =
     match !Globals.objdump_d with
     | None -> ()
     | Some filename -> (
-        match read_source_file filename with
+        match read_file_lines filename with
         | MyFail s -> Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename
-        | Ok lines ->
-            let parse_line (s : string) : (natural * (natural * string)) option =
-              (*          if String.length s >=9 && s.[8] = ':' then *)
-              match Scanf.sscanf s " %x: %x %n" (fun a i n -> (a, i, n)) with
-              | (a, i, n) ->
-                  let s' = String.sub s n (String.length s - n) in
-                  Some (Nat_big_num.of_int a, (Nat_big_num.of_int i, s'))
-              | exception _ -> None
-              (*          else
-                        None*)
-            in
-            objdump_lines := Some (List.filter_map parse_line (Array.to_list lines))
+        | Ok lines -> objdump_lines := Some (parse_objdump lines)
       )
+
+let mk_objdump_lines_array instructions : (natural * string) option array =
+  Array.of_list
+    (List.map
+       (function
+         | (addr, i) -> (
+             match !objdump_lines with
+             | Some lines -> List.assoc_opt addr lines
+             (* TODO: warn if multiple lines?*)
+             | None -> None
+           ))
+       instructions)
 
 let lookup_objdump_lines (a : natural) : (natural * string) option =
   match !objdump_lines with Some lines -> List.assoc_opt a lines | None -> None
 
 (*****************************************************************************)
-(*        parse of control-flow instruction asm                              *)
+(*   parse control-flow instruction asm from objdump and branch table data   *)
 (*****************************************************************************)
 
 type addr = natural
 
-type node = addr * int * string list
+type index = int (* index into instruction-indexed arrays *)
+
+type node = addr * index * string list
 
 type control_flow_insn =
+  | C_plain
   | C_ret
   | C_eret
   | C_branch of addr (*numeric addr*) * string (*symbolic addr*)
@@ -352,6 +358,8 @@ type control_flow_insn =
   | C_branch_cond of string (*mnemonic*) * addr (*numeric addr*) * string (*symbolic addr*)
   | C_branch_register of string (*argument*)
   | C_smc_hvc of string
+
+(*mnemonic*)
 
 type target_kind =
   | T_plain_successor
@@ -366,6 +374,7 @@ type target_kind =
 
 let pp_control_flow_instruction c =
   match c with
+  | C_plain -> "plain"
   | C_ret -> "ret"
   | C_eret -> "eret"
   | C_branch (a, s) -> "b" ^ " " ^ pp_addr a ^ " " ^ s
@@ -376,6 +385,7 @@ let pp_control_flow_instruction c =
 
 let pp_control_flow_instruction_short c =
   match c with
+  | C_plain -> "plain"
   | C_ret -> "ret"
   | C_eret -> "eret"
   | C_branch (a, s) -> "b"
@@ -397,7 +407,7 @@ let pp_target_kind_short = function
 
 let highlight c =
   match c with
-  | C_ret | C_eret | C_branch_and_link (_, _) | C_smc_hvc _ -> false
+  | C_plain | C_ret | C_eret | C_branch_and_link (_, _) | C_smc_hvc _ -> false
   | C_branch (_, _) | C_branch_cond (_, _, _) | C_branch_register _ -> true
 
 (* highlight branch targets to earlier addresses*)
@@ -408,7 +418,7 @@ let pp_target_addr_wrt (addr : natural) (c : control_flow_insn) (a : natural) =
 let pp_come_from_addr_wrt (addr : natural) (c : control_flow_insn) (a : natural) =
   (if highlight c && Nat_big_num.greater a addr then "v" else "") ^ pp_addr a
 
-(* hacky parsing of assembly from objdump -d *)
+(* hacky parsing of assembly from objdump -d to identify control-flow instructions and their arguments *)
 
 let parse_addr (s : string) : natural = Scanf.sscanf s "%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
 
@@ -426,32 +436,27 @@ let parse_drop_one s =
   | (s1, s') -> Some s'
   | exception _ -> None
 
-let parse_control_flow_instruction s mnemonic s' =
-  (*  match Scanf.sscanf s "%s %n" (fun mnemonic -> fun n -> let s' = String.sub s n (String.length s - n) in (mnemonic,s')) with
-        | exception _ -> None
-        | (mnemonic,s') ->
-         (
-    *)
+let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
   (*  Printf.printf "s=\"%s\" mnemonic=\"%s\" s'=\"%s\"\n"s mnemonic s';*)
-  if List.mem mnemonic ["ret"] then Some C_ret
-  else if List.mem mnemonic ["eret"] then Some C_eret
-  else if List.mem mnemonic ["br"] then Some (C_branch_register mnemonic)
+  if List.mem mnemonic ["ret"] then C_ret
+  else if List.mem mnemonic ["eret"] then C_eret
+  else if List.mem mnemonic ["br"] then C_branch_register mnemonic
   else if
     (String.length mnemonic >= 2 && String.sub s 0 2 = "b.") || List.mem mnemonic ["b"; "bl"]
   then
     match parse_target s' with
     | None -> raise (Failure ("b./b/bl parse error for: \"" ^ s ^ "\"\n"))
     | Some (a, s) ->
-        if mnemonic = "b" then Some (C_branch (a, s))
-        else if mnemonic = "bl" then Some (C_branch_and_link (a, s))
-        else Some (C_branch_cond (mnemonic, a, s))
+        if mnemonic = "b" then C_branch (a, s)
+        else if mnemonic = "bl" then C_branch_and_link (a, s)
+        else C_branch_cond (mnemonic, a, s)
   else if List.mem mnemonic ["cbz"; "cbnz"] then
     match parse_drop_one s' with
     | None -> raise (Failure ("cbz/cbnz 1 parse error for: " ^ s ^ "\n"))
     | Some s' -> (
         match parse_target s' with
         | None -> raise (Failure ("cbz/cbnz 2 parse error for: " ^ s ^ "\n"))
-        | Some (a, s) -> Some (C_branch_cond (mnemonic, a, s))
+        | Some (a, s) -> C_branch_cond (mnemonic, a, s)
       )
   else if List.mem mnemonic ["tbz"; "tbnz"] then
     match parse_drop_one s' with
@@ -464,26 +469,29 @@ let parse_control_flow_instruction s mnemonic s' =
             | None -> raise (Failure ("tbz/tbnz 3 parse error for: " ^ s ^ "\n"))
             | Some (a, s'''') ->
                 (*                Printf.printf "s=%s mnemonic=%s s'=%s s''=%s s'''=%s s''''=%s\n"s mnemonic s' s'' s''' s'''';*)
-                Some (C_branch_cond (mnemonic, a, s''''))
+                C_branch_cond (mnemonic, a, s'''')
           )
       )
-  else if List.mem mnemonic ["smc"; "hvc"] then Some (C_smc_hvc s')
-  else None
+  else if List.mem mnemonic ["smc"; "hvc"] then C_smc_hvc s'
+  else C_plain
 
 (*
     )
    *)
 
-let branch_targets test =
+let mk_control_flow_insns_with_targets_array test instructions index_of_address address_of_index
+    size :
+    (addr * natural (*insn*) * control_flow_insn * (target_kind * addr * index * string) list)
+    array =
   init_objdump ();
 
-  (* **         read in branch-table description file                   ** *)
+  (* read in and parse branch-table description file *)
   let branch_data : (natural (*a_br*) * (natural (*a_table*) * natural)) (*size*) list =
     match !Globals.branch_table_data_file with
     | None -> [] (*None*)
     (*Warn.fatal "no branch table data file\n"*)
     | Some filename -> (
-        match read_source_file filename with
+        match read_file_lines filename with
         | MyFail s -> Warn.fatal2 "%s\ncouldn't read branch table data file: \"%s\"\n" s filename
         | Ok lines ->
             let parse_line (s : string) : (natural * (natural * natural)) option =
@@ -497,6 +505,7 @@ let branch_targets test =
       )
   in
 
+  (* pull out .rodata section from ELF *)
   let ((c, addr, bs) as rodata : Dwarf.p_context * Nat_big_num.num * char list) =
     Dwarf.extract_section_body test.elf_file ".rodata" false
   in
@@ -504,23 +513,7 @@ let branch_targets test =
      though not for all other things in .rodata *)
   let rodata_words : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
 
-  (*
-  let objdump_rodata : (natural(*addr*) * natural(*word*)) list =
-    match !Globals.objdump_rodata with
-    | None -> Warn.fatal0 "no objdump_rodata file\n" ""
-    | Some filename ->
-       match read_source_file filename with
-       | MyFail s ->
-          Warn.fatal2 "%s\ncouldn't read objdump_rodata file: \"%s\"\n" s filename
-       | Ok lines ->
-          let parse_line (s:string) : (natural*natural) option =
-            match Scanf.sscanf s " %x: %x .word %x" (fun a -> fun w -> fun _ -> (a,w)) with
-            | (a,w) ->
-               Some (Nat_big_num.of_int a, Nat_big_num.of_int w)
-            | exception _ -> None
-          in
-          (List.filter_map parse_line (Array.to_list lines)) in
- *)
+  (* compute targets of each instruction *)
   let rec natural_assoc_opt n nys =
     match nys with
     | [] -> None
@@ -529,24 +522,24 @@ let branch_targets test =
 
   let succ_addr addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
 
-  let targets_of_control_flow_insn (addr : natural) (c : control_flow_insn) :
+  let targets_of_control_flow_insn_without_index (addr : natural) (c : control_flow_insn) :
       (target_kind * addr * string) list =
     match c with
+    | C_plain -> [(T_plain_successor, succ_addr addr, "")]
     | C_ret -> []
     | C_eret -> []
     | C_branch (a, s) -> [(T_branch, a, s)]
     | C_branch_and_link (a, s) ->
+        (* special-case non-return functions to have no successor target of calls *)
         if List.mem s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then
-          (* special case non-return functions*)
           [(T_branch_and_link_call_noreturn, a, s)]
         else
           [
             (T_branch_and_link_call, a, s);
             (T_branch_and_link_successor, succ_addr addr, "<return>");
-          ] (* we rely later on the ordering of these *)
+          ]
     | C_branch_cond (is, a, s) ->
-        let succ_addr = Nat_big_num.add addr (Nat_big_num.of_int 4) in
-        [(T_branch_cond_branch, a, s); (T_branch_cond_successor, succ_addr, "<fallthrough>")]
+        [(T_branch_cond_branch, a, s); (T_branch_cond_successor, succ_addr addr, "<fallthrough>")]
     | C_branch_register r1 -> (
         match natural_assoc_opt addr branch_data with
         | None -> Warn.fatal "no branch table for address%s\n" (pp_addr addr)
@@ -574,14 +567,14 @@ let branch_targets test =
     | C_smc_hvc s -> [(T_smc_hvc_successor, succ_addr addr, "<C_smc_hvc successor>")]
   in
 
-  (* pull out instructions from text section, assuming 4-byte insns *)
-  let (p, text_addr, bs) = Dwarf.extract_text test.elf_file in
-  let instructions : (natural * natural) list = Dwarf.words_of_byte_list text_addr bs [] in
+  let targets_of_control_flow_insn (addr : natural) (c : control_flow_insn) :
+      (target_kind * addr * index * string) list =
+    List.map
+      (function (tk, a'', s'') -> (tk, a'', index_of_address a'', s''))
+      (targets_of_control_flow_insn_without_index addr c)
+  in
 
-  (*
-  Printf.printf "instructions=%d unique instructions=%d\n"  (List.length instructions) (List.length (List.sort_uniq compare (List.map (function (a,i)->Nat_big_num.to_int i) instructions))); exit 1;
-  *)
-  let control_flow_insn ((addr : natural), (i : natural)) : (addr * control_flow_insn) option =
+  let control_flow_insn ((addr : natural), (i : natural)) : control_flow_insn =
     match lookup_objdump_lines addr with
     | Some (i, s) -> (
         match
@@ -589,19 +582,12 @@ let branch_targets test =
               let s' = String.sub s n (String.length s - n) in
               (mnemonic, s'))
         with
-        | (mnemonic, s') -> (
-            (*           if (String.length mnemonic >=2 && String.sub s 0 2 ="b.") || List.mem mnemonic ["b"; "bl"; "br"; "ret"; "tbz"; "tbnz"; "cbz"; "cbnz"; "eret"; "smc"; "hvc"] then*)
-            match parse_control_flow_instruction s mnemonic s' with
-            | None -> None (*Warn.fatal "parse error %s\n" s*)
-            | Some c -> Some (addr, c)
-            (*           else
-                        None*)
-            | exception _ -> None
-          )
+        | (mnemonic, s') -> parse_control_flow_instruction s mnemonic s'
       )
-    | None -> None
+    | None -> Warn.fatal "control_flow_insn: lookup_objdump_lines failed for %s" (pp_addr addr)
   in
 
+  (*  
   let control_flow_insns : (addr * control_flow_insn) list =
     List.filter_map control_flow_insn instructions
   in
@@ -610,54 +596,29 @@ let branch_targets test =
       (addr * control_flow_insn * (target_kind * addr * string) list) list =
     List.map (function (a, c) -> (a, c, targets_of_control_flow_insn a c)) control_flow_insns
   in
-
-  let index_of_address (addr : natural) : int =
-    Nat_big_num.to_int (Nat_big_num.sub addr text_addr) / 4
-  in
-  let address_of_index (i : int) : natural =
-    Nat_big_num.add text_addr (Nat_big_num.of_int (i * 4))
-  in
-
-  let size = List.length instructions in
-
+ *)
   let control_flow_insns_with_targets_array :
-      ( addr
-      * natural (*isns*)
-      * control_flow_insn option
-      * (target_kind * addr * int * string) list
-      )
+      (addr * natural (*insn*) * control_flow_insn * (target_kind * addr * index * string) list)
       array =
     Array.init size (function k ->
-        (let (a, i) = List.nth instructions k in
-         let co = control_flow_insn (a, i) in
-         match co with
-         | None -> (a, i, None, [(T_plain_successor, succ_addr a, k + 1, "succ")])
-         | Some (a', c) ->
-             let targets = targets_of_control_flow_insn a c in
-             let targets' =
-               List.map
-                 (function (tk, a'', s'') -> (tk, a'', index_of_address a'', s''))
-                 targets
-             in
-             (a, i, Some c, targets')))
+        let (a, i) = List.nth instructions k in
+        let c = control_flow_insn (a, i) in
+        let targets = targets_of_control_flow_insn a c in
+        (a, i, c, targets))
   in
 
-  let indirect_branches =
-    List.filter
-      (function
-        | (a, c, ts) -> (
-            match c with C_branch_register _ -> true | _ -> false
-          ))
-      control_flow_insns_with_targets
-  in
+  control_flow_insns_with_targets_array
 
-  ( control_flow_insns_with_targets,
-    control_flow_insns_with_targets_array,
-    index_of_address,
-    address_of_index,
-    indirect_branches )
+let mk_indirect_branches control_flow_insns_with_targets_array =
+  List.filter
+    (function
+      | (a, i, c, ts) -> (
+          match c with C_branch_register _ -> true | _ -> false
+        ))
+    (Array.to_list control_flow_insns_with_targets_array)
 
-let pp_branch_targets (xs : (addr * control_flow_insn * (target_kind * addr * string) list) list)
+(*  
+let pp_branch_targets (xs : (addr * control_flow_insn * (target_kind * addr * int * string) list) list)
     =
   String.concat ""
     (List.map
@@ -665,10 +626,11 @@ let pp_branch_targets (xs : (addr * control_flow_insn * (target_kind * addr * st
          | (a, c, ts) ->
              pp_addr a ^ ":  " ^ pp_control_flow_instruction c ^ " -> "
              ^ String.concat ","
-                 (List.map (function (tk, a', s) -> pp_addr a' ^ "" ^ s ^ "") ts)
+                 (List.map (function (tk, a', k', s) -> pp_addr a' ^ "" ^ s ^ "") ts)
              ^ "\n")
        xs)
-
+ *)
+(*
 let come_from_table (xs : (addr * control_flow_insn * (target_kind * addr * string) list) list) :
     (int, target_kind * addr * control_flow_insn * string) Hashtbl.t =
   let t = Hashtbl.create 1000 in
@@ -677,7 +639,7 @@ let come_from_table (xs : (addr * control_flow_insn * (target_kind * addr * stri
       | (a, c, ts) ->
           List.iter
             (function
-              | (tk, a', s) ->
+              | (tk, a', k', s) ->
                   let aint' = Nat_big_num.to_int a' in
                   (* let prev = Hashtbl.find t aint' in *)
                   let come_from = (tk, a, c, s) in
@@ -688,9 +650,34 @@ let come_from_table (xs : (addr * control_flow_insn * (target_kind * addr * stri
 
 let come_froms t addr : (target_kind * addr * control_flow_insn * string) list =
   List.rev (Hashtbl.find_all t (Nat_big_num.to_int addr))
+ *)
 
-let pp_come_froms (addr : addr) (cfs : (target_kind * addr * control_flow_insn * string) list) :
-    string =
+let mk_come_from_array control_flow_insns_with_targets_array :
+    (target_kind * addr * index * control_flow_insn * string) list array =
+  let come_from_array = Array.make (Array.length control_flow_insns_with_targets_array) [] in
+  Array.iteri
+    (function
+      | k -> (
+          function
+          | (a, i, c, ts) ->
+              List.iter
+                (function
+                  | (tk, a', k', s) ->
+                      let come_from = (tk, a, k, c, s) in
+                      come_from_array.(k') <- come_from :: come_from_array.(k'))
+                ts
+        ))
+    control_flow_insns_with_targets_array;
+  Array.iteri
+    (function
+      | k -> (
+          function cfs -> come_from_array.(k) <- List.rev cfs
+        ))
+    come_from_array;
+  come_from_array
+
+let pp_come_froms (addr : addr)
+    (cfs : (target_kind * addr * index * control_flow_insn * string) list) : string =
   match cfs with
   | [] -> ""
   | _ ->
@@ -698,7 +685,7 @@ let pp_come_froms (addr : addr) (cfs : (target_kind * addr * control_flow_insn *
       ^ String.concat ","
           (List.map
              (function
-               | (tk, a, c, s) ->
+               | (tk, a, k, c, s) ->
                    pp_come_from_addr_wrt addr c a ^ "(" ^ pp_target_kind_short tk
                    (*^ pp_control_flow_instruction_short c*)
                    ^ ")"
@@ -733,8 +720,8 @@ module D = Pack.Digraph
 *)
 
 let pp_call_graph test
-    ( control_flow_insns_with_targets,
-      control_flow_insns_with_targets_array,
+    ( (*control_flow_insns_with_targets,*)
+    control_flow_insns_with_targets_array,
       index_of_address,
       address_of_index,
       indirect_branches ) =
@@ -769,7 +756,7 @@ let pp_call_graph test
   let extra_bl_targets' =
     List.filter_map
       (function
-        | (a, c, ts) -> (
+        | (a, i, c, ts) -> (
             match c with
             | C_branch_and_link (a', s') ->
                 if
@@ -779,7 +766,7 @@ let pp_call_graph test
                 else None
             | _ -> None
           ))
-      control_flow_insns_with_targets
+      (Array.to_list control_flow_insns_with_targets_array)
   in
 
   let rec dedup axs acc =
@@ -824,28 +811,34 @@ let pp_call_graph test
     | k :: todo' ->
         if List.mem k acc_reachable then stupid_reachability acc_reachable acc_bl_targets todo'
         else
-          let (a, i, co, targets) = control_flow_insns_with_targets_array.(k) in
-          let target_indices = List.map (function (tk'', a'', k'', s'') -> k'') targets in
-          let (non_bl_targets, bl_targets) =
-            match co with
-            | Some (C_branch_and_link (_, _)) -> (
-                match target_indices with [t1; t2] -> ([t2], [t1]) | [t1] -> ([], [t1])
-              )
-            | _ -> (target_indices, [])
+          let (a, i, c, targets) = control_flow_insns_with_targets_array.(k) in
+          let (bl_targets, non_bl_targets) =
+            List.partition
+              (function
+                | (tk'', a'', k'', s'') -> (
+                    match tk'' with
+                    | T_branch_and_link_call | T_branch_and_link_call_noreturn -> true
+                    | _ -> false
+                  ))
+              targets
+          in
+          let bl_target_indices = List.map (function (tk'', a'', k'', s'') -> k'') bl_targets in
+          let non_bl_target_indices =
+            List.map (function (tk'', a'', k'', s'') -> k'') non_bl_targets
           in
           stupid_reachability (k :: acc_reachable)
-            (List.sort_uniq compare (bl_targets @ acc_bl_targets))
-            (non_bl_targets @ todo')
+            (List.sort_uniq compare (bl_target_indices @ acc_bl_targets))
+            (non_bl_target_indices @ todo')
   in
 
-  let bl_targets k =
-    let (reachable, bl_targets) = stupid_reachability [] [] [k] in
-    bl_targets
+  let bl_target_indices k =
+    let (reachable, bl_target_indices) = stupid_reachability [] [] [k] in
+    bl_target_indices
   in
 
   let call_graph =
     List.map
-      (function (a, k, ss) as node -> (node, List.map node_of_index (bl_targets k)))
+      (function (a, k, ss) as node -> (node, List.map node_of_index (bl_target_indices k)))
       nodes
   in
 
@@ -1025,31 +1018,40 @@ let pp_test test =
   init_objdump ();
 
   (* pull out instructions from text section, assuming 4-byte insns *)
-  let (p, addr, bs) = Dwarf.extract_text test.elf_file in
-  let instructions : (natural * natural) list = Dwarf.words_of_byte_list addr bs [] in
+  let (p, text_addr, bs) = Dwarf.extract_text test.elf_file in
+  let instructions : (natural * natural) list = Dwarf.words_of_byte_list text_addr bs [] in
+  let index_of_address (addr : natural) : int =
+    Nat_big_num.to_int (Nat_big_num.sub addr text_addr) / 4
+  in
+  let address_of_index (i : int) : natural =
+    Nat_big_num.add text_addr (Nat_big_num.of_int (i * 4))
+  in
 
   (* hack to cut down problem size for runtime experimentation *)
   (* 14.5s with show_vars; 3.2s without.   13.3s with myconcat stubbed out, 15.2s with String.concat *)
-  let rec first n xs = if n = 0 then [] else match xs with x :: xs' -> x :: first (n - 1) xs' in
-  let instructions = if !Globals.clip_binary then first 1000 instructions else instructions in
-
-  let elf_symbols_array =
-    Array.of_list
-      (List.map (function (addr, i) -> elf_symbols_of_address test addr) instructions)
+  let rec first n xs =
+    if n = 0 then []
+    else match xs with x :: xs' -> x :: first (n - 1) xs' | _ -> Warn.fatal "first %d" n
   in
+  let instructions = if !Globals.clip_binary then first 1000 instructions else instructions in
+  let size = List.length instructions in
+
+  (*
+  Printf.printf "instructions=%d unique instructions=%d\n"  (List.length instructions) (List.length (List.sort_uniq compare (List.map (function (a,i)->Nat_big_num.to_int i) instructions))); exit 1;
+  *)
+  let elf_symbols_array = mk_elf_symbols_array test instructions in
+
+  let frame_info_array = mk_frame_info_array test instructions in
 
   (* compute the come-from data *)
-  let ( control_flow_insns_with_targets,
-        control_flow_insns_with_targets_array,
-        index_of_address,
-        address_of_index,
-        indirect_branches ) =
-    branch_targets test
+  let control_flow_insns_with_targets_array =
+    mk_control_flow_insns_with_targets_array test instructions index_of_address address_of_index
+      size
   in
-  let t = come_from_table control_flow_insns_with_targets in
-  let come_froms_array =
-    Array.of_list (List.map (function (addr, i) -> come_froms t addr) instructions)
-  in
+
+  let indirect_branches = mk_indirect_branches control_flow_insns_with_targets_array in
+
+  let come_froms_array = mk_come_from_array control_flow_insns_with_targets_array in
 
   (* compute the inlining data *)
   let iss = Dwarf.analyse_inlined_subroutines test.dwarf_static.ds_dwarf in
@@ -1138,7 +1140,7 @@ let pp_test test =
        - the branch target (but not the successor) of a C_branch_and_link
        - the targets (branch and fall-through) of a C_branch_cond, and/or
        - the targets of a C_branch_register *)
-    let source_node_come_from (tk, addr, c, s) =
+    let source_node_come_from (tk, addr, k, c, s) =
       match tk with
       | T_plain_successor -> false
       | T_branch -> false
@@ -1179,40 +1181,37 @@ let pp_test test =
       (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
       if k >= k_max then ""
       else
-        let (addr, i, co, targets) = control_flow_insns_with_targets_array.(k) in
-        match co with
-        | None -> graphette_body visited nn_last (k + 1)
-        | Some c -> (
-            match c with
-            | C_ret -> ""
-            | C_eret -> ""
-            | C_branch (a, s) ->
-                let k' = index_of_address a in
-                if List.mem (nn_last, k') visited then ""
-                else graphette_body ((nn_last, k') :: visited) nn_last k'
-            | C_branch_and_link (a, s) ->
-                let nn = pp_node_name_branch_and_link addr in
-                Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
-                ^ pp_edge nn_last nn
-                ^
-                if
-                  List.filter
-                    (function (T_branch_and_link_successor, _, _, _) -> true | _ -> false)
-                    targets
-                  = []
-                then ""
-                else graphette_body visited nn (k + 1)
-            | C_branch_cond (_, _, _) | C_branch_register _ ->
-                String.concat ""
-                  (List.map
-                     (function
-                       | addr' ->
-                           let nn = pp_node_name_source addr' in
-                           pp_edge nn_last nn)
-                     (List.sort_uniq compare
-                        (List.map (function (tk, addr', c, s) -> addr') targets)))
-            | C_smc_hvc s -> graphette_body visited nn_last (k + 1)
-          )
+        let (addr, i, c, targets) = control_flow_insns_with_targets_array.(k) in
+        match c with
+        | C_plain -> graphette_body visited nn_last (k + 1)
+        | C_ret -> ""
+        | C_eret -> ""
+        | C_branch (a, s) ->
+            let k' = index_of_address a in
+            if List.mem (nn_last, k') visited then ""
+            else graphette_body ((nn_last, k') :: visited) nn_last k'
+        | C_branch_and_link (a, s) ->
+            let nn = pp_node_name_branch_and_link addr in
+            Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s;\n" nn s s margin
+            ^ pp_edge nn_last nn
+            ^
+            if
+              List.filter
+                (function (T_branch_and_link_successor, _, _, _) -> true | _ -> false)
+                targets
+              = []
+            then ""
+            else graphette_body visited nn (k + 1)
+        | C_branch_cond (_, _, _) | C_branch_register _ ->
+            String.concat ""
+              (List.map
+                 (function
+                   | addr' ->
+                       let nn = pp_node_name_source addr' in
+                       pp_edge nn_last nn)
+                 (List.sort_uniq compare
+                    (List.map (function (tk, addr', c, s) -> addr') targets)))
+        | C_smc_hvc s -> graphette_body visited nn_last (k + 1)
     in
     let c = open_out f in
     Printf.fprintf c "digraph g {\n";
@@ -1279,7 +1278,7 @@ let pp_test test =
     (* the frame info for this address *)
     ^ begin
         if !Globals.show_cfa then
-          let frame_info = pp_frame_info test addr in
+          let frame_info = pp_frame_info frame_info_array k in
           if frame_info = !last_frame_info then "" (*"CFA: unchanged\n"*)
           else (
             last_frame_info := frame_info;
@@ -1316,13 +1315,13 @@ let pp_test test =
       end
     ^ begin
         match
-          List.find_opt (function (a, c, ts) -> Nat_big_num.equal a addr) indirect_branches
+          List.find_opt (function (a, i, c, ts) -> Nat_big_num.equal a addr) indirect_branches
         with
-        | Some (a, c, ts) ->
+        | Some (a, i, c, ts) ->
             " -> "
             ^ String.concat ","
                 (List.map
-                   (function (tk, a', s) -> pp_target_addr_wrt addr c a' ^ "" ^ s ^ "")
+                   (function (tk, a', k', s) -> pp_target_addr_wrt addr c a' ^ "" ^ s ^ "")
                    ts)
             ^ " "
         | None -> ""
@@ -1337,11 +1336,11 @@ let pp_test test =
      Dwarf.pp_all_aggregate_types c d)
   ^ "\n************** instructions *****************\n"
   ^ String.concat "" (List.map pp_instruction instructions)
-  ^ "\n************** branch targets *****************\n"
-  ^ pp_branch_targets control_flow_insns_with_targets
+  (*  ^ "\n************** branch targets *****************\n"*)
+  (*  ^ pp_branch_targets control_flow_insns_with_targets_array*)
   ^ "\n************** call graph *****************\n"
   ^ pp_call_graph test
-      ( control_flow_insns_with_targets,
+      ( (*control_flow_insns_with_targets,*)
         control_flow_insns_with_targets_array,
         index_of_address,
         address_of_index,
@@ -1368,7 +1367,7 @@ let process_file (filename : string) : unit =
 
   (* copy emacs syntax highlighting blob to output. sometime de-hard-code the filename*)
   begin
-    match read_source_file "emacs-highlighting" with
+    match read_file_lines "emacs-highlighting" with
     | MyFail _ -> ()
     | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines
   end;
