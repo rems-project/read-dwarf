@@ -263,10 +263,10 @@ let rec dwarf_source_file_line_numbers test (a : natural) :
   match sls with
   | [] -> dwarf_source_file_line_numbers test (Nat_big_num.sub a (Nat_big_num.of_int 4))
   | _ ->
-     List.map
-       (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
-         (subprogram_name, Nat_big_num.to_int n))
-       sls
+      List.map
+        (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
+          (subprogram_name, Nat_big_num.to_int n))
+        sls
 
 (*****************************************************************************)
 (*        look up address in ELF symbol table                                *)
@@ -988,13 +988,13 @@ let correlate_source_line test1 graph1 test2 graph2 : graph_cfg =
   let (nodes_source1, nodes_rest1, edges1) = graph1 in
   let (nodes_source2, nodes_rest2, edges2) = graph2 in
   let is_branch_cond = function
-    | (nn, cnk, label, addr, k) ->
-       match cnk with
-       | CFG_node_branch_cond 
-         | CFG_node_branch_register 
-         | CFG_node_ret 
-         | CFG_node_branch_and_link -> true
-       | _ -> false
+    | (nn, cnk, label, addr, k) -> (
+        match cnk with
+        | CFG_node_branch_cond | CFG_node_branch_register | CFG_node_ret
+         |CFG_node_branch_and_link ->
+            true
+        | _ -> false
+      )
   in
   let nodes_branch_cond1 = List.filter is_branch_cond nodes_rest1 in
   let nodes_branch_cond2 = List.filter is_branch_cond nodes_rest2 in
@@ -1587,10 +1587,18 @@ let process_file () : unit =
 
           let graph0' =
             reachable_subgraph graph0 (*["sync_lower_exception"]*)
-                                         ["mpool_fini"; "mpool_lock"; "mpool_free"; "mpool_add_chunk"; "mpool_unlock"; "sl_lock"; "sl_unlock"]
+              [
+                "mpool_fini";
+                "mpool_lock";
+                "mpool_free";
+                "mpool_add_chunk";
+                "mpool_unlock";
+                "sl_lock";
+                "sl_unlock";
+              ]
           in
 
-          let graph2' = reachable_subgraph graph2 (*["sync_lower_exception"]*)["mpool_fini"] in
+          let graph2' = reachable_subgraph graph2 (*["sync_lower_exception"]*) ["mpool_fini"] in
 
           let graph = graph_union graph0' graph2' in
 
