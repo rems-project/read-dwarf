@@ -40,7 +40,6 @@ let elf =
   setter Globals.elf
     Arg.(value & opt (some non_dir_file) None & info ["elf"] ~docv:"ELF_FILE" ~doc)
 
-
 let objdump_d2 =
   let doc = "Second: File containing result of objdump -d" in
   setter Globals.objdump_d2
@@ -59,7 +58,6 @@ let elf2 =
   setter Globals.elf2
     Arg.(value & opt (some non_dir_file) None & info ["elf2"] ~docv:"ELF_FILE" ~doc)
 
-  
 let out_file =
   let doc = "file for output (optional)" in
   setter Globals.out_file

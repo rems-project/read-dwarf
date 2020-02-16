@@ -1,21 +1,20 @@
 let elf = ref (None : string option)
 
+let branch_table_data_file = ref (None : string option)
+
+let objdump_d = ref (None : string option)
+
+let elf2 = ref (None : string option)
+
+let branch_table_data_file2 = ref (None : string option)
+
+let objdump_d2 = ref (None : string option)
+
 let comp_dir = ref (None : string option)
 
 let dot_file = ref (None : string option)
 
 let out_file = ref (None : string option)
-
-let objdump_d = ref (None : string option)
-
-let dot_file2 = ref (None : string option)
-
-let out_file2 = ref (None : string option)
-
-let objdump_d2 = ref (None : string option)
-              
-(*let objdump_rodata = ref (None : string option)*)
-let branch_table_data_file = ref (None : string option)
 
 let clip_binary = ref false
 
