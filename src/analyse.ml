@@ -259,18 +259,22 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
 (* source line info for matching instructions between binaries - ignoring inlining for now, and supposing there is always a predecessor with a source line. Should pay more careful attention to the actual line number table *)
 let rec dwarf_source_file_line_numbers' test recursion_limit (a : natural) :
     (string (*subprogram name*) * int) (*line number*) list =
-  if recursion_limit = 0 then [] else
-  let sls = Dwarf.source_lines_of_address test.dwarf_static a in
-  match sls with
-  | [] -> dwarf_source_file_line_numbers' test (recursion_limit -1) (Nat_big_num.sub a (Nat_big_num.of_int 4))
-  | _ ->
-      List.map
-        (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
-          (subprogram_name, Nat_big_num.to_int n))
-        sls
+  if recursion_limit = 0 then []
+  else
+    let sls = Dwarf.source_lines_of_address test.dwarf_static a in
+    match sls with
+    | [] ->
+        dwarf_source_file_line_numbers' test (recursion_limit - 1)
+          (Nat_big_num.sub a (Nat_big_num.of_int 4))
+    | _ ->
+        List.map
+          (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
+            (subprogram_name, Nat_big_num.to_int n))
+          sls
 
-let dwarf_source_file_line_numbers test (a : natural) = dwarf_source_file_line_numbers' test 100 (a : natural)
-        
+let dwarf_source_file_line_numbers test (a : natural) =
+  dwarf_source_file_line_numbers' test 100 (a : natural)
+
 (*****************************************************************************)
 (*        look up address in ELF symbol table                                *)
 (*****************************************************************************)
@@ -699,70 +703,190 @@ type graph_cfg =
   * node_cfg list
   (* interior nodes*)
   * edge_cfg list
+
 (*edges*)
 
-
 (* the graphviz svg colours from https://www.graphviz.org/doc/info/colors.html without those too close to white or those that dot complains about*)
-let colours_svg = 
+let colours_svg =
   [
-(*"aliceblue";*)(*"antiquewhite";*)"aqua";"aquamarine";(*"azure";*)
-(*"beige";*)(*"bisque";*)"black";(*"blanchedalmond";*)"blue";
-"blueviolet";"brown";"burlywood";"cadetblue";"chartreuse";
-"chocolate";"coral";"cornflowerblue";(*"cornsilk";*)"crimson";
-"cyan";"darkblue";"darkcyan";"darkgoldenrod";(*"darkgray";*)
-"darkgreen";"darkgrey";"darkkhaki";"darkmagenta";"darkolivegreen";
-"darkorange";"darkorchid";"darkred";"darksalmon";"darkseagreen";
-"darkslateblue";"darkslategray";"darkslategrey";"darkturquoise";"darkviolet";
-"deeppink";"deepskyblue";"dimgray";"dimgrey";"dodgerblue";
-"firebrick";(*"floralwhite";*)"forestgreen";"fuchsia";(*"gainsboro";*)
-(*"ghostwhite";*)"gold";"goldenrod";"gray";"grey";
-"green";"greenyellow";(*"honeydew";*)"hotpink";"indianred";
-"indigo";(*"ivory";*)"khaki";(*"lavender";*)(*"lavenderblush";*)
-"lawngreen";(*"lemonchiffon";*)"lightblue";"lightcoral";(*"lightcyan";*)
-(*"lightgoldenrodyellow";*)(*"lightgray";*)"lightgreen";"lightgrey";"lightpink";
-"lightsalmon";"lightseagreen";"lightskyblue";"lightslategray";"lightslategrey";
-"lightsteelblue";(*"lightyellow";*)"lime";"limegreen";(*"linen";*)
-"magenta";"maroon";"mediumaquamarine";"mediumblue";"mediumorchid";
-"mediumpurple";"mediumseagreen";"mediumslateblue";"mediumspringgreen";"mediumturquoise";
-"mediumvioletred";"midnightblue";(*"mintcream";*)(*"mistyrose";*)"moccasin";
-"navajowhite";"navy";(*"oldlace";*)"olive";"olivedrab";
-"orange";"orangered";"orchid";"palegoldenrod";"palegreen";
-"paleturquoise";"palevioletred";(*"papayawhip";*)(*"peachpuff";*)"peru";
-"pink";"plum";"powderblue";"purple";"red";
-"rosybrown";"royalblue";"saddlebrown";"salmon";"sandybrown";
-"seagreen";(*"seashell";*)"sienna";"silver";"skyblue";
-"slateblue";"slategray";"slategrey";(*"snow";*)"springgreen";
-"steelblue";"tan";"teal";"thistle";"tomato";
-"turquoise";"violet";"wheat";(*"white";*)(*"whitesmoke";*)
-  "yellow";"yellowgreen"
- ]
-let colours_dot_complains = [
-"teal";
-"darkgrey";
-"silver";
-"darkcyan";
-"olive";
-"darkmagenta";
-"aqua";
-"darkred";
-"lime";
-"lightgreen" ]
+    (*"aliceblue";*)
+    (*"antiquewhite";*)
+    "aqua";
+    "aquamarine";
+    (*"azure";*)
+    (*"beige";*)
+    (*"bisque";*)
+    "black";
+    (*"blanchedalmond";*)
+    "blue";
+    "blueviolet";
+    "brown";
+    "burlywood";
+    "cadetblue";
+    "chartreuse";
+    "chocolate";
+    "coral";
+    "cornflowerblue";
+    (*"cornsilk";*)
+    "crimson";
+    "cyan";
+    "darkblue";
+    "darkcyan";
+    "darkgoldenrod";
+    (*"darkgray";*)
+    "darkgreen";
+    "darkgrey";
+    "darkkhaki";
+    "darkmagenta";
+    "darkolivegreen";
+    "darkorange";
+    "darkorchid";
+    "darkred";
+    "darksalmon";
+    "darkseagreen";
+    "darkslateblue";
+    "darkslategray";
+    "darkslategrey";
+    "darkturquoise";
+    "darkviolet";
+    "deeppink";
+    "deepskyblue";
+    "dimgray";
+    "dimgrey";
+    "dodgerblue";
+    "firebrick";
+    (*"floralwhite";*)
+    "forestgreen";
+    "fuchsia";
+    (*"gainsboro";*)
+    (*"ghostwhite";*)
+    "gold";
+    "goldenrod";
+    "gray";
+    "grey";
+    "green";
+    "greenyellow";
+    (*"honeydew";*)
+    "hotpink";
+    "indianred";
+    "indigo";
+    (*"ivory";*)
+    "khaki";
+    (*"lavender";*)
+    (*"lavenderblush";*)
+    "lawngreen";
+    (*"lemonchiffon";*)
+    "lightblue";
+    "lightcoral";
+    (*"lightcyan";*)
+    (*"lightgoldenrodyellow";*)
+    (*"lightgray";*)
+    "lightgreen";
+    "lightgrey";
+    "lightpink";
+    "lightsalmon";
+    "lightseagreen";
+    "lightskyblue";
+    "lightslategray";
+    "lightslategrey";
+    "lightsteelblue";
+    (*"lightyellow";*)
+    "lime";
+    "limegreen";
+    (*"linen";*)
+    "magenta";
+    "maroon";
+    "mediumaquamarine";
+    "mediumblue";
+    "mediumorchid";
+    "mediumpurple";
+    "mediumseagreen";
+    "mediumslateblue";
+    "mediumspringgreen";
+    "mediumturquoise";
+    "mediumvioletred";
+    "midnightblue";
+    (*"mintcream";*)
+    (*"mistyrose";*)
+    "moccasin";
+    "navajowhite";
+    "navy";
+    (*"oldlace";*)
+    "olive";
+    "olivedrab";
+    "orange";
+    "orangered";
+    "orchid";
+    "palegoldenrod";
+    "palegreen";
+    "paleturquoise";
+    "palevioletred";
+    (*"papayawhip";*)
+    (*"peachpuff";*)
+    "peru";
+    "pink";
+    "plum";
+    "powderblue";
+    "purple";
+    "red";
+    "rosybrown";
+    "royalblue";
+    "saddlebrown";
+    "salmon";
+    "sandybrown";
+    "seagreen";
+    (*"seashell";*)
+    "sienna";
+    "silver";
+    "skyblue";
+    "slateblue";
+    "slategray";
+    "slategrey";
+    (*"snow";*)
+    "springgreen";
+    "steelblue";
+    "tan";
+    "teal";
+    "thistle";
+    "tomato";
+    "turquoise";
+    "violet";
+    "wheat";
+    (*"white";*)
+    (*"whitesmoke";*)
+    "yellow";
+    "yellowgreen";
+  ]
+
+let colours_dot_complains =
+  [
+    "teal";
+    "darkgrey";
+    "silver";
+    "darkcyan";
+    "olive";
+    "darkmagenta";
+    "aqua";
+    "darkred";
+    "lime";
+    "lightgreen";
+  ]
 
 let colours = List.filter (function c -> not (List.mem c colours_dot_complains)) colours_svg
 
-      
 let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targets_array
     come_froms_array index_of_address : graph_cfg =
-    
-  let colour addr = 
+  let colour addr =
     match dwarf_source_file_line_numbers test addr with
-    | [(subprogram_name, line)] -> 
-        let colour = List.nth colours ((((Hashtbl.hash subprogram_name) land 65535) * List.length colours)/65536) in
+    | [(subprogram_name, line)] ->
+        let colour =
+          List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
+        in
         colour
-    | _ -> "black" in
+    | _ -> "black"
+  in
 
-
-(* the graphette source nodes are the addresses which are either
+  (* the graphette source nodes are the addresses which are either
        - elf symbols
        - the branch target (but not the successor) of a C_branch_and_link
        - the targets (branch and fall-through) of a C_branch_cond, and/or
@@ -949,17 +1073,15 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
 
   graph
 
-
-    
-
-let pp_colour colour =         "[color=\"" ^ colour ^ "\"]" ^ "[fontcolor=\"" ^ colour ^ "\"]"
-
-          
+let pp_colour colour = "[color=\"" ^ colour ^ "\"]" ^ "[fontcolor=\"" ^ colour ^ "\"]"
 
 let margin = "[margin=\"0.03,0.02\"]"
-  (* let nodesep = "[nodesep=\"0.25\"]" in (*graphviz default *) *)
+
+(* let nodesep = "[nodesep=\"0.25\"]" in (*graphviz default *) *)
 let nodesep = "[nodesep=\"0.1\"]"
+
 let pp_node_name nn = "\"" ^ nn ^ "\""
+
 let pp_edge (nn, nn', cek) =
   match cek with
   | CFG_edge_flow -> pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep ^ ";\n"
@@ -967,15 +1089,14 @@ let pp_edge (nn, nn', cek) =
       pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep
       ^ "[constraint=\"false\";style=\"dashed\"];\n"
 
-                                                                                
 let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) dot_file : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
-
   let pp_node ((nn, cnk, label, addr, k, col) as n) =
     let shape =
       match cnk with CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]" | _ -> ""
     in
-    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name nn) label label margin shape (pp_colour col)
+    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name nn) label label
+      margin shape (pp_colour col)
   in
 
   let c = open_out dot_file in
@@ -1036,7 +1157,9 @@ let reachable_subgraph ((nodes_source, nodes, edges) : graph_cfg) (labels_start 
       nodes_source
   in
   let nodes_reachable_rest =
-    List.filter (function (nn, cnk, label, addr, k, col) -> List.mem nn node_names_reachable) nodes
+    List.filter
+      (function (nn, cnk, label, addr, k, col) -> List.mem nn node_names_reachable)
+      nodes
   in
   (nodes_reachable_source, nodes_reachable_rest, edges_reachable)
 
@@ -1661,7 +1784,7 @@ let process_file () : unit =
                 "mpool_add_chunk";
                 "mpool_unlock";
                 "sl_lock";
-                "sl_unlock"
+                "sl_unlock";
               ]
           in
 
@@ -1669,26 +1792,38 @@ let process_file () : unit =
 
           let graph = graph_union graph0' graph2' in
 
-        
-          let graph' = (correlate_source_line test graph0' test2 graph2') in
+          let graph' = correlate_source_line test graph0' test2 graph2' in
 
-          let dot_file_root = String.sub dot_file 0 (String.length dot_file -4) in
-          let dot_file_base = dot_file_root ^ "_base.dot" in 
+          let dot_file_root = String.sub dot_file 0 (String.length dot_file - 4) in
+          let dot_file_base = dot_file_root ^ "_base.dot" in
           let dot_file_layout = dot_file_root ^ "_layout.dot" in
-          pp_cfg graph dot_file_base ;
+          pp_cfg graph dot_file_base;
           let status = Unix.system ("dot -Txdot " ^ dot_file_base ^ " > " ^ dot_file_layout) in
-          let layout_lines = match read_file_lines dot_file_layout with Ok lines -> lines | MyFail s -> Warn.fatal "couldn't read dot_file_layout %s" s in
-          let ppd_correlate_edges = let (_,_,edges) = graph' in List.map pp_edge edges in
+          let layout_lines =
+            match read_file_lines dot_file_layout with
+            | Ok lines -> lines
+            | MyFail s -> Warn.fatal "couldn't read dot_file_layout %s" s
+          in
+          let ppd_correlate_edges =
+            let (_, _, edges) = graph' in
+            List.map pp_edge edges
+          in
           let c = open_out dot_file in
-          Array.iteri (function j -> function line -> if j+1=Array.length layout_lines then () else Printf.fprintf c "%s\n" layout_lines.(j)) layout_lines;
+          Array.iteri
+            (function
+              | j -> (
+                  function
+                  | line ->
+                      if j + 1 = Array.length layout_lines then ()
+                      else Printf.fprintf c "%s\n" layout_lines.(j)
+                ))
+            layout_lines;
           List.iter (function line -> Printf.fprintf c "%s\n" line) ppd_correlate_edges;
           Printf.fprintf c "}\n";
           close_out c;
           let status = Unix.system ("dot -Tpdf " ^ dot_file ^ " > " ^ dot_file_root ^ ".pdf") in
           let status = Unix.system ("dot -Tsvg " ^ dot_file ^ " > " ^ dot_file_root ^ ".svg") in
           ()
-
-            
       | None -> Warn.fatal0 "no dot file\n"
     )
   | _ -> Warn.fatal0 "missing files for elf2\n"
