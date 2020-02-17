@@ -257,17 +257,20 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
               sls))
 
 (* source line info for matching instructions between binaries - ignoring inlining for now, and supposing there is always a predecessor with a source line. Should pay more careful attention to the actual line number table *)
-let rec dwarf_source_file_line_numbers test (a : natural) :
+let rec dwarf_source_file_line_numbers' test recursion_limit (a : natural) :
     (string (*subprogram name*) * int) (*line number*) list =
+  if recursion_limit = 0 then [] else
   let sls = Dwarf.source_lines_of_address test.dwarf_static a in
   match sls with
-  | [] -> dwarf_source_file_line_numbers test (Nat_big_num.sub a (Nat_big_num.of_int 4))
+  | [] -> dwarf_source_file_line_numbers' test (recursion_limit -1) (Nat_big_num.sub a (Nat_big_num.of_int 4))
   | _ ->
       List.map
         (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
           (subprogram_name, Nat_big_num.to_int n))
         sls
 
+let dwarf_source_file_line_numbers test (a : natural) = dwarf_source_file_line_numbers' test 100 (a : natural)
+        
 (*****************************************************************************)
 (*        look up address in ELF symbol table                                *)
 (*****************************************************************************)
@@ -888,7 +891,50 @@ let mk_cfg node_name_prefix elf_symbols_array control_flow_insns_with_targets_ar
 
   graph
 
-let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) dot_file : unit =
+(* the graphviz svg colours from https://www.graphviz.org/doc/info/colors.html without those too close to white *)
+let colours = 
+  [
+(*"aliceblue";*)(*"antiquewhite";*)"aqua";"aquamarine";(*"azure";*)
+(*"beige";*)(*"bisque";*)"black";(*"blanchedalmond";*)"blue";
+"blueviolet";"brown";"burlywood";"cadetblue";"chartreuse";
+"chocolate";"coral";"cornflowerblue";(*"cornsilk";*)"crimson";
+"cyan";"darkblue";"darkcyan";"darkgoldenrod";(*"darkgray";*)
+"darkgreen";"darkgrey";"darkkhaki";"darkmagenta";"darkolivegreen";
+"darkorange";"darkorchid";"darkred";"darksalmon";"darkseagreen";
+"darkslateblue";"darkslategray";"darkslategrey";"darkturquoise";"darkviolet";
+"deeppink";"deepskyblue";"dimgray";"dimgrey";"dodgerblue";
+"firebrick";(*"floralwhite";*)"forestgreen";"fuchsia";(*"gainsboro";*)
+(*"ghostwhite";*)"gold";"goldenrod";"gray";"grey";
+"green";"greenyellow";(*"honeydew";*)"hotpink";"indianred";
+"indigo";(*"ivory";*)"khaki";(*"lavender";*)(*"lavenderblush";*)
+"lawngreen";(*"lemonchiffon";*)"lightblue";"lightcoral";(*"lightcyan";*)
+(*"lightgoldenrodyellow";*)(*"lightgray";*)"lightgreen";"lightgrey";"lightpink";
+"lightsalmon";"lightseagreen";"lightskyblue";"lightslategray";"lightslategrey";
+"lightsteelblue";(*"lightyellow";*)"lime";"limegreen";(*"linen";*)
+"magenta";"maroon";"mediumaquamarine";"mediumblue";"mediumorchid";
+"mediumpurple";"mediumseagreen";"mediumslateblue";"mediumspringgreen";"mediumturquoise";
+"mediumvioletred";"midnightblue";(*"mintcream";*)(*"mistyrose";*)"moccasin";
+"navajowhite";"navy";(*"oldlace";*)"olive";"olivedrab";
+"orange";"orangered";"orchid";"palegoldenrod";"palegreen";
+"paleturquoise";"palevioletred";(*"papayawhip";*)(*"peachpuff";*)"peru";
+"pink";"plum";"powderblue";"purple";"red";
+"rosybrown";"royalblue";"saddlebrown";"salmon";"sandybrown";
+"seagreen";(*"seashell";*)"sienna";"silver";"skyblue";
+"slateblue";"slategray";"slategrey";(*"snow";*)"springgreen";
+"steelblue";"tan";"teal";"thistle";"tomato";
+"turquoise";"violet";"wheat";(*"white";*)(*"whitesmoke";*)
+  "yellow";"yellowgreen"
+ ]
+    
+let colour_node test ((nn, cnk, label, addr, k) as n) =
+    match dwarf_source_file_line_numbers test addr with
+    | [(subprogram_name, line)] -> 
+        let colour = List.nth colours ((((Hashtbl.hash subprogram_name) land 65535) * List.length colours)/65536) in
+        "[color=\"" ^ colour ^ "\"]"
+    | _ -> ""
+                               
+    
+let pp_cfg testo ((nodes_source, nodes, edges) : graph_cfg) dot_file : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
   let margin = "[margin=\"0.03,0.02\"]" in
   (* let nodesep = "[nodesep=\"0.25\"]" in (*graphviz default *) *)
@@ -903,11 +949,11 @@ let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) dot_file : unit =
         ^ "[constraint=\"false\";style=\"dashed\"];\n"
   in
 
-  let pp_node (nn, cnk, label, addr, k) =
+  let pp_node ((nn, cnk, label, addr, k) as n) =
     let shape =
       match cnk with CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]" | _ -> ""
     in
-    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s;\n" (pp_node_name nn) label label margin
+    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name nn) label label margin (match testo with None -> "" | Some test -> (colour_node test n))
       shape
   in
 
@@ -1550,7 +1596,7 @@ let process_file () : unit =
               an.come_froms_array an.index_of_address
           in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
-          pp_cfg graph dot_file
+          pp_cfg (Some test) graph dot_file
       | None -> ()
       );
 
@@ -1604,7 +1650,7 @@ let process_file () : unit =
 
           let graph' = graph_union graph (correlate_source_line test graph0' test2 graph2') in
 
-          pp_cfg graph' dot_file
+          pp_cfg None graph' dot_file
       | None -> Warn.fatal0 "no dot file\n"
     )
   | _ -> Warn.fatal0 "missing files for elf2\n"
