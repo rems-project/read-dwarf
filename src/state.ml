@@ -110,7 +110,12 @@ end
 (*        State management                                                   *)
 (*****************************************************************************)
 
-(** Makes a fresh state with all variable fresh and new *)
+(** Makes a fresh state with all variable fresh and new
+
+    Remark: This create a state according to the current register layout in the Reg module
+    ({!Reg.index}). If new registers are added afterwards, this state won't have them.
+    Use {!copy_extend} to fix that.
+*)
 let make () =
   let id = !next_id in
   let state =
@@ -122,6 +127,7 @@ let make () =
   WeakMap.add id2state id state;
   state
 
+(** Make a state using the argument passed *)
 let make_of regs extra_vars asserts memory =
   let id = !next_id in
   let state = { id; regs; extra_vars; asserts; memory } in
@@ -130,7 +136,12 @@ let make_of regs extra_vars asserts memory =
   state
 
 (** Do a deep copy of all the mutable part of the state,
-    so it can be mutated without retroaction *)
+    so it can be mutated without retro-action.
+
+    Remark: This create a new state with the same register layout as the input state
+    It will not accommodate register discovered in between
+    Use {!copy_extend} to add the new register that are missing
+*)
 let copy state =
   let id = !next_id in
   let nstate =
@@ -146,12 +157,33 @@ let copy state =
   WeakMap.add id2state id nstate;
   nstate
 
+(** Do a deep copy of all the mutable part of the state,
+    so it can be mutated without retro-action.
+    All new register that are not present are added with fresh new variables
+    as if created by {!make}
+ *)
+let copy_extend state =
+  let id = !next_id in
+  let nstate =
+    {
+      id;
+      regs = Reg.Map.dummy ();
+      extra_vars = Vector.empty ();
+      asserts = state.asserts;
+      memory = ();
+    }
+  in
+  nstate.regs <-
+    Reg.Map.copy_extend
+      ~init:(fun p -> Var.to_exp { state = nstate; var = Register p })
+      state.regs;
+  next_id := id + 1;
+  WeakMap.add id2state id nstate;
+  nstate
+
 (*****************************************************************************)
 (*        State convenience manipulation                                     *)
 (*****************************************************************************)
-
-(** The type of a mutable register cell *)
-type reg_cell = exp Reg.Map.cell ArrayCell.t
 
 (** Add an assertion to a state *)
 let push_assert (s : t) (e : exp) = s.asserts <- e :: s.asserts
@@ -183,6 +215,8 @@ let svar_type { state; var } =
 
 let pp_sexp exp = Isla_lang.PP.pp_exp Var.pp exp
 
+let pp_trc trc = Isla_lang.PP.pp_trc Var.pp trc
+
 let pp s =
   PP.(
     !^"state"
@@ -191,7 +225,9 @@ let pp s =
            ("id", Id.pp s.id);
            ("regs", Reg.Map.pp pp_sexp s.regs);
            ("extra_vars", !^"todo");
-           ("asserts", !^"todo");
-           ("asserts_ref", !^"todo");
+           ( "asserts",
+             s.asserts
+             |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_sexp e)
+             |> separate hardline );
            ("memory", !^"todo");
          ])

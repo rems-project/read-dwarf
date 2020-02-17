@@ -12,7 +12,7 @@ module SymTbl = Sym.Table
 *)
 type t = { symbols : SymTbl.t; segments : Segment.t list }
 
-(** Parse an ELF file to create a {!ElfFile.t}. Uses {!Analyse.parse_file} *)
+(** Parse an ELF file to create a {!ElfFile.t}. Uses {!Analyse.parse_elf_file} *)
 let of_file (file : string) =
   let f = Analyse.parse_elf_file file in
   let segments = List.map Segment.of_linksem f.segments in

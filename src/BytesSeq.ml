@@ -2,7 +2,17 @@
     Contrary to [Bytes] it is a non-owning immutable view.
     It do not prevent the original bytes from being modified,
     and the changes will be propagated in the view.
-    It is additional sugar on top of Linksem's [Byte_sequence_wrapper] *)
+    It is additional sugar on top of Linksem's [Byte_sequence_wrapper]
+
+    About all the suffixed function:
+    - All iteration function without suffix do the expected operation on char (as single bytes)
+    - All iteration function with suffix nle do the expected operation on a sequence of
+      integers of n bits as read in little endian.
+    - All iteration function with suffix nbe do the expected operation on a sequence of
+      integers of n bits as read in big endian.
+    - All iteration function with suffix nbs do the expected operation on a sequence of
+      BytesSeq.t of length corresponding to n bits.
+*)
 
 (* TODO make this include manually and make a mli file *)
 include Byte_sequence_wrapper
@@ -72,8 +82,14 @@ let sub bs start len : t =
       (Invalid_argument
          (Printf.sprintf "ByteSeq.sub at %d of length %d but total size is %d" start len bs.len))
 
+(** Same as {!sub} but for bytes *)
+let bytes_sub bytes start len : t = sub (of_bytes bytes) start len
+
 (** This can instantiated to sub_getter 10 to have getter of BytesSeq.t of size 10 *)
 let sub_getter len bs start = sub bs start len
+
+(** Same as {!sub_getter} but for bytes *)
+let bytes_sub_getter len bs start = bytes_sub bs start len
 
 (** Take the first i bytes of the sequence *)
 let front i bs =
@@ -117,13 +133,19 @@ let iter16le f bs = gen_iter 2 Bytes.get_int16_le f bs
 
 let iter16be f bs = gen_iter 2 Bytes.get_int16_be f bs
 
+let iter16bs f bs = gen_iter 2 (bytes_sub_getter 2) f bs
+
 let iter32le f bs = gen_iter 4 Bytes.get_int32_le f bs
 
 let iter32be f bs = gen_iter 4 Bytes.get_int32_be f bs
 
+let iter32bs f bs = gen_iter 4 (bytes_sub_getter 4) f bs
+
 let iter64le f bs = gen_iter 8 Bytes.get_int64_le f bs
 
 let iter64be f bs = gen_iter 8 Bytes.get_int64_be f bs
+
+let iter64bs f bs = gen_iter 8 (bytes_sub_getter 8) f bs
 
 (*****************************************************************************)
 (*         Folding                                                           *)
@@ -142,13 +164,19 @@ let fold_left16le f a bs = gen_fold_left iter16le f a bs
 
 let fold_left16be f a bs = gen_fold_left iter16be f a bs
 
+let fold_left16bs f a bs = gen_fold_left iter16bs f a bs
+
 let fold_left32le f a bs = gen_fold_left iter32le f a bs
 
 let fold_left32be f a bs = gen_fold_left iter32be f a bs
 
+let fold_left32bs f a bs = gen_fold_left iter32bs f a bs
+
 let fold_left64le f a bs = gen_fold_left iter64le f a bs
 
 let fold_left64be f a bs = gen_fold_left iter64be f a bs
+
+let fold_left64bs f a bs = gen_fold_left iter64bs f a bs
 
 (*****************************************************************************)
 (*        To list                                                            *)
@@ -162,13 +190,19 @@ let to_list16le bs = gen_to_list fold_left16le bs
 
 let to_list16be bs = gen_to_list fold_left16be bs
 
+let to_list16bs bs = gen_to_list fold_left16bs bs
+
 let to_list32le bs = gen_to_list fold_left32le bs
 
 let to_list32be bs = gen_to_list fold_left32be bs
 
+let to_list32bs bs = gen_to_list fold_left32bs bs
+
 let to_list64le bs = gen_to_list fold_left64le bs
 
 let to_list64be bs = gen_to_list fold_left64be bs
+
+let to_list64bs bs = gen_to_list fold_left64bs bs
 
 (*****************************************************************************)
 (*        Pretty printing                                                    *)

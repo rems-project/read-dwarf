@@ -114,15 +114,14 @@ let rec ltype_expr (cont : type_context) : 'v lexp -> lty = function
 and type_expr cont expr : ty = snd (ltype_expr cont expr)
 
 (** Add the new register found in the trace and returns the type context for free variables *)
-let type_regs (isla_trace : 'v ltrc) =
-  let c : type_context = HashVector.empty () in
+let type_trc ?(tc = HashVector.empty ()) (isla_trace : 'v ltrc) =
   let (Trace events) = isla_trace in
   let process : 'v levent -> unit = function
-    | Smt (DeclareConst (Free var, typ), _) -> HashVector.add c var typ
-    | Smt (DefineConst (Free var, exp), _) -> HashVector.add c var @@ type_expr c exp
-    | Smt (Assert exp, l) -> tassert l "Assertion type must be Bool" (type_expr c exp = Ty_Bool)
+    | Smt (DeclareConst (Free var, typ), _) -> HashVector.add tc var typ
+    | Smt (DefineConst (Free var, exp), _) -> HashVector.add tc var @@ type_expr tc exp
+    | Smt (Assert exp, l) -> tassert l "Assertion type must be Bool" (type_expr tc exp = Ty_Bool)
     | ReadReg (name, _, v, l) | WriteReg (name, _, v, l) ->
-        let tv = type_valu l c v in
+        let tv = type_valu l tc v in
         if Reg.mem_string name then
           tassert l "Register structure cannot change"
           @@ Reg.type_weak_eq tv (Reg.reg_type (Reg.of_string name))
@@ -130,6 +129,6 @@ let type_regs (isla_trace : 'v ltrc) =
     | _ -> ()
   in
   List.iter process events;
-  c
+  tc
 
 let pp_tcontext = HashVector.pp PP.pp_ty

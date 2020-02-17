@@ -40,6 +40,9 @@ let of_linksem lsym =
 (** Tell if a symbol is interesting for readDwarf purposes *)
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
+(** Take the BytesSeq.t corresponding to the offset and length *)
+let sub sym off len = BytesSeq.sub sym.data off len
+
 (** Pretty prints a symbol type *)
 let pp_typ typ =
   PP.string

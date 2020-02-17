@@ -136,6 +136,7 @@ let path_type = partial_path_type index
 (*        Register indexed mapping                                           *)
 (*****************************************************************************)
 
+(* Doc for Reg.Map in the mli file *)
 module Map = struct
   type 'a cell = MPlain of 'a | MStruct of 'a t
 
@@ -187,6 +188,27 @@ module Map = struct
     let mapcell = function MPlain a -> f a | MStruct m -> iter f m in
     Array.iter mapcell m
 
+  let copy_extend ~init m =
+    let rec cecell (ty : typ) ?prev (root : path) =
+      match (ty, prev) with
+      | (Plain _, Some (MPlain v)) -> MPlain v
+      | (Plain _, None) -> MPlain (init root)
+      | (Struct rs, Some (MStruct prev)) -> MStruct (cestruct rs ~prev root)
+      | (Struct rs, None) -> MStruct (cestruct rs root)
+      | _ -> failwith "copy_extend: corrupted Reg.Map"
+    and cestruct rs ?prev (root : path) =
+      let new_init prev index = cecell (field_type rs index) ?prev (root @ [index]) in
+      let init : int -> 'a =
+        match prev with
+        | None -> new_init None
+        | Some arr ->
+            let old_len = Array.length arr in
+            fun i -> if i < old_len then new_init (Some arr.(i)) i else new_init None i
+      in
+      Array.init (Vector.length rs.types) init
+    in
+    cestruct index ~prev:m []
+
   let rec pp_struct rs conv rm : PP.document =
     rm
     |> Array.mapi (fun i c -> (field_to_string rs i, pp_plain (field_type rs i) conv c))
@@ -220,4 +242,4 @@ let rec pp_rstruct rs =
       )
       !^"}")
 
-and pp_rtype = PP.(function Plain i -> !^"Plain " ^^ pp_ty i | Struct s -> pp_rstruct s)
+and pp_rtype = PP.(function Plain i -> pp_ty i | Struct s -> pp_rstruct s)

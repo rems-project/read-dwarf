@@ -5,3 +5,4 @@ doc.html
 **/.merlin
 tiny_test/ARMv8-*
 tiny_test/native-*
+test_asm/build

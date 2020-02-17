@@ -32,7 +32,7 @@ let simplify (exp : State.exp) : State.exp =
   in
   let input ichannel =
     let i = Files.read_all ichannel in
-    let rexp = Isla.parse_exp_string filename i in
+    let rexp = Isla.parse_exp_string ~filename i in
     let nexp = IslaManip.exp_conv_svar State.Var.of_string rexp in
     nexp
   in

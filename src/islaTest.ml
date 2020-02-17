@@ -109,8 +109,8 @@ let input imode (arg : string) : (string * string) Term.ret =
     )
   | ELF s ->
       let filename = s ^ " in " ^ arg in
-      let elf = ElfFile.of_file arg in
-      let (sym, off) = ElfFile.SymTbl.sym_offset_of_string elf.symbols s in
+      let elf = Elf.File.of_file arg in
+      let (sym, off) = Elf.SymTbl.sym_offset_of_string elf.symbols s in
       `Ok (filename, BytesSeq.to_string (BytesSeq.sub sym.data off (off + 4)))
 
 let input_term = Term.(ret (const input $ imode_term $ arg))
@@ -168,14 +168,14 @@ let pmode_term = Term.(const processing_f2m $ noparse $ typer $ run $ simp)
 (** Does the actual processing of the trace *)
 let processing pmode (filename, input) : unit =
   let parse input =
-    let t = Isla.parse_trc_string filename input in
+    let t = Isla.parse_trc_string ~filename input in
     let t = IslaManip.remove_ignored t in
     (* TODO make filter an intermediate step *)
     PPA.(println @@ pp_trc string t);
     t
   in
   let typer t =
-    let c = IslaType.type_regs t in
+    let c = IslaType.type_trc t in
     PPA.(println @@ tcontext c);
     PPA.(println @@ rstruct Reg.index);
     t
@@ -191,14 +191,10 @@ let processing pmode (filename, input) : unit =
   | DUMP -> input |> print_endline
   | PARSE -> input |> parse |> ignore
   | TYPE -> input |> parse |> typer |> ignore
-  | RUN ->
-      input |> parse |> typer
-      |> IslaManip.trace_conv_svar (fun _ -> failwith "hey")
-      |> run |> ignore
+  | RUN -> input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run |> ignore
   | SIMP ->
-      input |> parse |> typer
-      |> IslaManip.trace_conv_svar (fun _ -> failwith "hey")
-      |> run |> State.map_exp SMT.simplify |> PPA.state |> PPA.println
+      input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run
+      |> State.map_exp SMT.simplify |> PPA.state |> PPA.println
 
 let term = Term.(func_option z3 processing $ pmode_term $ isla_term)
 

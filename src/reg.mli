@@ -72,29 +72,38 @@ val path_type : path -> typ
 (*        Register indexed mapping                                           *)
 (*****************************************************************************)
 
+(** This sub module defines a register map that associate a value to all
+    architectural registers. This is a mutable data structure *)
 module Map : sig
-  type 'a cell = MPlain of 'a | MStruct of 'a t
+  (** The type of a map that bind one 'a to each register *)
+  type 'a t
 
-  and 'a t = 'a cell array
-
+  (** Dummy value, UNSAFE : UB to use this value *)
   val dummy : unit -> 'a t
 
+  (** Initialize by setting each value using the init function on the path *)
   val init : (path -> 'a) -> 'a t
 
-  val get_mut_cell : 'a t -> path -> 'a cell ArrayCell.t
-
-  val get_cell : 'a t -> path -> 'a cell
-
+  (** Get the value associated to a register *)
   val get : 'a t -> path -> 'a
 
+  (** Set the value associated to a register *)
   val set : 'a t -> path -> 'a -> unit
 
+  (** Map on the data structure, return a new instance *)
   val map : ('a -> 'b) -> 'a t -> 'b t
 
+  (** Copy the data structure, return an new independent instance *)
   val copy : 'a t -> 'a t
 
+  (** Run the function on each value stored in the map *)
   val iter : ('a -> unit) -> 'a t -> unit
 
+  (** Do a copy of the map but add value for all register that have been added
+      since the creation of the previous register map. Values are initialized using init *)
+  val copy_extend : init:(path -> 'a) -> 'a t -> 'a t
+
+  (** Pretty print the map *)
   val pp : ('a -> PP.document) -> 'a t -> PP.document
 end
 

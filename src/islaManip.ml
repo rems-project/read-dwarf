@@ -70,6 +70,11 @@ let event_conv_svar (conv : 'a -> 'b) : ('a, 'c) event -> ('b, 'c) event = funct
 
 let trace_conv_svar (conv : 'a -> 'b) (Trace l) = Trace (List.map (event_conv_svar conv) l)
 
+(** This function change the type of state variable in the case there is no state variable
+    Such as the output of isla *)
+let isla_trace_conv_svar trc =
+  trace_conv_svar (fun i -> failwith "isla_trace_conv_svar : there were state variable") trc
+
 (*****************************************************************************)
 (*        Exp substitution                                                   *)
 (*****************************************************************************)
@@ -162,13 +167,13 @@ let split_cycle : ('a, 'v) trc -> ('a, 'v) trc * ('a, 'v) trc = function
       let (l1, l2) = split_cycle_list [] l in
       (Trace l1, Trace l2)
 
-(** Remove everything before the "cycle" event, should be equivalent to snd (split_cycle l) *)
+(** Remove all events before the "cycle" event, keep the SMT statements *)
 let remove_init : ('a, 'v) trc -> ('a, 'v) trc = function
   | Trace l ->
       let rec pop_until_cycle = function
         | [] -> []
         | Cycle _ :: l -> l
-        (* | Smt (v, a) :: l -> Smt(v,a) :: (pop_until_cycle l) *)
+        | Smt (v, a) :: l -> Smt (v, a) :: pop_until_cycle l
         | a :: l -> pop_until_cycle l
       in
       Trace (pop_until_cycle l)

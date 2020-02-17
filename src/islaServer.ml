@@ -54,6 +54,20 @@ let read_basic_answer () =
     then one request lead to exactly one answer of that type *)
 type answer = Version of string | Traces of (bool * string) list
 
+(** Expect a version answer and fails if it is not the case *)
+let expect_version = function Version s -> s | _ -> failwith "expected version number from isla"
+
+(** Expect isla traces and fails if it is not the case *)
+let expect_traces = function Traces tl -> tl | _ -> failwith "expected traces from isla"
+
+(** Expect isla traces and fails if it is not the case, additionally parse them *)
+let expect_parsed_traces a =
+  a |> expect_traces
+  |> List.mapi (fun i (b, t) ->
+         ( b,
+           let filename = Printf.sprintf "Isla call %d, trace %d" !req_num i in
+           Isla.parse_trc_string ~filename t ))
+
 (** When isla encounter a non fatal error with that specific request.
     This error is recoverable and the sever can accept other requests *)
 exception IslaError
@@ -73,9 +87,6 @@ let read_answer () : answer =
       in
       Traces (List.of_seq seq)
   | _ -> failwith "isla protocol error: Traces element before StartTraces"
-
-(** Expect a version answer ans fails if it is not the case *)
-let expect_version = function Version s -> s | _ -> failwith "expected version number from isla"
 
 (** Answer pretty printer *)
 let pp_answer = function
@@ -110,6 +121,10 @@ let string_request (req : string) : answer =
 
 (** Send a request and wait for answer *)
 let request (req : request) : answer = req |> string_of_request |> string_request
+
+(** Request the traces of a binary instruction and parse the result *)
+let request_bin_parsed (bin : BytesSeq.t) : (bool * Isla.rtrc) list =
+  ASM bin |> request |> expect_parsed_traces
 
 let send_request req = req |> string_of_request |> send_string_request
 

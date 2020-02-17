@@ -21,12 +21,14 @@ let vc_subst_full (vc : value_context) (exp : State.exp) : State.exp =
   let vc_subst v a = match v with Free i -> HashVector.get vc i | State v -> Var (State v, a) in
   IslaManip.var_subst vc_subst exp
 
-(** This function run an isla trace on a state and return the end state.*)
-let run_trc (init_state : state) (trace : State.trc) =
-  assert (IslaManip.is_linear trace);
-  let vc : value_context = HashVector.empty () in
-  let state = State.copy init_state in
-  let (Trace events) = trace in
+(** This function run an isla trace on a state
+    it return the value context and the new state
+
+    Any encountered branch are ignored and their assertion are added to the new state *)
+let full_run_trc ?(vc = HashVector.empty ()) (start : state) (trc : State.trc) =
+  (* assert (IslaManip.is_linear trc); *)
+  let state = State.copy start in
+  let (Trace events) = trc in
   (* This function process a single event by mutating state *)
   let process : State.event -> unit = function
     | Smt (DeclareConst (_, _), _) -> ()
@@ -57,5 +59,10 @@ let run_trc (init_state : state) (trace : State.trc) =
     | _ -> ()
   in
   List.iter process events;
-  PPI.(println $ hvector sexp vc);
-  state
+  (vc, state)
+
+(** This function run an isla trace on a state and return the end state.
+
+    It is just a wrapper of {!full_run_trc} that give only the state.
+*)
+let run_trc start trc = snd @@ full_run_trc start trc
