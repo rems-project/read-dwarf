@@ -58,6 +58,7 @@ let elf2 =
   setter Globals.elf2
     Arg.(value & opt (some non_dir_file) None & info ["elf2"] ~docv:"ELF_FILE" ~doc)
 
+(* TODO: cmdliner seems to check that the file exists(?), which we don't want here*)
 let out_file =
   let doc = "file for output (optional)" in
   setter Globals.out_file
