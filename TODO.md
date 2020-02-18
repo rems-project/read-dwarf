@@ -14,8 +14,6 @@
  - Switch to `Logs` for logging instead of mixing debug and warn.
  - Add prefix to external output or error coming from servers like isla or z3 with sed
  - Add test dependencies and ordering to Tests.ml
- - Add test parameters to Test.ml
- - Add dumping of stack trace for unknown exceptions
  - Add slow-test/fast test distinction (isla version is a slow test)
  - Add regexp test filtering
  - Think about removing PPrint and using StdLib.Format (and Fmt) instead
@@ -32,7 +30,6 @@
 # Required Plumbing
 
  - isla
-   - Use Alasdair code for socket interaction and make it work as with cmd interface
    - Write the system that caches results.
    - Move the initial state from isla to readDwarf
  - Z3
@@ -73,7 +70,6 @@
 
 - Add logging system with backtraces on fatal errors.
 - Decide whether to stick with PPrint or swap to StdLib.Format
-- Add support for running multiple instruction from an ELF file into a new subcommand
 
 
 
