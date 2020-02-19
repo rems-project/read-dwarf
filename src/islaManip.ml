@@ -24,18 +24,56 @@ let annot_exp : ('v, 'a) exp -> 'a = function
   | Var (_, a) -> a
   | Bits (_, a) -> a
   | Bool (_, a) -> a
+  | Enum (_, a) -> a
   | Unop (_, _, a) -> a
   | Binop (_, _, _, a) -> a
   | Manyop (_, _, a) -> a
   | Ite (_, _, _, a) -> a
+  | Let (_, _, _, a) -> a
 
 (** Get the annotation of an event *)
 let annot_event : ('v, 'a) event -> 'a = function
   | Smt (_, a) -> a
+  | DefineEnum (_, a) -> a
   | Branch (_, _, a) -> a
   | ReadReg (_, _, _, a) -> a
   | WriteReg (_, _, _, a) -> a
   | Cycle a -> a
+  | ReadMem (_, _, _, _, a) -> a
+  | WriteMem (_, _, _, _, _, a) -> a
+
+(*****************************************************************************)
+(*        Non-recursive maps                                                 *)
+(*****************************************************************************)
+
+let direct_exp_map_exp (f : ('a, 'b) exp -> ('a, 'b) exp) = function
+  | Unop (u, e, l) -> Unop (u, f e, l)
+  | Binop (b, e, e', l) -> Binop (b, f e, f e', l)
+  | Manyop (m, el, l) -> Manyop (m, List.map f el, l)
+  | Ite (c, e, e', l) -> Ite (f c, f e, f e', l)
+  | Let (b, e, e', l) -> Let (b, f e, f e', l)
+  | Bits (bv, a) -> Bits (bv, a)
+  | Bool (b, a) -> Bool (b, a)
+  | Enum (e, a) -> Enum (e, a)
+  | Var (v, a) -> Var (v, a)
+
+let direct_exp_iter_exp (i : ('a, 'b) exp -> unit) = function
+  | Unop (u, e, l) -> i e
+  | Binop (b, e, e', l) ->
+      i e;
+      i e'
+  | Manyop (m, el, l) -> List.iter i el
+  | Ite (c, e, e', l) ->
+      i c;
+      i e;
+      i e'
+  | Let (b, e, e', l) ->
+      i e;
+      i e'
+  | Bits (bv, a) -> ()
+  | Bool (b, a) -> ()
+  | Enum (e, a) -> ()
+  | Var (v, a) -> ()
 
 (*****************************************************************************)
 (*        Generic conversion                                                 *)
@@ -46,15 +84,18 @@ let annot_event : ('v, 'a) event -> 'a = function
 let var_conv_svar (conv : 'a -> 'b) : 'a var -> 'b var = function
   | State a -> State (conv a)
   | Free i -> Free i
+  | Bound s -> Bound s
 
 let rec exp_conv_svar (conv : 'a -> 'b) : ('a, 'c) exp -> ('b, 'c) exp = function
   | Var (v, a) -> Var (var_conv_svar conv v, a)
   | Bits (bv, a) -> Bits (bv, a)
   | Bool (b, a) -> Bool (b, a)
+  | Enum (e, a) -> Enum (e, a)
   | Unop (u, e, a) -> Unop (u, exp_conv_svar conv e, a)
   | Binop (u, e, e', a) -> Binop (u, exp_conv_svar conv e, exp_conv_svar conv e', a)
   | Manyop (m, el, a) -> Manyop (m, List.map (exp_conv_svar conv) el, a)
   | Ite (c, e, e', a) -> Ite (exp_conv_svar conv c, exp_conv_svar conv e, exp_conv_svar conv e', a)
+  | Let (v, e, e', a) -> Let (v, exp_conv_svar conv e, exp_conv_svar conv e', a)
 
 let smt_conv_svar (conv : 'a -> 'b) : ('a, 'c) smt -> ('b, 'c) smt = function
   | DeclareConst (v, t) -> DeclareConst (var_conv_svar conv v, t)
@@ -63,10 +104,13 @@ let smt_conv_svar (conv : 'a -> 'b) : ('a, 'c) smt -> ('b, 'c) smt = function
 
 let event_conv_svar (conv : 'a -> 'b) : ('a, 'c) event -> ('b, 'c) event = function
   | Smt (d, a) -> Smt (smt_conv_svar conv d, a)
+  | DefineEnum (n, a) -> DefineEnum (n, a)
   | Branch (i, s, a) -> Branch (i, s, a)
   | ReadReg (n, al, v, a) -> ReadReg (n, al, v, a)
   | WriteReg (n, al, v, a) -> WriteReg (n, al, v, a)
   | Cycle a -> Cycle a
+  | ReadMem (a, b, c, d, e) -> ReadMem (a, b, c, d, e)
+  | WriteMem (a, b, c, d, e, f) -> WriteMem (a, b, c, d, e, f)
 
 let trace_conv_svar (conv : 'a -> 'b) (Trace l) = Trace (List.map (event_conv_svar conv) l)
 
@@ -83,30 +127,12 @@ let isla_trace_conv_svar trc =
 let rec var_subst (subst : 'v var -> 'a -> ('v, 'a) exp) (exp : ('v, 'a) exp) : ('v, 'a) exp =
   (* PPI.(println @@ !^"Calling vc_subst_full " ^^ sexp exp); *)
   let s = var_subst subst in
-  match exp with
-  | Var (v, a) -> subst v a
-  | Manyop (m, el, a) -> Manyop (m, List.map s el, a)
-  | Binop (b, e, e', a) -> Binop (b, s e, s e', a)
-  | Unop (u, e, a) -> Unop (u, s e, a)
-  | Ite (c, e, e', a) -> Ite (s c, s e, s e', a)
-  | e -> e
+  match exp with Var (v, a) -> subst v a | _ -> direct_exp_map_exp s exp
 
 (** iterate a function on all the variable of an expression *)
-let rec exp_iter_var (f : 'v var -> unit) (exp : ('v, 'a) exp) : unit =
-  let i = exp_iter_var f in
-  match exp with
+let rec exp_iter_var (f : 'v var -> unit) : ('v, 'a) exp -> unit = function
   | Var (v, a) -> f v
-  | Manyop (b, el, a) -> List.iter i el
-  | Binop (b, e, e', a) ->
-      i e;
-      i e'
-  | Unop (u, e, a) -> i e
-  | Ite (c, e, e', a) ->
-      i c;
-      i e;
-      i e'
-  | Bool (_, _) -> ()
-  | Bits (_, _) -> ()
+  | exp -> direct_exp_iter_exp (exp_iter_var f) exp
 
 (*****************************************************************************)
 (*        Accessor list conversion                                           *)
@@ -154,7 +180,7 @@ let bvi_to_bv (bvi : bvi) (size : int) =
 (* TODO Make a configuration file and read that from the config *)
 
 (** List of ignored register for the purposes of the semantics. *)
-let ignored_regs = ["SEE"; "__unconditional"; "__v85_implemented"]
+let ignored_regs = ["SEE"; "__unconditional"; "__v85_implemented"; "DBGEN"]
 
 (** Split the trace between before and after the "cycle" event *)
 let split_cycle : ('a, 'v) trc -> ('a, 'v) trc * ('a, 'v) trc = function
@@ -189,5 +215,21 @@ let remove_ignored : ('a, 'v) trc -> ('a, 'v) trc = function
              | _ -> true)
            l)
 
+(* TODO smarter filter merging *)
+
 (** Do the global filtering to get the main usable trace *)
 let filter t = t |> remove_init |> remove_ignored
+
+(*****************************************************************************)
+(*         Let unfolding                                                     *)
+(*****************************************************************************)
+
+let rec unfold_lets ?(context = Hashtbl.create 5) : ('a, 'v) exp -> ('a, 'v) exp = function
+  | Var (Bound b, l) -> Hashtbl.find context b
+  | Let (b, e1, e2, l) ->
+      let e1 = unfold_lets ~context e1 in
+      Hashtbl.add context b e1;
+      let res = unfold_lets ~context e2 in
+      Hashtbl.remove context b;
+      res
+  | exp -> direct_exp_map_exp (unfold_lets ~context) exp

@@ -45,6 +45,25 @@ type rexp = (string, lrng) exp
 (*        Isla parsing                                                       *)
 (*****************************************************************************)
 
+(** Exception that represent an Isla parsing error *)
+exception ParseError of loc * string
+
+(* Registering and pretty printer for that exception *)
+let _ =
+  Printexc.register_printer (function
+    | ParseError (l, s) ->
+        Some PP.(sprint @@ prefix 2 1 (loc l ^^ !^": ") (!^"ParseError: " ^^ !^s))
+    | _ -> None)
+
+(** Exception that represent an Isla lexing error *)
+exception LexError of loc * string
+
+(* Registering and pretty printer for that exception *)
+let _ =
+  Printexc.register_printer (function
+    | LexError (l, s) -> Some PP.(sprint @@ prefix 2 1 (loc l ^^ !^": ") (!^"LexError: " ^^ !^s))
+    | _ -> None)
+
 type lexer = Lexing.lexbuf -> Parser.token
 
 type 'a parser = lexer -> Lexing.lexbuf -> 'a
@@ -53,8 +72,8 @@ type 'a parser = lexer -> Lexing.lexbuf -> 'a
 let parse (parser : 'a parser) ?(filename = "default") (l : Lexing.lexbuf) : 'a =
   l.lex_curr_p <- { pos_fname = filename; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
   try parser Lexer.token @@ l with
-  | Parser.Error -> PP.(fatal @@ loc l.lex_start_p ^^ !^": Syntax error")
-  | Lexer.Error s -> PP.(fatal @@ loc l.lex_curr_p ^^ !^": Unexpected character")
+  | Parser.Error -> raise (ParseError (l.lex_start_p, "Syntax error"))
+  | Lexer.Error s -> raise (LexError (l.lex_start_p, "Unexpected character"))
 
 (** Parse a single Isla expression from a Lexing.lexbuf *)
 let parse_exp : ?filename:string -> Lexing.lexbuf -> rexp = parse Parser.exp_start

@@ -18,6 +18,7 @@ let declare_vars ochannel exp : unit =
             PPI.(fprint ochannel @@ pp_smt PPI.svar decl ^^ hardline));
           Hashtbl.add declared (State.Var.to_string svar) ()
         end
+    | Bound b -> failwith "Z3.declare_vars : bound var"
   in
   IslaManip.exp_iter_var process_var exp
 
@@ -34,6 +35,7 @@ let simplify (exp : State.exp) : State.exp =
     let i = Files.read_all ichannel in
     let rexp = Isla.parse_exp_string ~filename i in
     let nexp = IslaManip.exp_conv_svar State.Var.of_string rexp in
+    let nexp = IslaManip.unfold_lets nexp in
     nexp
   in
   Cmd.io [|!z3; "-in"|] output input

@@ -71,16 +71,12 @@
 - Add logging system with backtraces on fatal errors.
 - Decide whether to stick with PPrint or swap to StdLib.Format
 
-
-
 ## Memory stack
 
-- Add support for state memory manipulation
+- Handle the 52 bits real width pointer problem
 - Add support for concrete to symbol offset rewrite
   if concrete value is <sym+off> then it is replaced by (bvadd sym off)
 - Add support for rodata detection
-- Add support for parsing of isla memory operations
-- Add support for memory operations execution in islaTrace
 - Add support for memory manipulation in Z3. (Mem = Array Addr Byte)
   includes support for more Z3 syntax, including custom types.
 

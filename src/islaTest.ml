@@ -182,10 +182,17 @@ let processing pmode (filename, input) : unit =
   in
   let run trace =
     let init_state = State.make () in
+    State.lock init_state;
     PPA.(println @@ state init_state);
     let end_state = IslaTrace.run_trc init_state trace in
     PPA.(println @@ state end_state);
     end_state
+  in
+  let simp state =
+    State.unsafe_unlock state;
+    State.map_mut_exp SMT.simplify state;
+    State.lock state;
+    state
   in
   match pmode with
   | DUMP -> input |> print_endline
@@ -193,8 +200,8 @@ let processing pmode (filename, input) : unit =
   | TYPE -> input |> parse |> typer |> ignore
   | RUN -> input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run |> ignore
   | SIMP ->
-      input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run
-      |> State.map_exp SMT.simplify |> PPA.state |> PPA.println
+      input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run |> simp |> PPA.state
+      |> PPA.println
 
 let term = Term.(func_option z3 processing $ pmode_term $ isla_term)
 

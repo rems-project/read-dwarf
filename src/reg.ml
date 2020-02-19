@@ -182,6 +182,22 @@ module Map = struct
     let mapcell = function MPlain a -> MPlain (f a) | MStruct m -> MStruct (map f m) in
     Array.map mapcell m
 
+  (* TODO move that into a proper array extension *)
+  let array_map_mut f a =
+    let len = Array.length a in
+    for i = 0 to len - 1 do
+      Array.unsafe_get a i |> f |> Array.unsafe_set a i
+    done
+
+  let rec map_mut f m =
+    let map_mut_cell = function
+      | MPlain a -> MPlain (f a)
+      | MStruct m as ms ->
+          map_mut f m;
+          ms
+    in
+    array_map_mut map_mut_cell m
+
   let copy m = map Fun.id m
 
   let rec iter f m =

@@ -18,13 +18,13 @@ let run_code trcs typ (run : bool) simp (code : BytesSeq.t) : unit =
       BB.type_regs bb;
       (if typ then PP.(println $ Reg.pp_rstruct Reg.index));
       if run || simp then begin
-        let start = Init.state () in
-        Printf.printf "Starting from state %d\n" start.id;
-        let endst = BB.run start bb in
-        (if run then PP.(println $ State.pp endst));
-        if simp then
-          let simpst = State.map_exp SMT.simplify endst in
-          PP.(println $ State.pp simpst)
+        let istate = Init.state () in
+        let state = State.copy istate in
+        Printf.printf "Starting with state %d\n" istate.id;
+        BB.run_mut state bb;
+        (if run then PP.(println $ State.pp state));
+        if simp then State.map_mut_exp SMT.simplify state;
+        PP.(println $ State.pp state)
       end
     end
   end
@@ -35,9 +35,11 @@ let run_bb arch trcs typ run simp elfname sym len =
     let (sym, off) = Elf.SymTbl.sym_offset_of_string elf.symbols sym in
     let len = match len with Some i -> i | None -> sym.size - off in
     let code = Elf.Sym.sub sym off len in
+    Random.self_init ();
     IslaServer.start arch;
     Init.init ();
     run_code trcs typ run simp code;
+    flush stdout;
     IslaServer.stop ()
   with Not_found -> Warn.fatal2 "The symbol %s was not found in %s\n" sym elfname
 

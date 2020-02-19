@@ -7,7 +7,7 @@
 *)
 
 (** Bump when updating isla *)
-let required_version = "dev-04ab29b6122009895dda367028ebbfdd738ec1db"
+let required_version = "dev-358a8383a447deef1d1684c437945b5b86490ad9"
 
 let req_num = ref (-1)
 

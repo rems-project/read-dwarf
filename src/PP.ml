@@ -12,13 +12,17 @@ let ( $ ) = ( @@ )
 (*        Output                                                             *)
 (*****************************************************************************)
 
-let fprint out doc = ToChannel.pretty 0.75 100 out doc
+let fprint out doc = ToChannel.pretty 0.75 150 out doc
 
 let print doc = fprint stdout doc
 
 let println doc =
   fprint stdout (doc ^^ hardline);
   flush stdout
+
+let eprintln doc =
+  fprint stderr (doc ^^ hardline);
+  flush stderr
 
 let sprintc doc =
   let b = Buffer.create 50 in
@@ -27,8 +31,10 @@ let sprintc doc =
 
 let sprint doc =
   let b = Buffer.create 50 in
-  ToBuffer.pretty 0.75 100 b doc;
+  ToBuffer.pretty 0.75 150 b doc;
   Buffer.contents b
+
+let fail doc = failwith (sprintc doc)
 
 let fatal doc =
   fprint stderr (doc ^^ hardline);
@@ -36,14 +42,18 @@ let fatal doc =
   exit 1
 
 (* Usage example :
-   PP.(println @@ doc1 ^^ doc2)
+   PP.(println $ doc1 ^^ doc2)
    or
-   PP.(fatal @@ doc1 ^^ doc2)
+   PP.(fatal $ doc1 ^^ doc2)
 *)
 
 (*****************************************************************************)
 (*        Common                                                             *)
 (*****************************************************************************)
+
+(** Printf like function that returns a document of the formatted string.
+    it is just a string document nothing more complex*)
+let dprintf format = Printf.ksprintf ( !^ ) format
 
 let space = break 1
 

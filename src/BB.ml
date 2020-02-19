@@ -42,7 +42,14 @@ let from_binary (code : BytesSeq.t) : t =
 (** Add to the register map all the register appearing in the basic block *)
 let type_regs (bb : t) : unit = Array.iter (IslaType.type_trc %> ignore) bb.main
 
-(** Run a linear basic block on a trace *)
-let run start (bb : t) : state = Array.fold_left IslaTrace.run_trc start bb.main
+(** Run a linear basic block on a state by mutation *)
+let run_mut state (bb : t) : unit = Array.iter (IslaTrace.run_trc_mut state) bb.main
+
+(** Run a linear basic block on a trace and return a new state *)
+let run start (bb : t) : state =
+  let state = State.copy start in
+  run_mut state bb;
+  State.lock state;
+  state
 
 let pp (bb : t) = PP.(array State.pp_trc bb.main)

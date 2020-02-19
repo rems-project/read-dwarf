@@ -34,6 +34,7 @@ let to_array = to_array
 
 let of_array = of_array
 
+(* TODO optimize this *)
 let ensure vec size v =
   let len = length vec in
   if size > len then
@@ -46,9 +47,16 @@ let resize vec size v =
   let len = length vec in
   if size < len then remove_n vec (len - size) else ensure vec size v
 
+(* TODO optimize this *)
 let map2 f veca vecb =
   let arra = to_array veca and arrb = to_array vecb in
   Array.map2 f arra arrb |> of_array
+
+let map_mut f vec =
+  let len = length vec in
+  for i = 0 to len - 1 do
+    Res.Array.unsafe_get vec i |> f |> Res.Array.unsafe_set vec i
+  done
 
 let pp conv vec = PP.(!^"vec" ^^ (vec |> to_array |> array conv))
 

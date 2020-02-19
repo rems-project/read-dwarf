@@ -2,7 +2,9 @@
 
 type 'a t = { arr : 'a array; pos : int }
 
-let make arr pos = { arr; pos }
+let make arr pos =
+  assert (pos < Array.length arr && pos >= 0);
+  { arr; pos }
 
 let set cell v = cell.arr.(cell.pos) <- v
 

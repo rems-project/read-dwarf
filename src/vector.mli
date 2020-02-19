@@ -44,5 +44,8 @@ val resize : 'a t -> int -> 'a -> unit
 
 val map2 : ('a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
 
+(** Map the function on the vector mutably by replacing each cell by the result of the function *)
+val map_mut : ('a -> 'a) -> 'a t -> unit
+
 (** Vector pretty printer *)
 val pp : ('a -> PP.document) -> 'a t -> PP.document

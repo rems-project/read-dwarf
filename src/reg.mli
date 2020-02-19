@@ -93,6 +93,9 @@ module Map : sig
   (** Map on the data structure, return a new instance *)
   val map : ('a -> 'b) -> 'a t -> 'b t
 
+  (** Map on the data structure, mutating the given instance *)
+  val map_mut : ('a -> 'a) -> 'a t -> unit
+
   (** Copy the data structure, return an new independent instance *)
   val copy : 'a t -> 'a t
 
