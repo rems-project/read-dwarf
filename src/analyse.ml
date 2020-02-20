@@ -1277,7 +1277,7 @@ let pp_edge (nn, nn', cek) =
       pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep
       ^ "[constraint=\"false\";style=\"dashed\"];\n"
 
-let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) dot_file : unit =
+let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) cfg_dot_file : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
   let pp_node ((nn, cnk, label, addr, k, col) as n) =
     let shape =
@@ -1287,7 +1287,7 @@ let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) dot_file : unit =
       margin shape (pp_colour col)
   in
 
-  let c = open_out dot_file in
+  let c = open_out cfg_dot_file in
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
   List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes_source;
@@ -1923,14 +1923,14 @@ let process_file () : unit =
   match (!Globals.elf2, !Globals.objdump_d2, !Globals.branch_table_data_file2) with
   | (None, _, _) -> (
       (* output CFG dot file *)
-      ( match !Globals.dot_file with
-      | Some dot_file ->
+      ( match !Globals.cfg_dot_file with
+      | Some cfg_dot_file ->
           let graph =
             mk_cfg test "" an.elf_symbols_array an.control_flow_insns_with_targets_array
               an.come_froms_array an.index_of_address
           in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
-          pp_cfg graph dot_file
+          pp_cfg graph cfg_dot_file
       | None -> ()
       );
 
@@ -1949,8 +1949,8 @@ let process_file () : unit =
       match filename_out_file_option with Some f -> close_out c | None -> ()
     )
   | (Some filename_elf2, Some filename_objdump_d2, Some filename_branch_tables2) -> (
-      match !Globals.dot_file with
-      | Some dot_file ->
+      match !Globals.cfg_dot_file with
+      | Some cfg_dot_file ->
           let test2 = parse_elf_file filename_elf2 in
 
           let an2 = analyse_test test2 filename_objdump_d2 filename_branch_tables2 in
@@ -1965,40 +1965,33 @@ let process_file () : unit =
               an2.come_froms_array an2.index_of_address
           in
 
-          let graph0' =
-            reachable_subgraph graph0 (*["sync_lower_exception"]*)
-              [
-                "mpool_fini";
-                "mpool_lock";
-                "mpool_free";
-                "mpool_add_chunk";
-                "mpool_unlock";
-                "sl_lock";
-                "sl_unlock";
-              ]
+          let parse_source_node_list (so:string option) : string list = match so with None -> [] | Some s -> List.filter (function s' -> s'<>"") (String.split_on_char ' ' s) in 
+          
+          let graph0' = match parse_source_node_list !Globals.cfg_source_nodes with [] -> graph0 | cfg_source_node_list0 -> 
+            reachable_subgraph graph0 cfg_source_node_list0
           in
 
-          let graph2' = reachable_subgraph graph2 (*["sync_lower_exception"]*) ["mpool_fini"] in
+          let graph2' = match parse_source_node_list !Globals.cfg_source_nodes2 with [] -> graph2 | cfg_source_node_list2 -> reachable_subgraph graph2 cfg_source_node_list2 in
 
           let graph = graph_union graph0' graph2' in
 
           let graph' = correlate_source_line test graph0' test2 graph2' in
 
-          let dot_file_root = String.sub dot_file 0 (String.length dot_file - 4) in
-          let dot_file_base = dot_file_root ^ "_base.dot" in
-          let dot_file_layout = dot_file_root ^ "_layout.dot" in
-          pp_cfg graph dot_file_base;
-          let status = Unix.system ("dot -Txdot " ^ dot_file_base ^ " > " ^ dot_file_layout) in
+          let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
+          let cfg_dot_file_base = cfg_dot_file_root ^ "_base.dot" in
+          let cfg_dot_file_layout = cfg_dot_file_root ^ "_layout.dot" in
+          pp_cfg graph cfg_dot_file_base;
+          let status = Unix.system ("dot -Txdot " ^ cfg_dot_file_base ^ " > " ^ cfg_dot_file_layout) in
           let layout_lines =
-            match read_file_lines dot_file_layout with
+            match read_file_lines cfg_dot_file_layout with
             | Ok lines -> lines
-            | MyFail s -> Warn.fatal "couldn't read dot_file_layout %s" s
+            | MyFail s -> Warn.fatal "couldn't read cfg_dot_file_layout %s" s
           in
           let ppd_correlate_edges =
             let (_, _, edges) = graph' in
             List.map pp_edge edges
           in
-          let c = open_out dot_file in
+          let c = open_out cfg_dot_file in
           Array.iteri
             (function
               | j -> (
@@ -2011,8 +2004,8 @@ let process_file () : unit =
           List.iter (function line -> Printf.fprintf c "%s\n" line) ppd_correlate_edges;
           Printf.fprintf c "}\n";
           close_out c;
-          let status = Unix.system ("dot -Tpdf " ^ dot_file ^ " > " ^ dot_file_root ^ ".pdf") in
-          let status = Unix.system ("dot -Tsvg " ^ dot_file ^ " > " ^ dot_file_root ^ ".svg") in
+          let status = Unix.system ("dot -Tpdf " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".pdf") in
+          let status = Unix.system ("dot -Tsvg " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".svg") in
           ()
       | None -> Warn.fatal0 "no dot file\n"
     )

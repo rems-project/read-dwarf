@@ -58,7 +58,7 @@ let elf2 =
   setter Globals.elf2
     Arg.(value & opt (some non_dir_file) None & info ["elf2"] ~docv:"ELF_FILE" ~doc)
 
-(* TODO: cmdliner seems to check that the file exists(?), which we don't want here*)
+(* TODO: cmdliner seems to check that the file exists(?), which we don't want here. Or are we just not opening it properly?*)
 let out_file =
   let doc = "file for output (optional)" in
   setter Globals.out_file
@@ -68,11 +68,22 @@ let info =
   let doc = "Read and dump dwarf information" in
   Term.(info "rd" ~doc ~exits)
 
-let dot_file =
-  let doc = "File to output dot CFG to" in
-  setter Globals.dot_file
-    Arg.(value & opt (some string) None & info ["dot_file"] ~docv:"DOT_FILE" ~doc)
+let cfg_dot_file =
+  let doc = "File to output CFG dot to" in
+  setter Globals.cfg_dot_file
+    Arg.(value & opt (some string) None & info ["cfg_dot_file"] ~docv:"CFG_DOT_FILE" ~doc)
 
+let cfg_source_nodes =
+  let doc = "Optional space-separated list of node labels to start the CFG from" in
+  setter Globals.cfg_source_nodes
+    Arg.(value & opt (some string) None & info ["cfg_source_nodes"] ~docv:"CFG_SOURCE_NODES" ~doc)
+
+let cfg_source_nodes2 =
+  let doc = "Optional space-separated list of node labels to start the CFG from" in
+  setter Globals.cfg_source_nodes2
+    Arg.(value & opt (some string) None & info ["cfg_source_nodes2"] ~docv:"CFG_SOURCE_NODES2" ~doc)
+
+  
 let options =
   [
     comp_dir;
@@ -87,7 +98,9 @@ let options =
     branch_tables2;
     clip_binary;
     out_file;
-    dot_file;
+    cfg_dot_file;
+    cfg_source_nodes;
+    cfg_source_nodes2;
   ]
 
 let full_term = Term.(func_options options Analyse.process_file $ const ())
