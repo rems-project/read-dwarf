@@ -1064,7 +1064,8 @@ let colours = List.filter (function c -> not (List.mem c colours_dot_complains))
 
 let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targets_array
     come_froms_array index_of_address : graph_cfg =
-  let colour addr =
+  let colour label addr =
+(*    if label ="<sl_lock>" then "plum" else if label="<sl_unlock>" then "forestgreen" else "black"*)
     match dwarf_source_file_line_numbers test addr with
     | [(subprogram_name, line)] ->
         let colour =
@@ -1144,7 +1145,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
       | _ -> (List.hd (List.rev ss), node_name_source addr)
     in
     let label = s in
-    let node = (nn, CFG_node_source, label, addr, k, colour addr) in
+    let node = (nn, CFG_node_source, label, addr, k, colour label addr) in
     let nn' = next_non_source_node_name [] k in
     let edge = (nn, nn', CFG_edge_flow) in
     ([node], [edge])
@@ -1153,7 +1154,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
   let sink_node addr s ckn k =
     let nn = node_name addr in
     let label = s in
-    let node = (nn, CFG_node_ret, label, addr, k, colour addr) in
+    let node = (nn, CFG_node_ret, label, addr, k, colour label addr) in
     (*    let nn' = next_non_source_node_name [] k in
     let edge = (nn,nn') in*)
     ([node], [])
@@ -1162,7 +1163,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
   let simple_edge addr s ckn k =
     let nn = node_name addr in
     let label = s in
-    let node = (nn, CFG_node_ret, label, addr, k, colour addr) in
+    let node = (nn, CFG_node_ret, label, addr, k, colour label addr) in
     let nn' = next_non_source_node_name [] k in
     let edge = (nn, nn', CFG_edge_flow) in
     ([node], [edge])
@@ -1186,7 +1187,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
     | C_branch_and_link (a, s) ->
         let nn = node_name addr in
         let label = s in
-        let node = (nn, CFG_node_branch_and_link, label, addr, k, colour addr) in
+        let node = (nn, CFG_node_branch_and_link, label, addr, k, colour label addr) in
         let edges =
           List.filter_map
             (function
@@ -1200,7 +1201,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
     | C_smc_hvc s ->
         let nn = node_name addr in
         let label = "smc/hvc " ^ s in
-        let node = (nn, CFG_node_smc_hvc, label, addr, k, colour addr) in
+        let node = (nn, CFG_node_smc_hvc, label, addr, k, colour label addr) in
         let edges =
           List.filter_map
             (function
@@ -1214,7 +1215,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
     | C_branch_cond (mnemonic, a, s) ->
         let nn = node_name addr in
         let label = pp_addr addr in
-        let node = (nn, CFG_node_branch_cond, label, addr, k, colour addr) in
+        let node = (nn, CFG_node_branch_cond, label, addr, k, colour label addr) in
         let edges =
           List.map
             (function
@@ -1227,7 +1228,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
     | C_branch_register _ ->
         let nn = node_name addr in
         let label = pp_addr addr in
-        let node = (nn, CFG_node_branch_register, label, addr, k, colour addr) in
+        let node = (nn, CFG_node_branch_register, label, addr, k, colour label addr) in
         let edges =
           List.sort_uniq compare
             (List.map
@@ -1261,7 +1262,7 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
 
   graph
 
-let pp_colour colour = "[color=\"" ^ colour ^ "\"]" ^ "[fontcolor=\"" ^ colour ^ "\"]"
+let pp_colour colour = "[color=\"" ^ colour ^ "\"]" (*^ "[fillcolor=\"" ^ colour ^ "\"]"*) ^ "[fontcolor=\"" ^ colour ^ "\"]"
 
 let margin = "[margin=\"0.03,0.02\"]"
 
