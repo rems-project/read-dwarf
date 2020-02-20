@@ -81,9 +81,9 @@ let cfg_source_nodes =
 let cfg_source_nodes2 =
   let doc = "Optional space-separated list of node labels to start the CFG from" in
   setter Globals.cfg_source_nodes2
-    Arg.(value & opt (some string) None & info ["cfg_source_nodes2"] ~docv:"CFG_SOURCE_NODES2" ~doc)
+    Arg.(
+      value & opt (some string) None & info ["cfg_source_nodes2"] ~docv:"CFG_SOURCE_NODES2" ~doc)
 
-  
 let options =
   [
     comp_dir;

@@ -1965,13 +1965,23 @@ let process_file () : unit =
               an2.come_froms_array an2.index_of_address
           in
 
-          let parse_source_node_list (so:string option) : string list = match so with None -> [] | Some s -> List.filter (function s' -> s'<>"") (String.split_on_char ' ' s) in 
-          
-          let graph0' = match parse_source_node_list !Globals.cfg_source_nodes with [] -> graph0 | cfg_source_node_list0 -> 
-            reachable_subgraph graph0 cfg_source_node_list0
+          let parse_source_node_list (so : string option) : string list =
+            match so with
+            | None -> []
+            | Some s -> List.filter (function s' -> s' <> "") (String.split_on_char ' ' s)
           in
 
-          let graph2' = match parse_source_node_list !Globals.cfg_source_nodes2 with [] -> graph2 | cfg_source_node_list2 -> reachable_subgraph graph2 cfg_source_node_list2 in
+          let graph0' =
+            match parse_source_node_list !Globals.cfg_source_nodes with
+            | [] -> graph0
+            | cfg_source_node_list0 -> reachable_subgraph graph0 cfg_source_node_list0
+          in
+
+          let graph2' =
+            match parse_source_node_list !Globals.cfg_source_nodes2 with
+            | [] -> graph2
+            | cfg_source_node_list2 -> reachable_subgraph graph2 cfg_source_node_list2
+          in
 
           let graph = graph_union graph0' graph2' in
 
@@ -1981,7 +1991,9 @@ let process_file () : unit =
           let cfg_dot_file_base = cfg_dot_file_root ^ "_base.dot" in
           let cfg_dot_file_layout = cfg_dot_file_root ^ "_layout.dot" in
           pp_cfg graph cfg_dot_file_base;
-          let status = Unix.system ("dot -Txdot " ^ cfg_dot_file_base ^ " > " ^ cfg_dot_file_layout) in
+          let status =
+            Unix.system ("dot -Txdot " ^ cfg_dot_file_base ^ " > " ^ cfg_dot_file_layout)
+          in
           let layout_lines =
             match read_file_lines cfg_dot_file_layout with
             | Ok lines -> lines
@@ -2004,8 +2016,12 @@ let process_file () : unit =
           List.iter (function line -> Printf.fprintf c "%s\n" line) ppd_correlate_edges;
           Printf.fprintf c "}\n";
           close_out c;
-          let status = Unix.system ("dot -Tpdf " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".pdf") in
-          let status = Unix.system ("dot -Tsvg " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".svg") in
+          let status =
+            Unix.system ("dot -Tpdf " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".pdf")
+          in
+          let status =
+            Unix.system ("dot -Tsvg " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".svg")
+          in
           ()
       | None -> Warn.fatal0 "no dot file\n"
     )

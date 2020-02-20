@@ -15,6 +15,7 @@ let comp_dir = ref (None : string option)
 let cfg_dot_file = ref (None : string option)
 
 let cfg_source_nodes = ref (None : string option)
+
 let cfg_source_nodes2 = ref (None : string option)
 
 let out_file = ref (None : string option)
