@@ -9,3 +9,13 @@
  (dev
   (flags
    (:standard -warn-error -A -w -27 -w -26))))
+
+(rule
+ (target smtIntro.ml)
+ (action
+  (with-stdout-to
+   smtIntro.ml
+   (progn
+    (run echo "let intro = \"")
+    (cat intro.smt2)
+    (run echo "\"")))))

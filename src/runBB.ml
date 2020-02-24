@@ -4,8 +4,7 @@
 
 open Cmdliner
 open CommonOpt
-
-module SMT : Smt.Smt = Z3
+module SMT = Z3
 
 type state = State.t
 
@@ -37,11 +36,13 @@ let run_bb arch trcs typ run simp elfname sym len =
     let code = Elf.Sym.sub sym off len in
     Random.self_init ();
     IslaServer.start arch;
+    Z3.start ();
     Init.init ();
     run_code trcs typ run simp code;
     flush stdout;
+    Z3.stop ();
     IslaServer.stop ()
-  with Not_found -> Warn.fatal2 "The symbol %s was not found in %s\n" sym elfname
+  with Not_found -> Warn.fatal "The symbol %s was not found in %s\n" sym elfname
 
 let trcs =
   let doc = "Print the isla traces of the basic block" in

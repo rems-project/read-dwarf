@@ -13,7 +13,7 @@ type 'a vector = 'a Vector.t
     For now it is Isla.lrng, but it may change depending on our needs *)
 type annot = Isla.lrng
 
-let dummy_annot = Isla.Unknown
+let dummy_annot = Isla.UnknownRng
 
 type ty = Isla.ty
 
@@ -119,7 +119,7 @@ module Var = struct
         }
     | _ -> raise (Invalid_argument ("Invalid state variable: " ^ s))
 
-  let to_exp (v : t) = Isla.Var (Isla.State v, dummy_annot)
+  let to_exp (v : t) : exp = Isla.Var (Isla.State v, dummy_annot)
 
   let pp sv = sv |> to_string |> PP.string
 end
@@ -245,7 +245,7 @@ let make () =
     }
   in
   (* Warning: here I'm creating a cyclic reference. Please be aware of that *)
-  state.regs <- Reg.Map.init (fun p -> Var.to_exp { state; var = Register p });
+  state.regs <- (Reg.Map.init (fun p -> Var.to_exp { state; var = Register p }) : exp Reg.Map.t);
   next_id := id + 1;
   WeakMap.add id2state id state;
   state

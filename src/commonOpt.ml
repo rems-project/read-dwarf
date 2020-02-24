@@ -40,8 +40,10 @@ let isla_client =
   setter isla_client_ref
     Arg.(value & opt string "isla-client" & info ["isla"] ~env ~docv:"ISLA_CLIENT_PATH" ~doc)
 
+(** The z3 command *)
 let z3_ref = ref "z3"
 
+(** The z3 option *)
 let z3 =
   let doc = "Overrides the default z3 position" in
   let env = Arg.env_var "Z3_PATH" ~doc in

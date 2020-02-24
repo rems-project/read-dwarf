@@ -41,6 +41,8 @@ type revent = (string, lrng) event
 
 type rexp = (string, lrng) exp
 
+type rsmt_ans = (string, lrng) smt_ans
+
 (*****************************************************************************)
 (*        Isla parsing                                                       *)
 (*****************************************************************************)
@@ -85,6 +87,17 @@ let parse_exp_string ?(filename = "default") (s : string) : rexp =
 (** Parse a single Isla expression from a channel *)
 let parse_exp_channel ?(filename = "default") (c : in_channel) : rexp =
   parse_exp ~filename @@ Lexing.from_channel ~with_positions:true c
+
+(** Parse a Z3 answer from a Lexing.lexbuf *)
+let parse_smt_ans : ?filename:string -> Lexing.lexbuf -> rsmt_ans = parse Parser.smt_ans_start
+
+(** Parse a single Isla expression from a string *)
+let parse_smt_ans_string ?(filename = "default") (s : string) : rsmt_ans =
+  parse_smt_ans ~filename @@ Lexing.from_string ~with_positions:true s
+
+(** Parse a single Isla expression from a channel *)
+let parse_smt_ans_channel ?(filename = "default") (c : in_channel) : rsmt_ans =
+  parse_smt_ans ~filename @@ Lexing.from_channel ~with_positions:true c
 
 (** Parse an Isla trace from a Lexing.lexbuf *)
 let parse_trc : ?filename:string -> Lexing.lexbuf -> rtrc = parse Parser.trc_start

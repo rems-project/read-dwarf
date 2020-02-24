@@ -24,7 +24,7 @@ open Files
 
 (* IslaTest use Z3 by default *)
 
-module SMT : Smt.Smt = Z3
+module SMT = Z3
 
 (** The type of processing requested  *)
 type pmode =
@@ -132,7 +132,7 @@ let isla_mode_to_request imode input =
   | ASM -> IslaServer.TEXT_ASM input
   | HEX -> IslaServer.ASM (BytesSeq.of_hex input)
   | BIN -> IslaServer.ASM (BytesSeq.of_string input)
-  | _ -> Warn.fatal0 "impossible"
+  | _ -> assert false
 
 (** Run isla and return a text trace with a filename
     (if mode is RAW than just return the trace and filename without isla)
@@ -189,9 +189,11 @@ let processing pmode (filename, input) : unit =
     end_state
   in
   let simp state =
+    Z3.start ();
     State.unsafe_unlock state;
     State.map_mut_exp SMT.simplify state;
     State.lock state;
+    Z3.stop ();
     state
   in
   match pmode with

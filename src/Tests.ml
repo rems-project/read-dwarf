@@ -21,7 +21,7 @@ let reset () =
   Hashtbl.iter
     (fun name f ->
       try f ()
-      with e -> Warn.fatal2 "Reset function %s has thrown: %s\n" name (Printexc.to_string e))
+      with e -> Warn.fatal "Reset function %s has thrown: %s\n" name (Printexc.to_string e))
     resets
 
 (** Test failure is either when it returns false or throws *)
@@ -63,7 +63,7 @@ let tests_arg =
 let test_cmd tests =
   run_tests tests;
   if !success then begin
-    print_endline "All tests passed";
+    print_endline "All unit tests passed";
     Ok ()
   end
   else Error (`Msg "Some test failed")

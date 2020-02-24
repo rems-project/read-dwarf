@@ -12,7 +12,7 @@ let ( $ ) = ( @@ )
 (*        Output                                                             *)
 (*****************************************************************************)
 
-let fprint out doc = ToChannel.pretty 0.75 150 out doc
+let fprint (out : out_channel) (doc : document) = ToChannel.pretty 0.75 150 out doc
 
 let print doc = fprint stdout doc
 

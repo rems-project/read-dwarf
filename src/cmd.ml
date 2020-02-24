@@ -53,16 +53,17 @@ let input (cmd : cmd) (cont : in_channel -> 'a) : 'a =
   let output = open_process_args_in cmd.(0) cmd in
   protect (fun () -> cont output) @@ closing_in output cmd
 
+(** Call a command and read its output in a string *)
 let input_string (cmd : string array) : string = input cmd Files.read_all
-
-let input_exec exec cmd cont =
-  cmd.(0) <- exec;
-  input cmd cont
 
 (*****************************************************************************)
 (*        Pipe input-output                                                  *)
 (*****************************************************************************)
 
+(** Call the command provided, then call the first continuation to send
+    a message and then call the second continuation to get the answer.
+    Then it close the child process properly.
+*)
 let io (cmd : cmd) (out_cont : out_channel -> unit) (in_cont : in_channel -> 'a) : 'a =
   cmd.(0) <- get_full_path cmd.(0);
   (* PP.(println @@ array string cmd); *)
@@ -74,13 +75,27 @@ let io (cmd : cmd) (out_cont : out_channel -> unit) (in_cont : in_channel -> 'a)
   in
   protect process @@ closing (output, input) cmd
 
-let io_test_cat () =
-  let output oc = Printf.fprintf oc "test string\n" in
-  let input ic = input_line ic in
-  let a = io [|"cat"|] output input in
-  a = "test string"
+let _ =
+  Tests.add_test "Cmd.io.cat" (fun () ->
+      let output oc = Printf.fprintf oc "test string\n" in
+      let input ic = input_line ic in
+      let a = io [|"cat"|] output input in
+      a = "test string")
 
-let _ = Tests.add_test "Cmd.io.cat" io_test_cat
+(** This submodule manages another process as request server, trough pipes like Z3*)
+module IOServer = struct
+  (** The type a pipe server *)
+  type t = { cmd : cmd; input : in_channel; output : out_channel }
+
+  (** State the pipe server using commands *)
+  let start (cmd : cmd) : t =
+    cmd.(0) <- get_full_path cmd.(0);
+    let (input, output) = open_process_args cmd.(0) cmd in
+    { cmd; input; output }
+
+  (** Stop the pipe server *)
+  let stop (t : t) = close_process (t.input, t.output) |> check_status t.cmd
+end
 
 (*****************************************************************************)
 (*        Socket management                                                  *)

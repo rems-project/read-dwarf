@@ -38,3 +38,7 @@ Ask you want to change ocamlformat options or bump the version
 
 You can run `./read-dwarf --help` to get the list of subcommand. For each subcommand you can
 run `./read-dwarf subcommand --help` to learn more about the subcommand
+
+## Testing
+
+You can run `make test` for self testing.

@@ -1,26 +1,14 @@
-let fatal0 fmt =
-  Printf.eprintf fmt;
-  flush stderr;
-  exit 1
+(* Note : fatal0 and fatal2 are removed since now fatal accept any number of arguments.
+   Idem for nonfatal
+*)
 
-let fatal fmt s =
-  Printf.eprintf fmt s;
-  flush stderr;
-  exit 1
+(** Report a fatal error in the Printf style format *)
+let fatal fmt =
+  Printf.kfprintf
+    (fun _ ->
+      flush stderr;
+      exit 1)
+    stderr fmt
 
-let fatal2 fmt s t =
-  Printf.eprintf fmt s t;
-  flush stderr;
-  exit 1
-
-let nonfatal0 fmt =
-  Printf.eprintf fmt;
-  flush stderr
-
-let nonfatal fmt s =
-  Printf.eprintf fmt s;
-  flush stderr
-
-let nonfatal2 fmt s t =
-  Printf.eprintf fmt s t;
-  flush stderr
+(** Report a non-fatal error in the Printf style format *)
+let nonfatal fmt = Printf.kfprintf (fun _ -> flush stderr) stderr fmt

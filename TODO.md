@@ -6,6 +6,7 @@
  - Add the generation of `Og` target in addition to `O{0-2}` for testing
  - Package this thing with opam and dune to check it works.
  - Package isla-lang properly (need to change ott package also to include menhir lib).
+   - Use dune for isla-lang
 
 ## Internal infrastructure
 
@@ -23,19 +24,22 @@
 ## Linksem
 
  - Learn which test to run
- - Remove useless conversions in the Uint32 to Natural thing
- - Fix the my_concat inefficiency
+ - Remove useless conversions in the Uint32 to Natural thing : Locally but not pushed
+ - Fix the my_concat inefficiency : Locally but not pushed
  - See what could be moved to nat instead of natural
+ - Current profiling state of dwarf\_extract\_static (with local patches)
+   - Runtime on O0 hafnium only decreased from 4.8 to 4.3
+   - About 60% of the time is spent in string copying, allocating and garbage collection
+   - About 25% of the time is spent in big integers manipulation
+   - A significant part of the gc work may be due to bigints and not to strings, I don't know yet.
+   - About 5% of the time is spend directly in mydrop (and not in it's callees)
+   - The rest may be useful computations.
 
 # Required Plumbing
 
  - isla
    - Write the system that caches results.
    - Move the initial state from isla to readDwarf
- - Z3
-   - add the check function to check validity of a model (non-statisfiability of it's negation)
-   - find a way to deal with end of expression thing on simplify
-   - Make it so that z3 do not restart all the time but just once.
 
 # Content
 
@@ -95,3 +99,10 @@
 
 - Build a trace tree from a set of normal traces
 - Add isla support to set the pc before running an instruction
+
+# Done list
+
+ - Z3
+   - Add the check function to check validity of a model (non-statisfiability of it's negation)
+   - Find a way to deal with end of expression thing on simplify
+   - Make it so that Z3 do not restart all the time but just once.

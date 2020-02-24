@@ -66,7 +66,9 @@ let run_trc_mut_vc ?(vc = HashVector.empty ()) (state : state) (trc : State.trc)
   (* This function process a single event by mutating state *)
   let process : State.event -> unit = function
     | Smt (DeclareConst (_, _), _) -> ()
-    | Smt (DefineConst (Free i, e), l) -> HashVector.add vc i (vc_subst_full l vc e)
+    | Smt (DefineConst (Free i, e), l) -> (
+        try HashVector.add vc i (vc_subst_full l vc e) with RunError (_, _) -> ()
+      )
     | Smt (Assert e, l) -> State.push_assert state (vc_subst_full l vc e)
     | ReadReg (name, al, valu, l) ->
         let string_path = IslaManip.string_of_accessor_list al in

@@ -225,7 +225,7 @@ let source_line (comp_dir, dir, file) n1 =
           (*        source_file_cache := (file, None) :: !source_file_cache;
                   None *)
           source_file_cache := ((comp_dir, dir, file), None) :: !source_file_cache;
-          Warn.nonfatal2 "filename %s %s" filename s;
+          Warn.nonfatal "filename %s %s" filename s;
           None
     )
 
@@ -335,7 +335,7 @@ let parse_objdump_lines lines =
 
 let parse_objdump_file filename_objdump_d =
   match read_file_lines filename_objdump_d with
-  | MyFail s -> Warn.fatal2 "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
+  | MyFail s -> Warn.fatal "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
   | Ok lines -> parse_objdump_lines lines
 
 let mk_objdump_lines_array parsed_objdump_lines instructions :
@@ -482,7 +482,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
   let branch_data : (natural (*a_br*) * (natural (*a_table*) * natural)) (*size*) list =
     match read_file_lines filename_branch_table with
     | MyFail s ->
-        Warn.fatal2 "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
+        Warn.fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
     | Ok lines ->
         let parse_line (s : string) : (natural * (natural * natural)) option =
           match Scanf.sscanf s " %x: %x %x " (fun a_br a_table n -> (a_br, a_table, n)) with
@@ -517,7 +517,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
            let table_entry_addr = Nat_big_num.add a_table (Nat_big_num.of_int (4 * i)) in
            match natural_assoc_opt table_entry_addr rodata_words with
            | None ->
-              Warn.fatal2 "no branch table entry for address %s, for code address %s\n"
+              Warn.fatal "no branch table entry for address %s, for code address %s\n"
                 (pp_addr table_entry_addr) (pp_addr addr)
            | Some table_entry ->
               let a_target =
@@ -539,7 +539,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
       list =
     match read_file_lines filename_branch_table with
     | MyFail s ->
-        Warn.fatal2 "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
+        Warn.fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
     | Ok lines ->
         let parse_line (s : string) : (natural * (natural * natural * string * natural)) option =
           match
@@ -611,7 +611,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
     if pc = String.length shift then
       match stack with
       | [a] -> a
-      | _ -> Warn.fatal0 "eval_shift_expression terminated with non-singleton stack"
+      | _ -> Warn.fatal "eval_shift_expression terminated with non-singleton stack"
     else
       let command = shift.[pc] in
       if command = 'n' then
@@ -627,7 +627,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
                 (Nat_big_num.pow_int_positive 2 (Char.code command - Char.code '0'))
             in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal0 "eval_shift_expression shift empty stack"
+        | _ -> Warn.fatal "eval_shift_expression shift empty stack"
       else if command = 'r' then
         (* push rodata branch table base address *)
         let stack' = a_table :: stack in
@@ -642,29 +642,29 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
         | a1 :: a2 :: stack' ->
             let a' = Nat_big_num.add a1 a2 in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal0 "eval_shift_expression plus emptyish stack"
+        | _ -> Warn.fatal "eval_shift_expression plus emptyish stack"
       else if command = 'b' then
         (* read byte from branch table *)
         match stack with
         | a :: stack' ->
             let a' = read_rodata_b a in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal0 "eval_shift_expression b empty stack"
+        | _ -> Warn.fatal "eval_shift_expression b empty stack"
       else if command = 'h' then
         (* read halfword from branch table *)
         match stack with
         | a :: stack' ->
             let a' = read_rodata_h a in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal0 "eval_shift_expression h empty stack"
+        | _ -> Warn.fatal "eval_shift_expression h empty stack"
       else if command = 'W' then
         (* read word from branch table and sign-extend *)
         match stack with
         | a :: stack' ->
             let a' = read_rodata_W a in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal0 "eval_shift_expression W empty stack"
-      else Warn.fatal0 "eval_shift_expression unknown command"
+        | _ -> Warn.fatal "eval_shift_expression W empty stack"
+      else Warn.fatal "eval_shift_expression unknown command"
   in
 
   let branch_table_targets addr =
@@ -679,7 +679,7 @@ let mk_control_flow_insns_with_targets_array test instructions objdump_lines_arr
                 let table_entry_addr = Nat_big_num.add a_table (Nat_big_num.of_int (4 * i)) in
                 match natural_assoc_opt table_entry_addr rodata_words with
                 | None ->
-                    Warn.fatal2 "no branch table entry for address %s, for code address %s\n"
+                    Warn.fatal "no branch table entry for address %s, for code address %s\n"
                       (pp_addr table_entry_addr) (pp_addr addr)
                 | Some table_entry ->
                     let a_target =
@@ -1065,7 +1065,7 @@ let colours = List.filter (function c -> not (List.mem c colours_dot_complains))
 let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targets_array
     come_froms_array index_of_address : graph_cfg =
   let colour label addr =
-(*    if label ="<sl_lock>" then "plum" else if label="<sl_unlock>" then "forestgreen" else "black"*)
+    (*    if label ="<sl_lock>" then "plum" else if label="<sl_unlock>" then "forestgreen" else "black"*)
     match dwarf_source_file_line_numbers test addr with
     | [(subprogram_name, line)] ->
         let colour =
@@ -1174,13 +1174,13 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
     let (addr, i, c, targets) = control_flow_insns_with_targets_array.(k) in
     match c with
     | C_no_instruction ->
-        Warn.fatal0 "graphette_normal on C_no_instruction"
+        Warn.fatal "graphette_normal on C_no_instruction"
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_plain ->
-        Warn.fatal0 "graphette_normal on C_plain"
+        Warn.fatal "graphette_normal on C_plain"
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_branch _ ->
-        Warn.fatal0 "graphette_normal on C_branch"
+        Warn.fatal "graphette_normal on C_branch"
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_ret -> sink_node addr "ret" CFG_node_ret k
     | C_eret -> sink_node addr "eret" CFG_node_eret k
@@ -1262,7 +1262,9 @@ let mk_cfg test node_name_prefix elf_symbols_array control_flow_insns_with_targe
 
   graph
 
-let pp_colour colour = "[color=\"" ^ colour ^ "\"]" (*^ "[fillcolor=\"" ^ colour ^ "\"]"*) ^ "[fontcolor=\"" ^ colour ^ "\"]"
+let pp_colour colour =
+  "[color=\"" ^ colour ^ "\"]" (*^ "[fillcolor=\"" ^ colour ^ "\"]"*) ^ "[fontcolor=\""
+  ^ colour ^ "\"]"
 
 let margin = "[margin=\"0.03,0.02\"]"
 
@@ -1838,7 +1840,7 @@ let pp_instruction test an ((addr : natural), (i : natural)) =
       | Some (a', i', s) ->
           if i = i' then s
           else
-            Warn.fatal2 "instruction mismatch - linksem: %s vs objdump: %s\n" (pp_addr i)
+            Warn.fatal "instruction mismatch - linksem: %s vs objdump: %s\n" (pp_addr i)
               (pp_addr i')
       | None -> ""
     end
@@ -1889,17 +1891,17 @@ let process_file () : unit =
 
   (* todo: make idiomatic Cmdliner :-(  *)
   let filename_elf =
-    match !Globals.elf with Some s -> s | None -> Warn.fatal0 "no --elf option\n"
+    match !Globals.elf with Some s -> s | None -> Warn.fatal "no --elf option\n"
   in
 
   let filename_objdump_d =
-    match !Globals.objdump_d with Some s -> s | None -> Warn.fatal0 "no --objdump-d option\n"
+    match !Globals.objdump_d with Some s -> s | None -> Warn.fatal "no --objdump-d option\n"
   in
 
   let filename_branch_tables =
     match !Globals.branch_table_data_file with
     | Some s -> s
-    | None -> Warn.fatal0 "no --branch-tables option\n"
+    | None -> Warn.fatal "no --branch-tables option\n"
   in
 
   let filename_out_file_option = !Globals.out_file in
@@ -2024,6 +2026,6 @@ let process_file () : unit =
             Unix.system ("dot -Tsvg " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".svg")
           in
           ()
-      | None -> Warn.fatal0 "no dot file\n"
+      | None -> Warn.fatal "no dot file\n"
     )
-  | _ -> Warn.fatal0 "missing files for elf2\n"
+  | _ -> Warn.fatal "missing files for elf2\n"

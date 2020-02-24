@@ -36,6 +36,7 @@ let annot_event : ('v, 'a) event -> 'a = function
   | Smt (_, a) -> a
   | DefineEnum (_, a) -> a
   | Branch (_, _, a) -> a
+  | BranchAddress (_, a) -> a
   | ReadReg (_, _, _, a) -> a
   | WriteReg (_, _, _, a) -> a
   | Cycle a -> a
@@ -106,6 +107,7 @@ let event_conv_svar (conv : 'a -> 'b) : ('a, 'c) event -> ('b, 'c) event = funct
   | Smt (d, a) -> Smt (smt_conv_svar conv d, a)
   | DefineEnum (n, a) -> DefineEnum (n, a)
   | Branch (i, s, a) -> Branch (i, s, a)
+  | BranchAddress (addr, a) -> BranchAddress (addr, a)
   | ReadReg (n, al, v, a) -> ReadReg (n, al, v, a)
   | WriteReg (n, al, v, a) -> WriteReg (n, al, v, a)
   | Cycle a -> Cycle a

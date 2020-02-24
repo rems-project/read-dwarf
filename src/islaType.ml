@@ -105,16 +105,16 @@ let rec type_valu loc (cont : type_context) : valu -> Reg.typ = function
       List.iter (fun (name, v) -> ignore @@ Reg.add_field rs name (type_valu loc cont v)) l;
       Struct rs
   | Val_Enum (n, _) -> Plain (Ty_Enum n)
-  | Val_List _ -> Warn.fatal0 "valu list not implemented"
-  | Val_Vector _ -> Warn.fatal0 "valu list not implemented"
-  | Val_Unit -> Warn.fatal0 "valu unit not implemented"
-  | Val_NamedUnit _ -> Warn.fatal0 "valu named unit not implemented"
-  | Val_Poison -> Warn.fatal0 "Hey I got poisoned! Bad sail !"
-  | Val_String _ -> Warn.fatal0 "valu string not implemented"
+  | Val_List _ -> Warn.fatal "valu list not implemented"
+  | Val_Vector _ -> Warn.fatal "valu list not implemented"
+  | Val_Unit -> Warn.fatal "valu unit not implemented"
+  | Val_NamedUnit _ -> Warn.fatal "valu named unit not implemented"
+  | Val_Poison -> Warn.fatal "Hey I got poisoned! Bad sail !"
+  | Val_String _ -> Warn.fatal "valu string not implemented"
 
 let rec ltype_expr (cont : type_context) : 'v lexp -> lty = function
   | Var (Free var, l) -> (l, HashVector.get cont var)
-  | Var (_, _) -> Warn.fatal0 "Non free variable typing unimplemented"
+  | Var (_, _) -> Warn.fatal "Non free variable typing unimplemented"
   | Bits (str, l) ->
       (l, Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2))
   | Bool (_, l) -> (l, Ty_Bool)

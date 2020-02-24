@@ -26,7 +26,7 @@ let of_file (file : string) =
               let (addr, size) = (sym.addr, sym.size) in
               match Segment.get_addr_list_opt (BytesSeq.sub_getter size) segments addr with
               | Some data -> Sym.of_linksem_with_data data lsym
-              | None -> Warn.fatal2 "Symbol %s at 0x%x could not be loaded" (fst lsym) addr
+              | None -> Warn.fatal "Symbol %s at 0x%x could not be loaded" (fst lsym) addr
             else sym
           in
           SymTbl.add smap nsym
