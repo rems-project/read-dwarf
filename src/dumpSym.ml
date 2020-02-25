@@ -4,6 +4,8 @@ open Cmdliner
 
 let dump_symbols file =
   let elf = ElfFile.of_file file in
+  Printf.printf "Elf file with entry 0x%x on architecture %s\n" elf.entry
+    (Elf.File.machine_to_string elf.machine);
   PP.println (ElfFile.SymTbl.pp_raw elf.symbols);
   ()
 

@@ -1,36 +1,82 @@
 (** This module represent an ELF 64 file we do not deal with 32 bit for now *)
 
-module Sym = ElfSymbol
-module SymTbl = Sym.Table
+module SymTbl = ElfSymTable
 
-(** The type containing all the information about an ELF file
+type machine = X86 | X86_64 | PPC | PPC64 | ARM | AARCH64 | RISCV | Other of int
 
-    The end goal is that this type contains more interpreted information than Analyse.test i.e
-    interpreted enough so that they can be directly used into the symbolic execution
+let machine_of_linksem lmachine =
+  if lmachine = Elf_header.elf_ma_386 then X86
+  else if lmachine = Elf_header.elf_ma_x86_64 then X86_64
+  else if lmachine = Elf_header.elf_ma_arm then ARM
+  else if lmachine = Elf_header.elf_ma_aarch64 then AARCH64
+  else if lmachine = Elf_header.elf_ma_ppc then PPC
+  else if lmachine = Elf_header.elf_ma_ppc64 then PPC64
+  else if lmachine = Elf_header.elf_ma_riscv then RISCV
+  else Other (Z.to_int lmachine)
 
-    Hopefully, all the interpretated CFG, C types, comes_from, ... will go into this type
+let machine_to_string = function
+  | X86 -> "X86"
+  | X86_64 -> "X86_64"
+  | PPC -> "PPC"
+  | PPC64 -> "PPC64"
+  | ARM -> "ARM"
+  | AARCH64 -> "AARCH64"
+  | RISCV -> "RISCV"
+  | Other i -> Printf.sprintf "Other(%d)" i
+
+let pp_machine mach = mach |> machine_to_string |> PP.string
+
+(** The type containing all the information about an ELF file *)
+type t = {
+  symbols : SymTbl.t;
+  segments : Segment.t list;
+  entry : int;
+  machine : machine;
+  linksem : Elf_file.elf_file;
+}
+
+(** Error on Elf parsing *)
+exception ElfError of string
+
+let _ =
+  Printexc.register_printer (function
+    | ElfError s -> Some (Printf.sprintf "ElfError: %s" s)
+    | _ -> None)
+
+(** Throw an {!ElfError} *)
+let elferror fmt = Printf.ksprintf (fun s -> raise (ElfError s)) fmt
+
+(** Parse an ELF file to create an {!ElfFile.t} using Linksem.
+
+    May raise an {!ElfError}
 *)
-type t = { symbols : SymTbl.t; segments : Segment.t list }
-
-(** Parse an ELF file to create a {!ElfFile.t}. Uses {!Analyse.parse_elf_file} *)
-let of_file (file : string) =
-  let f = Analyse.parse_elf_file file in
-  let segments = List.map Segment.of_linksem f.segments in
-  let symbols =
-    List.fold_left
-      (fun smap lsym ->
-        let sym = Sym.of_linksem lsym in
-        if ElfSymbol.is_interesting sym.typ then
-          let nsym =
-            if Sym.linksem_data lsym = None then
-              let (addr, size) = (sym.addr, sym.size) in
-              match Segment.get_addr_list_opt (BytesSeq.sub_getter size) segments addr with
-              | Some data -> Sym.of_linksem_with_data data lsym
-              | None -> Warn.fatal "Symbol %s at 0x%x could not be loaded" (fst lsym) addr
-            else sym
-          in
-          SymTbl.add smap nsym
-        else smap)
-      SymTbl.empty f.symbol_map
+let of_file (filename : string) =
+  let ( (elf_file : Elf_file.elf_file),
+        (elf_epi : Sail_interface.executable_process_image),
+        (symbol_map : Elf_file.global_symbol_init_info) ) =
+    match Sail_interface.populate_and_obtain_global_symbol_init_info filename with
+    | Error.Fail s -> elferror "Linksem: populate_and_obtain_global_symbol_init_info: %s" s
+    | Error.Success x -> x
   in
-  { symbols; segments }
+  begin
+    match elf_file with
+    | Elf_file.ELF_File_32 _ -> elferror "32 bits elf files unsupported"
+    | _ -> ()
+  end;
+
+  let (segments, entry, machine) =
+    match elf_epi with
+    | ELF_Class_32 _ -> elferror "32 bits elf file class unsupported"
+    | ELF_Class_64 (s, e, m) -> (s, e, m)
+  in
+
+  let segments =
+    Lem_list.mapMaybe
+      (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None)
+      segments
+  in
+  let entry = Z.to_int entry in
+  let machine = machine_of_linksem machine in
+  let segments = List.map Segment.of_linksem segments in
+  let symbols = SymTbl.of_linksem segments symbol_map in
+  { symbols; segments; entry; machine; linksem = elf_file }

@@ -1,20 +1,15 @@
-(** This module represent an Elf symbol *)
+(* The documentation is in the mli file *)
 
-(** The type of the ELF symbol *)
 type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
 
-(** The ELF symbol. This type guarantee the data exists contrary to linksem symbols (it may be all zeros though) *)
+type linksem_typ = Z.t
+
 type t = { name : string; typ : typ; addr : int; size : int; data : BytesSeq.t }
 
-type sym = t
+type linksem_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
 
-(** The type of a symbol with offset *)
-type sym_offset = sym * int
-
-(** Check if an address is in a symbol *)
 let is_in t addr = t.addr <= addr && addr < t.addr + t.size
 
-(** Convert the integer type into typ *)
 let typ_of_linksem ltyp =
   match Z.to_int ltyp with
   | 0 -> NOTYPE
@@ -24,26 +19,39 @@ let typ_of_linksem ltyp =
   | 4 -> FILE
   | _ -> UNKNOWN
 
-(** Get the data from the linksem symbol type *)
-let linksem_data (name, (typ, size, addr, data, _)) = data
+let linksem_typ (name, (typ, size, addr, data, _)) = typ
 
-(** Create a symbol from a linksem symbol with the data specified *)
-let of_linksem_with_data data (name, (typ, size, addr, _, _)) =
-  { name; typ = typ_of_linksem typ; size = Z.to_int size; addr = Z.to_int addr; data }
+(** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded *)
+exception LoadingError of string * int
 
-(** Create a symbol from a linksem symbol *)
-let of_linksem lsym =
-  match linksem_data lsym with
-  | Some data -> of_linksem_with_data data lsym
-  | _ -> of_linksem_with_data BytesSeq.empty lsym
+let _ =
+  Printexc.register_printer (function
+    | LoadingError (name, addr) ->
+        Some (Printf.sprintf "Symbol %s at 0x%x could not be loaded" name addr)
+    | _ -> None)
 
-(** Tell if a symbol is interesting for readDwarf purposes *)
+let of_linksem segs ((name, (typ, size, addr, data, _)) as lsym) =
+  let typ = typ_of_linksem typ in
+  let size = Z.to_int size in
+  let addr = Z.to_int addr in
+  let data =
+    match data with
+    (* Rust's "if let" would be nice here *)
+    | Some data -> data
+    | _ -> (
+        match Segment.get_addr_list_opt (BytesSeq.sub_getter size) segs addr with
+        | Some data -> data
+        | None -> raise (LoadingError (name, addr))
+      )
+  in
+  { name; typ; size; addr; data }
+
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
-(** Take the BytesSeq.t corresponding to the offset and length *)
+let is_interesting_linksem lsym = lsym |> linksem_typ |> typ_of_linksem |> is_interesting
+
 let sub sym off len = BytesSeq.sub sym.data off len
 
-(** Pretty prints a symbol type *)
 let pp_typ typ =
   PP.string
   @@
@@ -55,7 +63,6 @@ let pp_typ typ =
   | FILE -> "FILE"
   | UNKNOWN -> "UNKNOWN"
 
-(** Raw pretty printing of a symbol *)
 let pp_raw sym =
   PP.(
     !^"sym"
@@ -67,52 +74,3 @@ let pp_raw sym =
            ("size", PP.int sym.size);
            ("data", BytesSeq.pp32le sym.data);
          ])
-
-(** Represent a symbol table
-    The interesting operation provided are fetching symbol by name
-    and knowing which symbol own a specific address
-*)
-module Table = struct
-  module IMap = Map.Make (Int)
-  module SMap = Map.Make (String)
-
-  type t = { by_name : sym SMap.t; by_addr : sym IMap.t }
-
-  (** The empty symbol table *)
-  let empty = { by_name = SMap.empty; by_addr = IMap.empty }
-
-  (** Return a new table with the symbol added *)
-  let add t sym =
-    { by_name = SMap.add sym.name sym t.by_name; by_addr = IMap.add sym.addr sym t.by_addr }
-
-  (** Get a symbol by name *)
-  let of_name t name = SMap.find name t.by_name
-
-  (** Get the symbol owning that address. Not_found is raised if no symbol own that address *)
-  let of_addr t addr =
-    let candidate = IMap.find_last (fun a -> a <= addr) t.by_addr |> snd in
-    if is_in candidate addr then candidate else raise Not_found
-
-  (** Get the symbol owning that address. None if no symbol own that address *)
-  let of_addr_opt t addr =
-    let candidate = IMap.find_last (fun a -> a <= addr) t.by_addr |> snd in
-    if is_in candidate addr then Some candidate else None
-
-  (** Get a symbol with the offset that correspond to that address *)
-  let of_addr_with_offset t addr =
-    let sym = of_addr t addr in
-    (sym, addr - sym.addr)
-
-  (** Transform a symbol + offset into the corresponding string *)
-  let string_of_sym_offset (sym, off) = sym.name ^ "+" ^ string_of_int off
-
-  (** Transform a symbol + offset string into the actual symbol and the integer offset *)
-  let sym_offset_of_string t s =
-    match String.split_on_char '+' s with
-    | [ssym] -> (of_name t (String.trim ssym), 0)
-    | [ssym; soff] -> (of_name t (String.trim ssym), soff |> String.trim |> int_of_string)
-    | _ -> failwith "sym_offset_to_string: wrong format"
-
-  (** Pretty print the table as a raw ocaml value *)
-  let pp_raw st = IMap.bindings st.by_addr |> List.map (Pair.map PP.ptr pp_raw) |> PP.mapping
-end

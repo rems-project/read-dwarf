@@ -215,29 +215,29 @@ let ppc bs = bs |> to_char_list |> List.map PP.byte |> PP.separate PP.empty
 let pp16le bs : PP.document =
   PP.(
     let front = bs |> to_list16le |> List.map hex16 |> separate space in
-    if fit 2 bs then front else front ^^ pp @@ trail 2 bs)
+    if fit 2 bs then front else front ^^ space ^^ pp @@ trail 2 bs)
 
 let pp16be bs : PP.document =
   PP.(
     let front = bs |> to_list16be |> List.map hex16 |> separate space in
-    if fit 2 bs then front else front ^^ pp @@ trail 2 bs)
+    if fit 2 bs then front else front ^^ space ^^ pp @@ trail 2 bs)
 
 let pp32le bs : PP.document =
   PP.(
     let front = bs |> to_list32le |> List.map hex32 |> separate space in
-    if fit 4 bs then front else front ^^ pp @@ trail 4 bs)
+    if fit 4 bs then front else front ^^ space ^^ pp @@ trail 4 bs)
 
 let pp32be bs : PP.document =
   PP.(
     let front = bs |> to_list32be |> List.map hex32 |> separate space in
-    if fit 4 bs then front else front ^^ pp @@ trail 4 bs)
+    if fit 4 bs then front else front ^^ space ^^ pp @@ trail 4 bs)
 
 let pp64le bs : PP.document =
   PP.(
     let front = bs |> to_list64le |> List.map hex64 |> separate space in
-    if fit 8 bs then front else front ^^ pp @@ trail 8 bs)
+    if fit 8 bs then front else front ^^ space ^^ pp @@ trail 8 bs)
 
 let pp64be bs : PP.document =
   PP.(
     let front = bs |> to_list64be |> List.map hex64 |> separate space in
-    if fit 8 bs then front else front ^^ pp @@ trail 8 bs)
+    if fit 8 bs then front else front ^^ space ^^ pp @@ trail 8 bs)

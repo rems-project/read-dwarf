@@ -83,6 +83,10 @@ let list = OCaml.list
 
 let opt = OCaml.option
 
+let pair conva convb (a, b) = OCaml.tuple [conva a; convb b]
+
+let tup3 conva convb convc (a, b, c) = OCaml.tuple [conva a; convb b; convc c]
+
 let qstring s = s |> string |> dquotes
 
 let erase _ = empty
