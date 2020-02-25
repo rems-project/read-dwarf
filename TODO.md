@@ -35,6 +35,18 @@
    - About 5% of the time is spend directly in mydrop (and not in it's callees)
    - The rest may be useful computations.
 
+     commenting out bits of harness_string_of_elf: 
+     time make -B hafnium-O0/hafnium.linksem-info-test 
+     24.19 s  for extract_dwarf, pp_fi,ld,li,is, pp_dwarf, mk_sdt, and pp_sdt
+     19.6  s  for extract_dwarf, pp_fi,ld,li,is, pp_dwarf, mk_sdt, and pp_sdt  *
+     15.28 s  for extract_dwarf,                 pp_dwarf, mk_sdt, and pp_sdt
+     12.35 s  for extract_dwarf,                           mk_sdt, and pp_sdt
+     12.20 s  for extract_dwarf,                           mk_sdt,           
+      8.97 s  for extract_dwarf,                                             
+      0.20 s  for                                                            
+
+     * with the body of analyse_type_top replaced by a constant 
+
 # Required Plumbing
 
  - isla
