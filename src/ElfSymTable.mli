@@ -20,8 +20,11 @@ val empty : t
 (** Return a new table with the symbol added *)
 val add : t -> sym -> t
 
-(** Get a symbol by name *)
+(** Get a symbol by name. Raise [Not_found] if no name matches *)
 val of_name : t -> string -> sym
+
+(** Get a symbol by name, None if no name matches *)
+val of_name_opt : t -> string -> sym option
 
 (** Get the symbol owning that address. Not_found is raised if no symbol own that address.data
       See {!of_addr_opt} *)

@@ -35,17 +35,17 @@
    - About 5% of the time is spend directly in mydrop (and not in it's callees)
    - The rest may be useful computations.
 
-     commenting out bits of harness_string_of_elf: 
-     time make -B hafnium-O0/hafnium.linksem-info-test 
+     commenting out bits of harness_string_of_elf:
+     time make -B hafnium-O0/hafnium.linksem-info-test
      24.19 s  for extract_dwarf, pp_fi,ld,li,is, pp_dwarf, mk_sdt, and pp_sdt
      19.6  s  for extract_dwarf, pp_fi,ld,li,is, pp_dwarf, mk_sdt, and pp_sdt  *
      15.28 s  for extract_dwarf,                 pp_dwarf, mk_sdt, and pp_sdt
      12.35 s  for extract_dwarf,                           mk_sdt, and pp_sdt
-     12.20 s  for extract_dwarf,                           mk_sdt,           
-      8.97 s  for extract_dwarf,                                             
-      0.20 s  for                                                            
+     12.20 s  for extract_dwarf,                           mk_sdt,
+      8.97 s  for extract_dwarf,
+      0.20 s  for
 
-     * with the body of analyse_type_top replaced by a constant 
+     * with the body of analyse_type_top replaced by a constant
 
 # Required Plumbing
 
@@ -57,55 +57,75 @@
 
 ## Memory
 
+### Pointer location tags
+
+ - `stack` : lower stack
+ - `code` : .text and other code sections
+ - `data` : .data
+ - `rodata` : .rodata
+ - `global` : .data or heap (anything passed as a pointer argument)
+ - `roglobal` : .rodata or .data or heap (anything passed as a const pointer argument)
+ - `glocal` : anything except .rodata (something return as a pointer by a subroutine)
+ - `roglocal` : anything (something returned as a const pointer by a subroutine)
+
 ### Simulation
 
  - Handle read-mem and write-mem calls
  - Memory is represented as a global trace: list of memory event from latest to oldest
    The only optimization is:
-     if someone reads from constant memory (rodata) then they receive a concrete value.
-       (This is mostly to handle naively jump tables)
+     if someone reads from constant memory (rodata) with a concrete address
+     then they receive a concrete value. (This is mostly to handle naively jump tables)
      if they write to it: UB
 
 #### C type and location inference
-  - Basic C type inference on linear traces
+ - Basic C type inference on linear traces
 
 ### Matching
-  - Finding the simulation relation on global variables.
-  - First try : Just match elf symbols with size and index lower stack with start sp
-    and handle all the rest symbolically.
+ - Finding the simulation relation on global variables.
+ - First try : Just match elf symbols with size and index lower stack with start sp
+   and handle all the rest symbolically.
 
 ## Control-flow management
-  - Start by handling that the exponential way and wait until it blows up
-  - Don't deal with loops for now
+ - Start by handling that the exponential way and wait until it blows up
+ - Don't deal with loops for now
 
 
 ## Function calling API
-  - Add a format to specify the calling convention
+ - Add a format to specify the calling convention
 
 # Current task stacks for Thibaut. This is the short term task list
 
-- Add logging system with backtraces on fatal errors.
-- Decide whether to stick with PPrint or swap to StdLib.Format
+ - Add logging system with backtraces on fatal errors.
+ - Decide whether to stick with PPrint or swap to StdLib.Format
 
 ## Memory stack
 
-- Handle the 52 bits real width pointer problem
-- Add support for concrete to symbol offset rewrite
-  if concrete value is <sym+off> then it is replaced by (bvadd sym off)
-- Add support for rodata detection
-- Add support for memory manipulation in Z3. (Mem = Array Addr Byte)
-  includes support for more Z3 syntax, including custom types.
+ - Handle the 52 bits real width pointer problem
+ - Add support for concrete to symbol offset rewrite
+   if concrete value is <sym+off> then it is replaced by (bvadd sym off)
+ - Add support for rodata detection
+ - Continue support for memory manipulation in Z3.
+   includes support for more Z3 syntax, including custom types.
+
+## Dwarf locations stack
+
+ - Define a proper concept of static "location" like register whatever or memory whatever
+   This location concept need to be integrated with isla states and use reg.ml register concepts
+ - LONG: Build a symbolic reverse evaluator to static location
+   - "Reverse" means that I don't want to get a value from a location but I want the location
+   - Basically convert a dwarf stack operation list to static_location option
+ - Build a indexing structure that can take a pc and a static location an tell what variable
+   is there (and thus later what CType)
+   Important: This can be incomplete: If I ask for a var type and I get nothing then
+   it's the same as any actually untyped location. We'll improve the location system as
+   needed.
 
 ## Ctype stack
 
-- Design the internal concept a CType (Mostly based on Dwarf types)
-- Internalize the Dwarf Ctype information for object symbols
-- Lookup system to get the type of symbol +offset object
-- Internalize the Dwarf Ctype information for function symbols
-- General system to get quickly dwarf types of some machine position at any PC
-  and in particular at function entry.
-- Do basic Ctype propagation
-- Fallback Ctype system: if propagation fails, fallback on dwarf information
+ - Design the internal concept of a CType (Mostly based on Dwarf types)
+ - Internalize the Dwarf Ctype information for dwarf entries inside dw modules structures
+ - LONG: Do Ctype propagation with fallback
+   - if propagation fails, fallback on dwarf information: Requires location indexing system
 
 ## Control flow stack
 
@@ -118,3 +138,4 @@
    - Add the check function to check validity of a model (non-statisfiability of it's negation)
    - Find a way to deal with end of expression thing on simplify
    - Make it so that Z3 do not restart all the time but just once.
+ - Internalize dwarf hierarchy and dump it with the dump-dwarf subcommand

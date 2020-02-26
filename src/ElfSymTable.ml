@@ -22,6 +22,8 @@ let add t sym =
 
 let of_name t name = SMap.find name t.by_name
 
+let of_name_opt t name = SMap.find_opt name t.by_name
+
 let of_addr t addr =
   let candidate = IMap.find_last (fun a -> a <= addr) t.by_addr |> snd in
   if is_in candidate addr then candidate else raise Not_found

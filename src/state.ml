@@ -387,15 +387,13 @@ let pp_trc trc = Isla_lang.PP.pp_trc Var.pp trc
 
 let pp s =
   PP.(
-    !^"state"
-    ^^ OCaml.record "state"
-         [
-           ("id", Id.pp s.id);
-           ("regs", Reg.Map.pp pp_sexp s.regs);
-           ("extra_vars", !^"todo");
-           ( "asserts",
-             s.asserts
-             |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_sexp e)
-             |> separate hardline );
-           ("memory", Mem.pp s.mem);
-         ])
+    record "state"
+      [
+        ("id", Id.pp s.id);
+        ("regs", Reg.Map.pp pp_sexp s.regs);
+        ("extra_vars", !^"todo");
+        ( "asserts",
+          s.asserts |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_sexp e) |> separate hardline
+        );
+        ("memory", Mem.pp s.mem);
+      ])

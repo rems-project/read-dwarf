@@ -91,10 +91,12 @@ let qstring s = s |> string |> dquotes
 
 let erase _ = empty
 
-let mapping (mappings : (document * document) list) =
+let mapping (mappings : (document * document) list) : document =
   surround 2 0 !^"{"
     (List.map (fun (a, b) -> infix 2 1 !^"->" a b) mappings |> separate (semi ^^ space))
     !^"}"
+
+let record name fields : document = !^name ^^ OCaml.record name fields
 
 (*****************************************************************************)
 (*        Unix                                                               *)

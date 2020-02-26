@@ -71,7 +71,7 @@ let of_file (filename : string) =
   in
 
   let segments =
-    Lem_list.mapMaybe
+    List.filter_map
       (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None)
       segments
   in
