@@ -52,6 +52,8 @@ let is_interesting_linksem lsym = lsym |> linksem_typ |> typ_of_linksem |> is_in
 
 let sub sym off len = BytesSeq.sub sym.data off len
 
+let compare s1 s2 = compare s1.addr s2.addr
+
 let pp_typ typ =
   PP.string
   @@
@@ -70,7 +72,7 @@ let pp_raw sym =
          [
            ("name", !^(sym.name));
            ("typ", pp_typ sym.typ);
-           ("addr", PP.ptr sym.addr);
-           ("size", PP.int sym.size);
+           ("addr", ptr sym.addr);
+           ("size", ptr sym.size);
            ("data", BytesSeq.pp32le sym.data);
          ])

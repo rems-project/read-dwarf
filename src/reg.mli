@@ -52,6 +52,8 @@ val add_reg : string -> typ -> t
 
 type path = t list
 
+val empty_path : path
+
 val partial_path_to_string : reg_struct -> path -> string
 
 val path_to_string : path -> string
@@ -67,6 +69,8 @@ val path_of_string_list : string list -> path
 val partial_path_type : reg_struct -> path -> typ
 
 val path_type : path -> typ
+
+val pp_path : path -> PP.document
 
 (*****************************************************************************)
 (*        Register indexed mapping                                           *)

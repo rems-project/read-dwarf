@@ -48,6 +48,9 @@ val is_interesting_linksem : linksem_t -> bool
 (** Take the BytesSeq.t corresponding to the offset and length *)
 val sub : t -> int -> int -> BytesSeq.t
 
+(** Starting address comparison *)
+val compare : t -> t -> int
+
 (** Pretty prints a symbol type *)
 val pp_typ : typ -> PP.document
 

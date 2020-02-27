@@ -91,6 +91,8 @@ let add_reg name typ = add_field index name typ
 
 type path = t list
 
+let empty_path = []
+
 let rec partial_path_to_string_list rs = function
   | [] -> []
   | f :: l -> (
@@ -131,6 +133,8 @@ let rec partial_path_type rs = function
     )
 
 let path_type = partial_path_type index
+
+let pp_path path = path |> path_to_string |> PP.string
 
 (*****************************************************************************)
 (*        Register indexed mapping                                           *)

@@ -41,7 +41,7 @@ let of_elf (elf : Elf.File.t) =
   let ldwarf_sdt = Dwarf.mk_sdt_dwarf ldwarf in
   let process_cu (funcs, vars) (cu : Dwarf.sdt_compilation_unit) =
     let nfuncs = List.rev_map (Func.of_linksem elf) cu.scu_subroutines in
-    let nvars = List.rev_map Var.of_linksem cu.scu_vars in
+    let nvars = List.rev_map (Var.of_linksem elf) cu.scu_vars in
     (List.rev_append nfuncs funcs, List.rev_append nvars vars)
   in
   let (funcs, vars) = List.fold_left process_cu ([], []) ldwarf_sdt.sd_compilation_units in

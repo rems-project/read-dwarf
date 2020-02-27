@@ -2,17 +2,33 @@
     as defined in the DWARF information of the target file *)
 
 (** Type of a DWARF variable *)
-type t = { name : string; param : bool }
+type t = { name : string; param : bool; locs : ((int * int) * Loc.t) list }
 
 (** Type of a DWARF variable in linksem *)
 type linksem_t = Dwarf.sdt_variable_or_formal_parameter
 
+(** Merge contiguous location lists *)
+let rec loc_merge = function
+  | ((a1, b1), d1) :: ((a2, b2), d2) :: l when b1 = a2 && Loc.compare d1 d2 = 0 ->
+      loc_merge (((a1, b2), d1) :: l)
+  | a :: l -> a :: loc_merge l
+  | [] -> []
+
+(** Convert from Z.t to int, if there is an overflow, returns Int.max_int instead of throwing *)
+let clamp_z z = try Z.to_int z with Z.Overflow when Z.compare z Z.zero > 0 -> Int.max_int
+
 (** Create a DWARF variable from it's linksem counterpart *)
-let of_linksem (lvar : linksem_t) =
+let of_linksem (elf : Elf.File.t) (lvar : linksem_t) : t =
   let name = lvar.svfp_name in
   let param = match lvar.svfp_kind with SVPK_var -> false | SVPK_param -> true in
-  { name; param }
+  let locs =
+    lvar.svfp_locations |> Option.value ~default:[]
+    |> List.map (fun (a, b, l) -> ((Z.to_int a, clamp_z b), Loc.of_linksem elf l))
+    |> loc_merge
+  in
+  { name; param; locs }
 
+(** Pretty print a variable *)
 let pp_raw v =
   let kind = if v.param then "param" else "var" in
-  PP.(record kind [("name", string v.name)])
+  PP.(record kind [("name", string v.name); ("locs", list (pair (pair ptr ptr) Loc.pp) v.locs)])

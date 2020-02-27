@@ -21,22 +21,22 @@ type linksem_func = Dwarf.sdt_subroutine
 type linksem_scope = Dwarf.sdt_lexical_block
 
 (** Create and Dwarf function from it linksem counterpart *)
-let rec func_of_linksem (lfun : linksem_func) =
+let rec func_of_linksem (elf : Elf.File.t) (lfun : linksem_func) =
   let name = Option.value ~default:"" lfun.ss_name in
   let scope_of_linksem_func (lfun : linksem_func) =
-    let vars = List.rev_map Var.of_linksem lfun.ss_vars in
-    let funcs = List.rev_map func_of_linksem lfun.ss_subroutines in
-    let scopes = List.rev_map scope_of_linksem lfun.ss_lexical_blocks in
+    let vars = List.rev_map (Var.of_linksem elf) lfun.ss_vars in
+    let funcs = List.rev_map (func_of_linksem elf) lfun.ss_subroutines in
+    let scopes = List.rev_map (scope_of_linksem elf) lfun.ss_lexical_blocks in
     { vars; funcs; scopes }
   in
   let scope = scope_of_linksem_func lfun in
   { name; scope }
 
 (** Create and Dwarf scope from it linksem counterpart *)
-and scope_of_linksem (lsc : linksem_scope) =
-  let vars = List.rev_map Var.of_linksem lsc.slb_vars in
-  let funcs = List.rev_map func_of_linksem lsc.slb_subroutines in
-  let scopes = List.rev_map scope_of_linksem lsc.slb_lexical_blocks in
+and scope_of_linksem (elf : Elf.File.t) (lsc : linksem_scope) =
+  let vars = List.rev_map (Var.of_linksem elf) lsc.slb_vars in
+  let funcs = List.rev_map (func_of_linksem elf) lsc.slb_subroutines in
+  let scopes = List.rev_map (scope_of_linksem elf) lsc.slb_lexical_blocks in
   { vars; funcs; scopes }
 
 let rec pp_raw_func f : PP.document =
@@ -65,7 +65,7 @@ type linksem_t = Dwarf.sdt_subroutine
     potential matching symbol. For now the matching is made with name only, but in the future
     code addresses may also be used to be more resilient *)
 let of_linksem (elf : Elf.File.t) (lfun : linksem_t) =
-  let func = func_of_linksem lfun in
+  let func = func_of_linksem elf lfun in
   let sym = Elf.SymTbl.of_name_opt elf.symbols func.name in
   { sym; func }
 
