@@ -1057,7 +1057,7 @@ let colours_dot_complains =
     "lime";
     "lightgreen";
     "darkblue";
-    "fuschia";
+    "fuchsia";
   ]
 
 let colours = List.filter (function c -> not (List.mem c colours_dot_complains)) colours_svg
