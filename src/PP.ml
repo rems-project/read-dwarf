@@ -91,8 +91,8 @@ let qstring s = s |> string |> dquotes
 
 let erase _ = empty
 
-let mapping (mappings : (document * document) list) : document =
-  surround 2 0 !^"{"
+let mapping (name : string) (mappings : (document * document) list) : document =
+  surround 2 0 (!^name ^^ !^"{")
     (List.map (fun (a, b) -> infix 2 1 !^"->" a b) mappings |> separate (semi ^^ space))
     !^"}"
 

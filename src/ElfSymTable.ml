@@ -50,4 +50,4 @@ let of_linksem segments linksem_map =
   in
   List.fold_left add_linksem_sym_to_map empty linksem_map
 
-let pp_raw st = IMap.bindings st.by_addr |> List.map (Pair.map PP.ptr pp_raw) |> PP.mapping
+let pp_raw st = IMap.bindings st.by_addr |> List.map (Pair.map PP.ptr pp_raw) |> PP.mapping "syms"
