@@ -3,7 +3,6 @@
  - Find a name other than "read-dwarf"
  - Make all the test target in the Makefile work again ideally without requiring
    hafnium-verification-plan
- - Add the generation of `Og` target in addition to `O{0-2}` for testing
  - Package this thing with opam and dune to check it works.
  - Package isla-lang properly (need to change ott package also to include menhir lib).
    - Use dune for isla-lang
@@ -20,6 +19,11 @@
  - Think about removing PPrint and using StdLib.Format (and Fmt) instead
    - Need to test performance,
    - Need to swap ott pp generation to StdLib.Format, which is good for portability
+ - Do a rd2 command that basically does the same thing as rd but using internal data structure
+   and not Linksem's data structures.
+ - Do a html command that basically does the same thing as rd2 but with a collapsible 
+   html file and way more information, in particular with an option to have 
+   the result of symbolic evaluation
 
 ## Linksem
 
@@ -109,11 +113,6 @@
 
 ## Dwarf locations stack
 
- - Define a proper concept of static "location" like register whatever or memory whatever
-   This location concept need to be integrated with isla states and use reg.ml register concepts
- - LONG: Build a symbolic reverse evaluator to static location
-   - "Reverse" means that I don't want to get a value from a location but I want the location
-   - Basically convert a dwarf stack operation list to static_location option
  - Build a indexing structure that can take a pc and a static location an tell what variable
    is there (and thus later what CType)
    Important: This can be incomplete: If I ask for a var type and I get nothing then
@@ -122,8 +121,9 @@
 
 ## Ctype stack
 
- - Design the internal concept of a CType (Mostly based on Dwarf types)
- - Internalize the Dwarf Ctype information for dwarf entries inside dw modules structures
+ - Design the type system: LONG
+ - Code OCaml structure to represent type system
+ - Convert dwarf linksem type into type from the type system inside the Data structure
  - LONG: Do Ctype propagation with fallback
    - if propagation fails, fallback on dwarf information: Requires location indexing system
 
@@ -139,3 +139,6 @@
    - Find a way to deal with end of expression thing on simplify
    - Make it so that Z3 do not restart all the time but just once.
  - Internalize dwarf hierarchy and dump it with the dump-dwarf subcommand
+ - Define a proper concept of static "location" like register whatever or memory whatever
+   This location concept need to be integrated with isla states and use reg.ml register concepts
+ - Simple location evaluator
