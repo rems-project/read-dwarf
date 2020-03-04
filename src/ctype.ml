@@ -91,12 +91,12 @@ let of_linksem (ltyp : linksem_t) : t =
     | CT (CT_pointer (_, Some t)) -> Ptr { target = ol t; location = ANY }
     | CT (CT_pointer (_, None)) -> Ptr { target = unknown; location = ANY }
     | CT (CT_array (_, elem, l)) -> Array { elem = ol elem; dims = List.map arr_dim_ol l }
-    | _ -> failwith "Unsupported type"
+    | _ -> Unknown
   and arr_dim_ol (count, typ) = { count = Option.map Z.to_int count }
   and ol ?typedef ?(const = false) ?(volatile = false) ?(restrict = false) : linksem_t -> t =
     function
     | CT (CT_const (_, Some t)) -> ol ~const:true ~volatile ~restrict t
-    | CT (CT_const (_, None)) -> failwith "const None ?"
+    | CT (CT_const (_, None)) -> { base = Unknown; const = true; volatile; restrict }
     | CT (CT_volatile (_, t)) -> ol ~const ~volatile:true ~restrict t
     | CT (CT_restrict (_, t)) -> ol ~const ~volatile ~restrict:true t
     | CT (CT_typedef (_, name, t, _)) -> ol ~typedef:name ~const ~volatile ~restrict t
