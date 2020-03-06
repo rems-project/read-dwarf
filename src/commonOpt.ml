@@ -50,4 +50,36 @@ let z3 =
   let doc = "z3 location" in
   setter z3_ref Arg.(value & opt string "z3" & info ["z3"] ~env ~docv:"Z3_PATH" ~doc)
 
-let comopts = [isla_client; z3]
+let quiet_ref = ref false
+
+let quiet =
+  let doc = "Remove all errors and warnings from the output" in
+  Arg.(value & flag & info ["q"; "quiet"] ~doc)
+
+let verbose =
+  let doc = "Log more stuff. When set twice, output all debugging logs" in
+  Arg.(value & flag_all & info ["v"; "verbose"] ~doc)
+
+let infoopt : string list Term.t =
+  let doc = "Set an precise OCaml module in info logging mode" in
+  Arg.(value & opt_all string [] & info ["info"] ~doc ~docv:"MODULE")
+
+let debug =
+  let doc = "Set an precise OCaml module in debug logging mode" in
+  Arg.(value & opt_all string [] & info ["debug"] ~doc ~docv:"MODULE")
+
+let process_logs_opts quiet verbose info debug =
+  if quiet then Logs.set_default_level Base;
+  if quiet then quiet_ref := true;
+  begin
+    match verbose with
+    | [] -> ()
+    | [true] -> Logs.set_default_level Info
+    | _ -> Logs.set_default_level Debug
+  end;
+  List.iter (fun name -> Logs.set_level name Info) info;
+  List.iter (fun name -> Logs.set_level name Debug) debug
+
+let logs_term = Term.(const process_logs_opts $ quiet $ verbose $ infoopt $ debug)
+
+let comopts = [isla_client; z3; logs_term]

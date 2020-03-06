@@ -11,7 +11,6 @@
 
  - Try to have read-dwarf automatically create/cache the objdump instead
    of asking it as a command line parameter.
- - Switch to `Logs` for logging instead of mixing debug and warn.
  - Add prefix to external output or error coming from servers like isla or z3 with sed
  - Add test dependencies and ordering to Tests.ml
  - Add slow-test/fast test distinction (isla version is a slow test)
@@ -99,7 +98,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Add logging system with backtraces on fatal errors.
  - Decide whether to stick with PPrint or swap to StdLib.Format
 
 ## Memory stack
@@ -142,3 +140,4 @@
  - Define a proper concept of static "location" like register whatever or memory whatever
    This location concept need to be integrated with isla states and use reg.ml register concepts
  - Simple location evaluator
+ - Add logging system with backtraces on fatal errors.

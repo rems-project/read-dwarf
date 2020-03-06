@@ -1,5 +1,9 @@
 (** This module is about calling external processes, and helper functions for doing that *)
 
+open Logs.Logger (struct
+  let str = "Cmd"
+end)
+
 open Protect
 open Unix
 
@@ -17,7 +21,7 @@ let _ =
 (** Check the return status and throw Chrash if input is noe WEXITED 0 *)
 let check_status cmd = function
   | WEXITED code when code = 0 -> ()
-  | WSIGNALED code when code < 0 -> Printf.eprintf "Signal %d should not exist: ????\n" code
+  | WSIGNALED code when code < 0 -> err "Signal %d should not exist: ????\n" code
   | code -> raise (Crash (cmd, code))
 
 (** Close input channel for channel openned with open_process_in.
@@ -31,6 +35,7 @@ let closing channels cmd () = check_status cmd @@ close_process channels
 (** Call the [which] shell command to get a executable position from its name.
     May throw Crash if the command fails*)
 let which arg =
+  debug "Calling which on %s" arg;
   let channel = open_process_in @@ "which " ^ arg in
   protect (fun () -> input_line channel) @@ closing_in channel [|"which"; arg|]
 
@@ -39,8 +44,10 @@ let get_full_path (s : string) : string =
   match s.[0] with
   | '/' | '.' -> s
   | _ -> (
-      try (* TODO add warning here *)
-          which s with _ -> s
+      try which s
+      with _ ->
+        warn "Trying to get path for %s with `which` and failed" s;
+        s
     )
 
 (*****************************************************************************)
@@ -114,8 +121,7 @@ module Server = struct
       Filename.concat (Filename.get_temp_dir_name ())
         (Printf.sprintf "%s-%d.socket" name (Random.bits ()))
     in
-    Printf.printf "New socket : %s\n" sock_path;
-    (* TODO logging system *)
+    info "New socket : %s" sock_path;
     Unix.(bind sock_fd (ADDR_UNIX sock_path));
     at_exit (fun () -> try Unix.unlink sock_path with Unix_error _ -> ());
     Unix.listen sock_fd 1;
@@ -132,17 +138,16 @@ module Server = struct
     cmd.(0) <- get_full_path cmd.(0);
     let pid = Unix.(create_process cmd.(0) cmd stdin stdout stderr) in
     let (sock_fd, _) = Unix.accept sock_fd in
-    print_endline ("Connected to " ^ name);
-    (* TODO logging system *)
+    info "Socket connected to %s" name;
     { name; pid; socket = sock_fd; sock_path }
 
   (** Stop the cut the connection, wait for the subprocess to die and then delete the socket *)
   let stop server =
-    Printf.printf "Closing connection with %s\n" server.name;
+    info "Closing connection with %s" server.name;
     shutdown server.socket SHUTDOWN_ALL;
     ignore @@ waitpid [] server.pid;
     Unix.unlink server.sock_path;
-    Printf.printf "Connection with %s closed\n" server.name
+    info "Connection with %s closed" server.name
 
   (** [read_exact sock size] reads exactly size bytes on sock and return them as a Bytes *)
   let read_exact sock_fd exact =
@@ -164,8 +169,7 @@ module Server = struct
     let length = Int32.to_int (Bytes.get_int32_le header 0) in
     let body = read_exact sock_fd length in
     let str = Bytes.unsafe_to_string body in
-    (* Printf.printf "Read string \"%s\" from %s\n" str server.name; *)
-    (* flush Stdlib.stdout; *)
+    debug "Read socket string \"%s\" from %s" str server.name;
     str
 
   (** Read a single byte from the server*)
@@ -173,14 +177,12 @@ module Server = struct
     let sock_fd = server.socket in
     let header = read_exact sock_fd 1 in
     let c = Char.code (Bytes.get header 0) in
-    (* Printf.printf "Read byte \"%d\" from %s\n" c server.name; *)
-    (* flush Stdlib.stdout; *)
+    debug "Read byte \"%d\" from %s" c server.name;
     c
 
   (** Send a string to the server with the 32 bit size then content format *)
   let write_string server str =
-    (* Printf.printf "Writing \"%s\" to %s\n" str server.name; *)
-    (* flush Stdlib.stdout; *)
+    debug "Writing \"%s\" to %s" str server.name;
     let sock_fd = server.socket in
     let len = String.length str in
     let msg = Bytes.create (len + 4) in

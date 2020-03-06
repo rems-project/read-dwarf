@@ -101,6 +101,7 @@ let options =
     cfg_dot_file;
     cfg_source_nodes;
     cfg_source_nodes2;
+    CommonOpt.logs_term;
   ]
 
 let full_term = Term.(func_options options Analyse.process_file $ const ())

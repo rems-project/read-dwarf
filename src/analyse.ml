@@ -1,3 +1,7 @@
+open Logs.Logger (struct
+  let str = "Analyse"
+end)
+
 open Printf
 
 type natural = Nat_big_num.num

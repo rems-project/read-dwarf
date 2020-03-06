@@ -1,5 +1,9 @@
 open Isla
 
+open Logs.Logger (struct
+  let str = "IslaType"
+end)
+
 type 'a vector = 'a Vector.t
 
 type 'a hvector = 'a HashVector.t
@@ -30,7 +34,6 @@ let expect_bv s (l, t) =
 let expect_enum s (l, t) =
   match t with Ty_Enum n -> n | _ -> raise (TypeError (l, "A enumeration was expected :" ^ s))
 
-(* TODO improve types errors *)
 let type_unop l (u : unop) ((lt, t) as ltt) : ty =
   match u with
   | Not ->
@@ -49,7 +52,6 @@ let type_unop l (u : unop) ((lt, t) as ltt) : ty =
       Ty_BitVec (b + 1 - a)
   | ZeroExtend m | SignExtend m -> Ty_BitVec (expect_bv PP.(sprintc @@ pp_unop u) ltt + m)
 
-(* TODO improve types errors *)
 let type_binop l (b : binop) ((lt, t) as ltt) ((lt', t') as ltt') : ty =
   let bv_same () =
     let n = expect_bv PP.(sprintc @@ pp_binop b) ltt in
@@ -105,16 +107,16 @@ let rec type_valu loc (cont : type_context) : valu -> Reg.typ = function
       List.iter (fun (name, v) -> ignore @@ Reg.add_field rs name (type_valu loc cont v)) l;
       Struct rs
   | Val_Enum (n, _) -> Plain (Ty_Enum n)
-  | Val_List _ -> Warn.fatal "valu list not implemented"
-  | Val_Vector _ -> Warn.fatal "valu list not implemented"
-  | Val_Unit -> Warn.fatal "valu unit not implemented"
-  | Val_NamedUnit _ -> Warn.fatal "valu named unit not implemented"
-  | Val_Poison -> Warn.fatal "Hey I got poisoned! Bad sail !"
-  | Val_String _ -> Warn.fatal "valu string not implemented"
+  | Val_List _ -> fatal "valu list not implemented"
+  | Val_Vector _ -> fatal "valu list not implemented"
+  | Val_Unit -> fatal "valu unit not implemented"
+  | Val_NamedUnit _ -> fatal "valu named unit not implemented"
+  | Val_Poison -> fatal "Hey I got poisoned! Bad sail !"
+  | Val_String _ -> fatal "valu string not implemented"
 
 let rec ltype_expr (cont : type_context) : 'v lexp -> lty = function
   | Var (Free var, l) -> (l, HashVector.get cont var)
-  | Var (_, _) -> Warn.fatal "Non free variable typing unimplemented"
+  | Var (_, _) -> fatal "Non free variable typing unimplemented"
   | Bits (str, l) ->
       (l, Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2))
   | Bool (_, l) -> (l, Ty_Bool)

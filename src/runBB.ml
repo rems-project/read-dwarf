@@ -6,6 +6,10 @@ open Cmdliner
 open CommonOpt
 module SMT = Z3
 
+open Logs.Logger (struct
+  let str = "RunBB"
+end)
+
 type state = State.t
 
 (* TODO control flow with lazyness *)
@@ -42,7 +46,7 @@ let run_bb arch trcs typ run simp elfname sym len =
     flush stdout;
     Z3.stop ();
     IslaServer.stop ()
-  with Not_found -> Warn.fatal "The symbol %s was not found in %s\n" sym elfname
+  with Not_found -> fatal "The symbol %s was not found in %s\n" sym elfname
 
 let trcs =
   let doc = "Print the isla traces of the basic block" in

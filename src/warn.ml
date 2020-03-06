@@ -2,13 +2,12 @@
    Idem for nonfatal
 *)
 
+module L = Logs.Logger (struct
+  let str = "Warn"
+end)
+
 (** Report a fatal error in the Printf style format *)
-let fatal fmt =
-  Printf.kfprintf
-    (fun _ ->
-      flush stderr;
-      exit 1)
-    stderr fmt
+let fatal fmt = L.fatal fmt
 
 (** Report a non-fatal error in the Printf style format *)
-let nonfatal fmt = Printf.kfprintf (fun _ -> flush stderr) stderr fmt
+let nonfatal fmt = L.err fmt

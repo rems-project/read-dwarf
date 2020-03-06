@@ -6,6 +6,10 @@
     connect to it.
 *)
 
+open Logs.Logger (struct
+  let str = "IslaServer"
+end)
+
 (** Bump when updating isla *)
 let required_version = "dev-17b3d0eafa04bb839817434c7e639d7b56fd2ed9"
 
@@ -131,24 +135,22 @@ let send_request req = req |> string_of_request |> send_string_request
 (** Stop isla client by sending a stop request *)
 let stop () =
   send_request STOP;
-  raw_stop ()
+  raw_stop ();
+  info "Isla stopped"
 
 (** Start isla and check version *)
 let start arch =
   raw_start arch;
   let version = request VERSION |> expect_version in
-  if version = required_version then Printf.printf "Isla started with version %s\n" version
+  if version = required_version then info "Isla started with version %s" version
   else begin
     stop ();
-    failwith
-      (Printf.sprintf "Isla started with API version %s but version %s was required" version
-         required_version)
+    fatal "Isla started with API version %s but version %s was required" version required_version
   end
 
 (** Test that isla can start and keep a valid version *)
 let _ =
   Tests.add_test "IslaServer.version" (fun () ->
-      print_endline "This test will log";
       start "aarch64.ir";
       stop ();
       true)
@@ -160,6 +162,7 @@ module Cmd = struct
   open CommonOpt
 
   let server_test arch =
+    base "Starting";
     Random.self_init ();
     raw_start arch;
     try
@@ -180,7 +183,7 @@ module Cmd = struct
         stop ();
         raise e
 
-  let term = Term.(func_option isla_client server_test $ arch)
+  let term = Term.(func_options [isla_client; logs_term] server_test $ arch)
 
   let info =
     let doc = "Raw isla server interaction." in

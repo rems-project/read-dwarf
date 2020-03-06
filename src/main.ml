@@ -31,4 +31,5 @@ let commands = if Tests.enable_tests then Tests.command :: pcommands else pcomma
 let _ = Printexc.record_backtrace true
 
 (** main *)
+
 let _ = Term.exit @@ Term.eval_choice Default.command commands

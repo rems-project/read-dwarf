@@ -24,6 +24,10 @@
 
 *)
 
+open Logs.Logger (struct
+  let str = "Z3"
+end)
+
 open Isla
 
 (*****************************************************************************)
@@ -148,7 +152,7 @@ let get_version () =
 let start () =
   raw_start ();
   let ver = get_version () in
-  Printf.printf "Z3 started  with version %s\n" ver;
+  info "Z3 started with version %s" ver;
   flush stdout;
   send_string_request SmtIntro.intro;
   push ()
@@ -157,7 +161,7 @@ let start () =
 let stop () =
   send_string_request "(exit)";
   raw_stop ();
-  Printf.printf "Closed connection with Z3\n";
+  info "Closed connection with Z3";
   flush stdout
 
 (*****************************************************************************)

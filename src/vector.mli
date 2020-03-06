@@ -47,5 +47,8 @@ val map2 : ('a -> 'b -> 'c) -> 'a t -> 'b t -> 'c t
 (** Map the function on the vector mutably by replacing each cell by the result of the function *)
 val map_mut : ('a -> 'a) -> 'a t -> unit
 
+(** Write the value in all the cells of the vector *)
+val fill_all : 'a t -> 'a -> unit
+
 (** Vector pretty printer *)
 val pp : ('a -> PP.document) -> 'a t -> PP.document

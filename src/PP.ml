@@ -14,6 +14,10 @@ let ( $ ) = ( @@ )
 
 let fprint (out : out_channel) (doc : document) = ToChannel.pretty 0.75 150 out doc
 
+let fprintln (out : out_channel) (doc : document) =
+  fprint out (doc ^^ hardline);
+  flush out
+
 let print doc = fprint stdout doc
 
 let println doc =

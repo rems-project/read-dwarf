@@ -3,6 +3,10 @@
 
 *)
 
+open Logs.Logger (struct
+  let str = "Tests"
+end)
+
 open Cmdliner
 open CommonOpt
 
@@ -20,8 +24,7 @@ let add_reset name f = if enable_tests then Hashtbl.add resets name f
 let reset () =
   Hashtbl.iter
     (fun name f ->
-      try f ()
-      with e -> Warn.fatal "Reset function %s has thrown: %s\n" name (Printexc.to_string e))
+      try f () with e -> fatal "Reset function %s has thrown: %s\n" name (Printexc.to_string e))
     resets
 
 (** Test failure is either when it returns false or throws *)
@@ -35,11 +38,11 @@ let add_test name f = if enable_tests then Hashtbl.add tests name f
 let success = ref true
 
 let run_test name (f : test) =
-  print_string ("Running test " ^ name ^ ": ");
+  if not !CommonOpt.quiet_ref then print_string ("Running test " ^ name ^ ": ");
   flush stdout;
   reset ();
   try
-    if f () then print_endline "Success"
+    if f () then (if not !CommonOpt.quiet_ref then print_endline "Success")
     else begin
       print_endline "Failure";
       success := false
@@ -51,7 +54,7 @@ let run_test name (f : test) =
 
 let run_test_name name =
   try run_test name (Hashtbl.find tests name)
-  with Not_found -> Warn.fatal "Test %s doesn't exist\n" name
+  with Not_found -> fatal "Test %s doesn't exist\n" name
 
 let run_tests testl =
   if testl = [] then Hashtbl.iter run_test tests else List.iter run_test_name testl
@@ -63,7 +66,7 @@ let tests_arg =
 let test_cmd tests =
   run_tests tests;
   if !success then begin
-    print_endline "All unit tests passed";
+    base "All unit tests passed";
     Ok ()
   end
   else Error (`Msg "Some test failed")

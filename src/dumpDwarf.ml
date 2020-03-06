@@ -5,6 +5,7 @@
 *)
 
 open Cmdliner
+open CommonOpt
 
 let dump_dwarf file =
   let dw = Dw.of_file file in
@@ -21,6 +22,6 @@ let info =
   in
   Term.(info "dump-dwarf" ~doc ~exits:default_exits)
 
-let term = Term.(const dump_dwarf $ elf)
+let term = Term.(func_option logs_term dump_dwarf $ elf)
 
 let command = (term, info)

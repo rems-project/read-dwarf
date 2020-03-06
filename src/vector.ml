@@ -58,12 +58,10 @@ let map_mut f vec =
     Res.Array.unsafe_get vec i |> f |> Res.Array.unsafe_set vec i
   done
 
+let fill_all vec elem =
+  let len = length vec in
+  for i = 0 to len - 1 do
+    Res.Array.unsafe_set vec i elem
+  done
+
 let pp conv vec = PP.(!^"vec" ^^ (vec |> to_array |> array conv))
-
-let vec_length_test () =
-  let v = empty () in
-  add_one v 1;
-  add_one v 1;
-  length v = 2
-
-let _ = Tests.add_test "Vector.length" vec_length_test

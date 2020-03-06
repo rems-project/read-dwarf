@@ -125,7 +125,7 @@ let isla_f2m direct hex bin sym : isla_mode Term.ret =
   | (false, false, true) -> `Ok BIN
   | _ -> `Error (false, "You cannot use -d/--direct, -b/--bin or -h/--hex at the same time")
 
-let isla_mode_term = Term.(ret (const isla_f2m $ direct $ hex $ bin $ sym))
+let isla_mode_term = Term.(ret (func_option logs_term isla_f2m $ direct $ hex $ bin $ sym))
 
 let isla_mode_to_request imode input =
   match imode with

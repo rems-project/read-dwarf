@@ -1,4 +1,7 @@
-(** This module represent ctypes as they are represented internally *)
+(** This module represent ctypes as they are represented internally
+
+    WIP, not documented see notes011-2020-03-03-types.
+*)
 
 module SMap = Map.Make (String)
 

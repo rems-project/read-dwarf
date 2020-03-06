@@ -1,6 +1,7 @@
 (** This module adds a command to dump the symbol of an ELF file with their content *)
 
 open Cmdliner
+open CommonOpt
 
 let dump_symbols file =
   let elf = ElfFile.of_file file in
@@ -17,6 +18,6 @@ let info =
   let doc = "Dump the elf symbol with their size and content" in
   Term.(info "dump-sym" ~doc ~exits:default_exits)
 
-let term = Term.(const dump_symbols $ elf)
+let term = Term.(func_option logs_term dump_symbols $ elf)
 
 let command = (term, info)

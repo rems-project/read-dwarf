@@ -2,6 +2,10 @@
 
 open Fun
 
+open Logs.Logger (struct
+  let str = "Loc"
+end)
+
 (** Type of a mapping from dwarf numbered registers to actual registers from {!Reg} *)
 type arch_map = Reg.path array
 
@@ -80,7 +84,7 @@ let of_linksem ?(amap = aarch64_map) (elf : Elf.File.t) : linksem_t -> t =
     when Z.to_int code = vDW_OP_addr -> (
       try Global (Elf.SymTbl.of_addr_with_offset elf.symbols @@ int_of_oav arg)
       with Not_found ->
-        Warn.nonfatal "Symbol at 0x%x not found in Loc.of_linksem\n" (int_of_oav arg);
+        warn "Symbol at 0x%x not found in Loc.of_linksem" (int_of_oav arg);
         Dwarf ops
     )
   (* Other *)
