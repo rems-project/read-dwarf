@@ -1408,9 +1408,20 @@ let correlate_source_line test1 graph1 test2 graph2 : graph_cfg =
 (*        render control-flow branches in text output                        *)
 (*****************************************************************************)
 
-type strength = L | B 
-  
-type glpyh = Glr of strength | Gud of strength | Gru of strength | Grd of strength | Grud of strength | Glrud of strength * strength | Ggt | Glt | GX | Gnone | Gquery
+type strength = L | B
+
+type glpyh =
+  | Glr of strength
+  | Gud of strength
+  | Gru of strength
+  | Grd of strength
+  | Grud of strength
+  | Glrud of strength * strength
+  | Ggt
+  | Glt
+  | GX
+  | Gnone
+  | Gquery
 
 let max_branch_distance = 300 (* instructions *)
 
@@ -1489,8 +1500,8 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
               match
                 match (buf.(k').(c'), g) with
                 | (Gnone, g) -> Some g
-                | (Glr s1, Gud s2) -> Some (Glrud (s1,s2))
-                | (Gud s2, Glr s1) -> Some (Glrud (s1,s2))
+                | (Glr s1, Gud s2) -> Some (Glrud (s1, s2))
+                | (Gud s2, Glr s1) -> Some (Glrud (s1, s2))
                 | (_, _) -> None
               with
               | None -> false
@@ -1529,17 +1540,18 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
             in
 
             let s = if k_first < k then B else L in
-            
+
             if is_target || is_origin then
               paint k' c
                 ( match (k_first = k', k' = k_last) with
                 | (true, false) -> Grd s
                 | (false, false) -> Grud s
                 | (false, true) -> Gru s
-                | (true, true) -> Gnone 
+                | (true, true) -> Gnone
                 )
               &&
-              if is_target then paint_target_arrow k' (c + 1) (if is_self_target then GX else Ggt) s
+              if is_target then
+                paint_target_arrow k' (c + 1) (if is_self_target then GX else Ggt) s
               else paint_origin_line k' (c + 1) s
             else paint_allowing_crossing k' c (Gud s)
           in
@@ -1577,17 +1589,15 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
     | Gru L -> "\u{2514}" (*   *)
     | Grd L -> "\u{250c}" (*   *)
     | Grud L -> "\u{251c}" (*   *)
-    | Glrud (L,L) -> "\u{253c}" (*   *)
-
+    | Glrud (L, L) -> "\u{253c}" (*   *)
     | Glr B -> "\u{2550}" (*   *)
     | Gud B -> "\u{2551}" (*   *)
     | Gru B -> "\u{255a}" (*   *)
     | Grd B -> "\u{2554}" (*   *)
     | Grud B -> "\u{2561}" (*   *)
-    | Glrud (B,B) -> "\u{256c}" (*   *)
-    | Glrud (L,B) -> "\u{256b}" (*   *)
-    | Glrud (B,L) -> "\u{256a}" (*   *)
-
+    | Glrud (B, B) -> "\u{256c}" (*   *)
+    | Glrud (L, B) -> "\u{256b}" (*   *)
+    | Glrud (B, L) -> "\u{256a}" (*   *)
     | Ggt -> ">" (*   *)
     | Glt -> "<" (*   *)
     | GX -> "X" (*   *)
@@ -1603,9 +1613,13 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
           String.concat ""
             (List.map2
                (fun g1 g2 ->
-                 if (List.mem g1 [Gud L; Grd L; Grud L; Glrud (L,L); Glrud (B,L)] && List.mem g2 [Gud L; Gru L; Grud L; Glrud (L,L); Glrud (B,L)]) 
+                 if
+                   List.mem g1 [Gud L; Grd L; Grud L; Glrud (L, L); Glrud (B, L)]
+                   && List.mem g2 [Gud L; Gru L; Grud L; Glrud (L, L); Glrud (B, L)]
                  then pp_glyph (Gud L)
-                 else if (List.mem g1 [Gud B; Grd B; Grud B; Glrud (L,B); Glrud (B,B)] && List.mem g2 [Gud B; Gru B; Grud B; Glrud (L,B); Glrud (B,B)])
+                 else if
+                   List.mem g1 [Gud B; Grd B; Grud B; Glrud (L, B); Glrud (B, B)]
+                   && List.mem g2 [Gud B; Gru B; Grud B; Glrud (L, B); Glrud (B, B)]
                  then pp_glyph (Gud B)
                  else pp_glyph Gnone)
                (Array.to_list buf.(k - 1))
