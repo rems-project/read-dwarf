@@ -1405,6 +1405,203 @@ let correlate_source_line test1 graph1 test2 graph2 : graph_cfg =
   ([], [], edges)
 
 (*****************************************************************************)
+(*        render control-flow branches in text output                        *)
+(*****************************************************************************)
+
+type glpyh = Glr | Gud | Gru | Grd | Grud | Glrud | Ggt | Glt | GX | Gnone | Gquery
+
+let max_branch_distance = 300 (* instructions *)
+
+let render_ascii_control_flow width control_flow_insns_with_targets_array :
+    string array * string array (*inbetweens*) * string (* padding *) =
+  let buf = Array.make_matrix (Array.length control_flow_insns_with_targets_array) width Gnone in
+
+  let render k =
+    let (addr, i, c, targets1) = control_flow_insns_with_targets_array.(k) in
+
+    let render_target_kind = function
+      | T_plain_successor -> false
+      | T_branch -> true
+      | T_branch_and_link_call -> false
+      | T_branch_and_link_call_noreturn -> false
+      | T_branch_and_link_successor -> false
+      | T_branch_cond_branch -> true
+      | T_branch_cond_successor -> false
+      | T_branch_register -> true
+      | T_smc_hvc_successor -> false
+    in
+
+    (* filter out targets that we're not going to render *)
+    let targets2 = List.filter (function (tk, a', k', s) -> render_target_kind tk) targets1 in
+
+    match targets2 with
+    | [] -> ()
+    | _ ->
+        (* sort targets by target instruction index *)
+        let targets3 =
+          List.sort_uniq
+            (function
+              | (tk', a', k', s') -> (
+                  function (tk'', a'', k'', s'') -> compare k' k''
+                ))
+            targets2
+        in
+
+        let rec last xs =
+          match xs with
+          | [x] -> x
+          | x :: (x' :: xs' as xs'') -> last xs''
+          | _ -> raise (Failure "last")
+        in
+        let k_first = min k (match List.hd targets3 with (tk', a', k', s') -> k') in
+        let k_last = max k (match last targets3 with (tk', a', k', s') -> k') in
+
+        Printf.printf "%s %s\n" (pp_addr addr)
+          (String.concat "," (List.map (function (tk', a', k', s') -> pp_addr a') targets3));
+
+        let rec forall k1 k2 f = if k1 > k2 then true else f k1 && forall (k1 + 1) k2 f in
+
+        let rec largest c1 c2 f =
+          if c2 < c1 then None else if f c2 then Some c2 else largest c1 (c2 - 1) f
+        in
+
+        let try_at_column dry_run c =
+          let try_for_row k' =
+            let is_target = List.exists (function (tk'', a'', k'', s'') -> k'' = k') targets3 in
+            let is_origin = k' = k in
+            let is_self_target = is_target && is_origin in
+            let is_first = k' = k_first in
+            let is_last = k' = k_last in
+
+            let free k' c' = buf.(k').(c') = Gnone in
+
+            let paint k' c' g =
+              if buf.(k').(c') = Gnone then (
+                if dry_run then () else buf.(k').(c') <- g;
+                true
+              )
+              else false
+            in
+
+            let paint_allowing_crossing k' c' g =
+              match
+                match (buf.(k').(c'), g) with
+                | (Gnone, g) -> Some g
+                | (Glr, Gud) -> Some Glrud
+                | (Gud, Glr) -> Some Glrud
+                | (_, _) -> None
+              with
+              | None -> false
+              | Some g' ->
+                  if dry_run then () else buf.(k').(c') <- g';
+                  true
+            in
+
+            let paint_target_arrow k' c' ghead =
+              match
+                largest c' (width - 1) (fun c'' ->
+                    free k' c''
+                    && forall c' (c'' - 1) (fun c''' ->
+                           buf.(k').(c''') = Gnone || buf.(k').(c''') = Gud))
+              with
+              | Some c_head ->
+                  if dry_run then () else buf.(k').(c_head) <- ghead;
+                  for c'' = c' to c_head - 1 do
+                    ignore (paint_allowing_crossing k' c'' Glr)
+                  done;
+                  true
+              | None -> false
+            in
+
+            let rec paint_origin_line k' c' =
+              match
+                largest c' (width - 1) (fun c'' ->
+                    forall c' c'' (fun c''' -> buf.(k').(c''') = Gnone || buf.(k').(c''') = Gud))
+              with
+              | Some c_head ->
+                  for c'' = c' to c_head do
+                    ignore (paint_allowing_crossing k' c'' Glr)
+                  done;
+                  true
+              | None -> false
+            in
+
+            if is_target || is_origin then
+              paint k' c
+                ( match (k_first = k', k' = k_last) with
+                | (true, false) -> Grd
+                | (false, false) -> Grud
+                | (false, true) -> Gru
+                | (true, true) -> Gnone
+                )
+              &&
+              if is_target then paint_target_arrow k' (c + 1) (if is_self_target then GX else Ggt)
+              else paint_origin_line k' (c + 1)
+            else paint_allowing_crossing k' c Gud
+          in
+
+          forall k_first k_last try_for_row
+        in
+
+        if k_last - k_first < max_branch_distance then
+          match largest 1 (width - 2) (try_at_column true) with
+          | Some c -> ignore (try_at_column false c)
+          | None -> buf.(k).(0) <- Gquery
+        else begin
+          (*hackish paint_long_branch, ignoring whatever is underneath*)
+          buf.(k).(width - 1) <- Glt;
+          buf.(k).(width - 2) <- Glt;
+          List.iter
+            (function
+              | (tk', a', k', s') ->
+                  let g = if k' = k then GX else Ggt in
+                  buf.(k').(width - 1) <- g;
+                  buf.(k').(width - 2) <- g)
+            targets3
+        end
+  in
+  Array.iteri
+    (function
+      | k -> (
+          function _ -> render k
+        ))
+    control_flow_insns_with_targets_array;
+
+  let pp_glyph = function
+    | Glr -> "\u{2500}" (*   *)
+    | Gud -> "\u{2502}" (*   *)
+    | Gru -> "\u{2514}" (*   *)
+    | Grd -> "\u{250c}" (*   *)
+                        (* "┌"  *)
+    | Grud -> "\u{251c}" (*   *)
+    | Glrud -> "\u{253c}" (*   *)
+    | Ggt -> ">" (*   *)
+    | Glt -> "<" (*   *)
+    | GX -> "X" (*   *)
+    | Gnone -> " " (*   *)
+    | Gquery -> "?"
+    (*   *)
+  in
+
+  let inbetweens =
+    Array.init (Array.length buf) (function k ->
+        if k = 0 then String.make width ' '
+        else
+          String.concat ""
+            (List.map2
+               (fun g1 g2 ->
+                 if List.mem g1 [Gud; Grd; Grud; Glrud] && List.mem g2 [Gud; Gru; Grud; Glrud]
+                 then pp_glyph Gud
+                 else pp_glyph Gnone)
+               (Array.to_list buf.(k - 1))
+               (Array.to_list buf.(k))))
+  in
+
+  ( Array.map (function row -> String.concat "" (List.map pp_glyph (Array.to_list row))) buf,
+    inbetweens,
+    String.make width ' ' )
+
+(*****************************************************************************)
 (*        call-graph                                                         *)
 (*****************************************************************************)
 
@@ -1694,6 +1891,9 @@ type analysis = {
   come_froms_array : (target_kind * addr * index * control_flow_insn * string) list array;
   inlining_array : (string (*ppd_labels*) * string) (*new inlining*) array;
   pp_inlining_label_prefix : string -> string;
+  rendered_control_flow : string array;
+  rendered_control_flow_inbetweens : string array;
+  rendered_control_flow_prefix : string;
 }
 
 let analyse_test test filename_objdump_d filename_branch_table =
@@ -1737,7 +1937,12 @@ let analyse_test test filename_objdump_d filename_branch_table =
   let come_froms_array = mk_come_from_array control_flow_insns_with_targets_array in
 
   (* compute the inlining data *)
+  let acf_width = 14 in
   let (inlining_array, pp_inlining_label_prefix) = mk_inlining_array test instructions in
+
+  let (rendered_control_flow, rendered_control_flow_inbetweens, rendered_control_flow_prefix) =
+    render_ascii_control_flow acf_width control_flow_insns_with_targets_array
+  in
 
   let an =
     {
@@ -1754,6 +1959,9 @@ let analyse_test test filename_objdump_d filename_branch_table =
       come_froms_array;
       inlining_array;
       pp_inlining_label_prefix;
+      rendered_control_flow;
+      rendered_control_flow_inbetweens;
+      rendered_control_flow_prefix;
     }
   in
 
@@ -1789,7 +1997,10 @@ let pp_instruction test an ((addr : natural), (i : natural)) =
   let elf_symbols = an.elf_symbols_array.(k) in
   (match elf_symbols with [] -> () | _ -> last_var_info := []);
 
-  (if come_froms' <> [] || elf_symbols <> [] then "\n" else "")
+  ( if come_froms' <> [] || elf_symbols <> [] then
+    an.pp_inlining_label_prefix "" ^ an.rendered_control_flow_inbetweens.(k) ^ "\n"
+  else ""
+  )
   ^ String.concat "" (List.map (fun (s : string) -> pp_addr addr ^ " <" ^ s ^ ">:\n") elf_symbols)
   (* the new inlining info for this address *)
   ^ ppd_new_inlining
@@ -1800,7 +2011,9 @@ let pp_instruction test an ((addr : natural), (i : natural)) =
           match pp_dwarf_source_file_lines () test.dwarf_static true addr with
           | Some s ->
               (* the inlining label prefix *)
-              an.pp_inlining_label_prefix ppd_labels ^ s ^ "\n"
+              an.pp_inlining_label_prefix ppd_labels
+              ^ an.rendered_control_flow_inbetweens.(k)
+              ^ s ^ "\n"
           | None -> ""
         in
         if source_info = !last_source_info then "" (*"unchanged\n"*)
@@ -1818,7 +2031,9 @@ let pp_instruction test an ((addr : natural), (i : natural)) =
         else (
           last_frame_info := frame_info;
           (* the inlining label prefix *)
-          an.pp_inlining_label_prefix ppd_labels ^ frame_info
+          an.pp_inlining_label_prefix ppd_labels
+          ^ an.rendered_control_flow_inbetweens.(k)
+          ^ frame_info
         )
       else ""
     end
@@ -1834,6 +2049,8 @@ let pp_instruction test an ((addr : natural), (i : natural)) =
     end
   (* the inlining label prefix *)
   ^ an.pp_inlining_label_prefix ppd_labels
+  (* the rendered control flow *)
+  ^ an.rendered_control_flow.(k)
   (* the address and (hex) instruction *)
   ^ pp_addr addr
   ^ ":  " ^ pp_addr i
