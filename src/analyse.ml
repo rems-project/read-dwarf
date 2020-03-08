@@ -1408,30 +1408,35 @@ let correlate_source_line test1 graph1 test2 graph2 : graph_cfg =
 (*        render control-flow branches in text output                        *)
 (*****************************************************************************)
 
-type strength = L | B
+type weight = L | B
 
-type glpyh =
-  | Glr of strength
-  | Gud of strength
-  | Gru of strength
-  | Grd of strength
-  | Grud of strength
-  | Glrud of strength * strength
+type glyph =
+  | Glr of weight
+  | Gud of weight
+  | Gru of weight
+  | Grd of weight
+  | Grud of weight
+  | Glrud of weight * weight
   | Ggt
   | Glt
   | GX
   | Gnone
   | Gquery
 
-let max_branch_distance = 300 (* instructions *)
+type arrow = {
+  source : index;
+  targets : index list;
+  first : index;
+  (* min of source and all targets *)
+  last : index;
+  (* max of source and all targets *)
+  weight : weight;
+}
 
-let render_ascii_control_flow width control_flow_insns_with_targets_array :
-    string array * string array (*inbetweens*) * string (* padding *) =
-  let buf = Array.make_matrix (Array.length control_flow_insns_with_targets_array) width Gnone in
-
-  let render k =
-    let (addr, i, c, targets1) = control_flow_insns_with_targets_array.(k) in
-
+let render_ascii_control_flow max_branch_distance max_width control_flow_insns_with_targets_array
+    : string array * string array (*inbetweens*) * int (* actual_width *) =
+  (* pull the arrows out of control_flow_insns_with_targets_array *)
+  let arrow_from (k : index) (addr, i, c, targets1) : arrow option =
     let render_target_kind = function
       | T_plain_successor -> false
       | T_branch -> true
@@ -1448,7 +1453,7 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
     let targets2 = List.filter (function (tk, a', k', s) -> render_target_kind tk) targets1 in
 
     match targets2 with
-    | [] -> ()
+    | [] -> None
     | _ ->
         (* sort targets by target instruction index *)
         let targets3 =
@@ -1459,6 +1464,8 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
                 ))
             targets2
         in
+        (* project out just the index *)
+        let targets4 = List.map (function (tk', a', k', s') -> k') targets3 in
 
         let rec last xs =
           match xs with
@@ -1466,123 +1473,141 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
           | x :: (x' :: xs' as xs'') -> last xs''
           | _ -> raise (Failure "last")
         in
-        let k_first = min k (match List.hd targets3 with (tk', a', k', s') -> k') in
-        let k_last = max k (match last targets3 with (tk', a', k', s') -> k') in
+        let first = min k (List.hd targets4) in
+        let last = max k (last targets4) in
 
-        Printf.printf "%s %s\n" (pp_addr addr)
-          (String.concat "," (List.map (function (tk', a', k', s') -> pp_addr a') targets3));
-
-        let rec forall k1 k2 f = if k1 > k2 then true else f k1 && forall (k1 + 1) k2 f in
-
-        let rec largest c1 c2 f =
-          if c2 < c1 then None else if f c2 then Some c2 else largest c1 (c2 - 1) f
-        in
-
-        let try_at_column dry_run c =
-          let try_for_row k' =
-            let is_target = List.exists (function (tk'', a'', k'', s'') -> k'' = k') targets3 in
-            let is_origin = k' = k in
-            let is_self_target = is_target && is_origin in
-            let is_first = k' = k_first in
-            let is_last = k' = k_last in
-
-            let free k' c' = buf.(k').(c') = Gnone in
-
-            let paint k' c' g =
-              if buf.(k').(c') = Gnone then (
-                if dry_run then () else buf.(k').(c') <- g;
-                true
-              )
-              else false
-            in
-
-            let paint_allowing_crossing k' c' g =
-              match
-                match (buf.(k').(c'), g) with
-                | (Gnone, g) -> Some g
-                | (Glr s1, Gud s2) -> Some (Glrud (s1, s2))
-                | (Gud s2, Glr s1) -> Some (Glrud (s1, s2))
-                | (_, _) -> None
-              with
-              | None -> false
-              | Some g' ->
-                  if dry_run then () else buf.(k').(c') <- g';
-                  true
-            in
-
-            let paint_target_arrow k' c' ghead s =
-              match
-                largest c' (width - 1) (fun c'' ->
-                    free k' c''
-                    && forall c' (c'' - 1) (fun c''' ->
-                           buf.(k').(c''') = Gnone || buf.(k').(c''') = Gud s))
-              with
-              | Some c_head ->
-                  if dry_run then () else buf.(k').(c_head) <- ghead;
-                  for c'' = c' to c_head - 1 do
-                    ignore (paint_allowing_crossing k' c'' (Glr s))
-                  done;
-                  true
-              | None -> false
-            in
-
-            let rec paint_origin_line k' c' s =
-              match
-                largest c' (width - 1) (fun c'' ->
-                    forall c' c'' (fun c''' -> buf.(k').(c''') = Gnone || buf.(k').(c''') = Gud s))
-              with
-              | Some c_head ->
-                  for c'' = c' to c_head do
-                    ignore (paint_allowing_crossing k' c'' (Glr s))
-                  done;
-                  true
-              | None -> false
-            in
-
-            let s = if k_first < k then B else L in
-
-            if is_target || is_origin then
-              paint k' c
-                ( match (k_first = k', k' = k_last) with
-                | (true, false) -> Grd s
-                | (false, false) -> Grud s
-                | (false, true) -> Gru s
-                | (true, true) -> Gnone
-                )
-              &&
-              if is_target then
-                paint_target_arrow k' (c + 1) (if is_self_target then GX else Ggt) s
-              else paint_origin_line k' (c + 1) s
-            else paint_allowing_crossing k' c (Gud s)
-          in
-
-          forall k_first k_last try_for_row
-        in
-
-        if k_last - k_first < max_branch_distance then
-          match largest 1 (width - 2) (try_at_column true) with
-          | Some c -> ignore (try_at_column false c)
-          | None -> buf.(k).(0) <- Gquery
-        else begin
-          (*hackish paint_long_branch, ignoring whatever is underneath*)
-          buf.(k).(width - 1) <- Glt;
-          buf.(k).(width - 2) <- Glt;
-          List.iter
-            (function
-              | (tk', a', k', s') ->
-                  let g = if k' = k then GX else Ggt in
-                  buf.(k').(width - 1) <- g;
-                  buf.(k').(width - 2) <- g)
-            targets3
-        end
+        Some
+          { source = k; targets = targets4; first; last; weight = (if first < k then B else L) }
   in
-  Array.iteri
-    (function
-      | k -> (
-          function _ -> render k
-        ))
-    control_flow_insns_with_targets_array;
 
+  let array_filter_mapi (f : int -> 'a -> 'b option) (a : 'a array) : 'b list =
+    let rec g k acc =
+      if k < 0 then acc else g (k - 1) (match f k a.(k) with None -> acc | Some b -> b :: acc)
+    in
+    g (Array.length a - 1) []
+  in
+
+  let arrows0 : arrow list = array_filter_mapi arrow_from control_flow_insns_with_targets_array in
+
+  (* sort by size, to render short arrows rightmost *)
+  let compare_arrow a1 a2 = compare (a1.last - a1.first) (a2.last - a2.first) in
+  let arrows = List.stable_sort compare_arrow arrows0 in
+
+  (* paint the arrows into a buffer of glyphs *)
+  let buf =
+    Array.make_matrix (Array.length control_flow_insns_with_targets_array) max_width Gnone
+  in
+  let leftmost_column_used = ref max_width in
+
+  let paint_arrow a =
+    let rec forall k1 k2 f = if k1 > k2 then true else f k1 && forall (k1 + 1) k2 f in
+
+    let rec largest c1 c2 f =
+      if c2 < c1 then None else if f c2 then Some c2 else largest c1 (c2 - 1) f
+    in
+
+    let try_at_column dry_run c =
+      let try_for_row k =
+        let is_target = List.mem k a.targets in
+        let is_source = k = a.source in
+        let is_self_target = is_target && is_source in
+
+        let free k c' = buf.(k).(c') = Gnone in
+
+        let paint k c' g =
+          if buf.(k).(c') = Gnone then (
+            if dry_run then () else buf.(k).(c') <- g;
+            true
+          )
+          else false
+        in
+
+        let paint_allowing_crossing k c' g =
+          match
+            match (buf.(k).(c'), g) with
+            | (Gnone, g) -> Some g
+            | (Glr w1, Gud w2) -> Some (Glrud (w1, w2))
+            | (Gud w2, Glr w1) -> Some (Glrud (w1, w2))
+            | (_, _) -> None
+          with
+          | None -> false
+          | Some g' ->
+              if dry_run then () else buf.(k).(c') <- g';
+              true
+        in
+
+        let paint_target_arrow k c' ghead w =
+          match
+            largest c' (max_width - 1) (fun c'' ->
+                free k c''
+                && forall c' (c'' - 1) (fun c''' ->
+                       buf.(k).(c''') = Gnone || buf.(k).(c''') = Gud w))
+          with
+          | Some c_head ->
+              if dry_run then () else buf.(k).(c_head) <- ghead;
+              for c'' = c' to c_head - 1 do
+                ignore (paint_allowing_crossing k c'' (Glr w))
+              done;
+              true
+          | None -> false
+        in
+
+        let paint_source_line k c' w =
+          match
+            largest c' (max_width - 1) (fun c'' ->
+                forall c' c'' (fun c''' ->
+                    match buf.(k).(c''') with Gnone -> true | Gud w -> true | _ -> false))
+          with
+          | Some c_head ->
+              for c'' = c' to c_head do
+                ignore (paint_allowing_crossing k c'' (Glr w))
+              done;
+              true
+          | None -> false
+        in
+
+        let w = a.weight in
+
+        if is_target || is_source then
+          paint k c
+            ( match (a.first = k, k = a.last) with
+            | (true, false) -> Grd w
+            | (false, false) -> Grud w
+            | (false, true) -> Gru w
+            | (true, true) -> Gnone
+            )
+          &&
+          if is_target then paint_target_arrow k (c + 1) (if is_self_target then GX else Ggt) w
+          else paint_source_line k (c + 1) w
+        else paint_allowing_crossing k c (Gud w)
+      in
+
+      forall a.first a.last try_for_row
+    in
+
+    if match max_branch_distance with None -> true | Some d -> a.last - a.first < d then
+      match largest 1 (max_width - 2) (try_at_column true) with
+      | Some c ->
+          ignore (try_at_column false c);
+          leftmost_column_used := min c !leftmost_column_used
+      | None -> buf.(a.source).(0) <- Gquery
+    else begin
+      (*hackish paint_long_branch, ignoring whatever is underneath*)
+      buf.(a.source).(max_width - 1) <- Glt;
+      buf.(a.source).(max_width - 2) <- Glt;
+      List.iter
+        (function
+          | k' ->
+              let g = if k' = a.source then GX else Ggt in
+              buf.(k').(max_width - 1) <- g;
+              buf.(k').(max_width - 2) <- g)
+        a.targets;
+      leftmost_column_used := min (max_width - 2) !leftmost_column_used
+    end
+  in
+  List.iter paint_arrow arrows;
+
+  (* convert glyph matrix into string array *)
   let pp_glyph = function
     | Glr L -> "\u{2500}" (*   *)
     | Gud L -> "\u{2502}" (*   *)
@@ -1606,6 +1631,10 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
     (*   *)
   in
 
+  (* actual width used *)
+  let width = max_width - !leftmost_column_used in
+
+  (* construct inter-line list of glphys  of vertical arrows for filler *)
   let inbetweens =
     Array.init (Array.length buf) (function k ->
         if k = 0 then String.make width ' '
@@ -1622,13 +1651,18 @@ let render_ascii_control_flow width control_flow_insns_with_targets_array :
                    && List.mem g2 [Gud B; Gru B; Grud B; Glrud (L, B); Glrud (B, B)]
                  then pp_glyph (Gud B)
                  else pp_glyph Gnone)
-               (Array.to_list buf.(k - 1))
-               (Array.to_list buf.(k))))
+               (Array.to_list (Array.sub buf.(k - 1) !leftmost_column_used width))
+               (Array.to_list (Array.sub buf.(k) !leftmost_column_used width))))
   in
 
-  ( Array.map (function row -> String.concat "" (List.map pp_glyph (Array.to_list row))) buf,
+  ( Array.map
+      (function
+        | row ->
+            String.concat ""
+              (List.map pp_glyph (Array.to_list (Array.sub row !leftmost_column_used width))))
+      buf,
     inbetweens,
-    String.make width ' ' )
+    width )
 
 (*****************************************************************************)
 (*        call-graph                                                         *)
@@ -1922,7 +1956,7 @@ type analysis = {
   pp_inlining_label_prefix : string -> string;
   rendered_control_flow : string array;
   rendered_control_flow_inbetweens : string array;
-  rendered_control_flow_prefix : string;
+  rendered_control_flow_width : int;
 }
 
 let analyse_test test filename_objdump_d filename_branch_table =
@@ -1966,11 +2000,16 @@ let analyse_test test filename_objdump_d filename_branch_table =
   let come_froms_array = mk_come_from_array control_flow_insns_with_targets_array in
 
   (* compute the inlining data *)
-  let acf_width = 14 in
   let (inlining_array, pp_inlining_label_prefix) = mk_inlining_array test instructions in
 
-  let (rendered_control_flow, rendered_control_flow_inbetweens, rendered_control_flow_prefix) =
-    render_ascii_control_flow acf_width control_flow_insns_with_targets_array
+  let acf_width = 50 in
+
+  let max_branch_distance = None in
+
+  (*Some 300*)
+  (* in instructions. or None for unlimited *)
+  let (rendered_control_flow, rendered_control_flow_inbetweens, rendered_control_flow_width) =
+    render_ascii_control_flow max_branch_distance acf_width control_flow_insns_with_targets_array
   in
 
   let an =
@@ -1990,7 +2029,7 @@ let analyse_test test filename_objdump_d filename_branch_table =
       pp_inlining_label_prefix;
       rendered_control_flow;
       rendered_control_flow_inbetweens;
-      rendered_control_flow_prefix;
+      rendered_control_flow_width;
     }
   in
 
