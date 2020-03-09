@@ -38,7 +38,9 @@ let of_elf (elf : Elf.File.t) =
     | Some d -> d
     | None -> dwarferror "Linksem extract_dwarf failed"
   in
-  let ldwarf_sdt = Dwarf.mk_sdt_dwarf ldwarf in
+  let ldwarf_sdt : Dwarf.sdt_dwarf =
+    Dwarf.mk_sdt_dwarf ldwarf (Dwarf.subprogram_line_extents ldwarf)
+  in
   let process_cu (funcs, vars) (cu : Dwarf.sdt_compilation_unit) =
     let nfuncs = List.rev_map (Func.of_linksem elf) cu.scu_subroutines in
     let nvars = List.rev_map (Var.of_linksem elf) cu.scu_vars in

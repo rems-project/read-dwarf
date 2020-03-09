@@ -8,7 +8,8 @@ C type information. The project will only work for binaries generated from C.
 
 ## Dependencies
 
-You need the lastest version of `linksem` from github pinned with opam to build.
+You need a specific `linksem` commit installed (See LINKSEM_COMMIT var in Makefile).
+The simplest way is to check it out and then pin it with opam.
 
 You also need to install `isla` and `isla-lang` via they respective Makefile.
 Warning for non-Rust users: You need to add ~/.cargo/bin to your PATH
