@@ -481,6 +481,16 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
   in
 
   (* this is the evaluator for a little stack-machine language used in the hafnium.branch-table files to describe the access pattern for each branch table *)
+  (*
+   n          push the index into the table
+   s in 0..9  left-shift the stack head by 2^s
+   r          push the branch table-base address
+   o          push the branch table offset address
+   +          replace the top two elements by their sum
+   b          read byte from the branch table
+   h          read two bytes from the branch table
+   W          read four byte from the branch table and sign-extend
+                                                            *)
   let rec eval_shift_expression (shift : string) (a_table : Nat_big_num.num)
       (a_offset : Nat_big_num.num) (i : Nat_big_num.num) (stack : Nat_big_num.num list) (pc : int)
       =
@@ -1628,7 +1638,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions_with_ta
       | Some c ->
           ignore (try_at_column false c);
           leftmost_column_used := min c !leftmost_column_used
-      | None -> buf.(a.source).(0) <- Gquery
+      | None -> buf.(a.source).(max_width - 1) <- Gquery
     else begin
       (*hackish paint_long_branch, ignoring whatever is underneath*)
       buf.(a.source).(max_width - 1) <- Glt;
@@ -1657,7 +1667,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions_with_ta
     | Gud B -> "\u{2551}" (*   *)
     | Gru B -> "\u{255a}" (*   *)
     | Grd B -> "\u{2554}" (*   *)
-    | Grud B -> "\u{2561}" (*   *)
+    | Grud B -> "\u{2560}" (*   *)
     | Glrud (B, B) -> "\u{256c}" (*   *)
     | Glrud (L, B) -> "\u{256b}" (*   *)
     | Glrud (B, L) -> "\u{256a}" (*   *)
@@ -2059,7 +2069,7 @@ let objdump_lines =
   (* compute the inlining data *)
   let (inlining, pp_inlining_label_prefix) = mk_inlining test instructions in
 
-  let acf_width = 50 in
+  let acf_width = 60 in
 
   let max_branch_distance = None in
 
