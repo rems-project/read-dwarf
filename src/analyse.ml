@@ -2075,74 +2075,86 @@ let analyse_test test filename_objdump_d filename_branch_table =
 
   an
 
-
 (*****************************************************************************)
 (* pretty-printing variable info from linksem simple die tree view, adapted from dwarf.lem  *)
 (*****************************************************************************)
 
-  let indent_level (indent: bool) (level:int):string=
-   if indent then
-    String.make (level*3) ' ' 
-  else
-    " "
-let indent_level_plus_one indent level:string=
-   if indent then
-    indent_level indent (level+1)
-  else
-    " "^"   "
+let indent_level (indent : bool) (level : int) : string =
+  if indent then String.make (level * 3) ' ' else " "
 
+let indent_level_plus_one indent level : string =
+  if indent then indent_level indent (level + 1) else " " ^ "   "
 
-let pp_sdt_concise_variable_or_formal_parameter (level:int) (svfp: Dwarf.sdt_variable_or_formal_parameter) : string=
-  let indent = (indent_level true level) in
-  ""
-  ^ indent
+let pp_sdt_concise_variable_or_formal_parameter (level : int)
+    (svfp : Dwarf.sdt_variable_or_formal_parameter) : string =
+  let indent = indent_level true level in
+  "" ^ indent
   (*  ^ indent ^ "cupdie:" ^  pp_cupdie3 svfp.svfp_cupdie ^ "\n"*)
-  (*^ indent ^ "name:" ^*) ^ svfp.svfp_name ^ "  "
-  (*^ indent ^ "kind:" *) ^  (match svfp.svfp_kind with SVPK_var -> "var" | SVPK_param -> "param" ) ^ "  " 
-  (*^ indent ^ "type:" *) ^  Dwarf.pp_type_info_deep svfp.svfp_type ^ "  "
-  (*^ indent ^ "const_value:"*) ^  (match svfp.svfp_const_value with | None -> "" | Some v -> "const:"^Nat_big_num.to_string v) ^ "  "
+  (*^ indent ^ "name:" ^*) ^ svfp.svfp_name
+  ^ "  "
+  (*^ indent ^ "kind:" *) ^ (match svfp.svfp_kind with SVPK_var -> "var" | SVPK_param -> "param")
+  ^ "  "
+  (*^ indent ^ "type:" *) ^ Dwarf.pp_type_info_deep svfp.svfp_type
+  ^ "  "
+  (*^ indent ^ "const_value:"*)
+  ^ (match svfp.svfp_const_value with None -> "" | Some v -> "const:" ^ Nat_big_num.to_string v)
+  ^ "  "
   (*^ indent ^ "external:" ^  show svfp.svfp_external ^ "\n"*)
   (*^ indent ^ "declaration:" ^  show svfp.svfp_declaration ^ "\n"*)
-(*^ indent ^ "locations:" *) ^ (match svfp.svfp_locations with None -> "no locations\n" | Some locs -> "\n" ^ Lem_string.concat "" (Lem_list.map (Dwarf.pp_parsed_single_location_description (Nat_big_num.of_int (level+1))) locs) )
+  (*^ indent ^ "locations:" *)
+  ^
+  match svfp.svfp_locations with
+  | None -> "no locations\n"
+  | Some locs ->
+      "\n"
+      ^ String.concat ""
+          (Lem_list.map
+             (Dwarf.pp_parsed_single_location_description (Nat_big_num.of_int (level + 1)))
+             locs)
+
 (*  ^ indent ^ "decl:" ^ (match svfp.svfp_decl with Nothing -> "none\n" | Just ((ufe,line) as ud) -> "\n" ^ indent_level true (level+1) ^ pp_ufe ufe ^ " " ^ show line ^ "\n" end)*)
 
-let pp_sdt_globals_compilation_unit (level:int) (cu:Dwarf.sdt_compilation_unit) : string= 
-   let indent = (indent_level true level) in
+let pp_sdt_globals_compilation_unit (level : int) (cu : Dwarf.sdt_compilation_unit) : string =
+  let indent = indent_level true level in
   ""
   (*  ^ indent ^ "cupdie:" ^  pp_cupdie3 cu.scu_cupdie ^ "\n"*)
-  ^ indent ^   (*"name:" ^*)cu.scu_name ^ "\n"
-  (*  ^ indent ^ "vars:" ^  "\n"*) ^ Lem_string.concat "" (Lem_list.map (pp_sdt_concise_variable_or_formal_parameter (level+1)) cu.scu_vars)
+  ^ indent
+  (*"name:" ^*) ^ cu.scu_name
+  ^ "\n"
+  (*  ^ indent ^ "vars:" ^  "\n"*)
+  ^ String.concat ""
+      (Lem_list.map (pp_sdt_concise_variable_or_formal_parameter (level + 1)) cu.scu_vars)
+
 (*  ^ indent ^ "subroutines :" ^  (match cu.scu_subroutines with | [] -> "none\n" | sus -> "\n" ^ String.concat "\n" (List.map  (pp_sdt_subroutine (level+1)) sus) end) *)
 
-let pp_sdt_globals_dwarf (sdt_d:Dwarf.sdt_dwarf) : string=
-   let indent_level = 0 in 
-   String.concat "" (List.map (pp_sdt_globals_compilation_unit indent_level) sdt_d.sd_compilation_units)
-
-
-
+let pp_sdt_globals_dwarf (sdt_d : Dwarf.sdt_dwarf) : string =
+  let indent_level = 0 in
+  String.concat ""
+    (List.map (pp_sdt_globals_compilation_unit indent_level) sdt_d.sd_compilation_units)
 
 (* ******************  local vars *************** *)
 
-let maybe_name x :string=  match x with None -> "no name" | Some y -> y 
+let maybe_name x : string = match x with None -> "no name" | Some y -> y
 
-   
-let rec locals_subroutine context (ss:Dwarf.sdt_subroutine) = 
-   let name = maybe_name ss.ss_name in
-   let kind1 = match ss.ss_kind with SSK_subprogram -> "" | SSK_inlined_subroutine -> "(inlined)"  in
-   let context1 = (name^kind1)::context in
-   List.map (function var -> (var, context1)) ss.ss_vars
-   @ begin
-       match ss.ss_abstract_origin with
-       | None -> []
-       | Some ss' ->
+let rec locals_subroutine context (ss : Dwarf.sdt_subroutine) =
+  let name = maybe_name ss.ss_name in
+  let kind1 =
+    match ss.ss_kind with SSK_subprogram -> "" | SSK_inlined_subroutine -> "(inlined)"
+  in
+  let context1 = (name ^ kind1) :: context in
+  List.map (function var -> (var, context1)) ss.ss_vars
+  @ begin
+      match ss.ss_abstract_origin with
+      | None -> []
+      | Some ss' ->
           let kind2 = "(abstract origin)" in
-          let context2 = (name^kind2)::context in
+          let context2 = (name ^ kind2) :: context in
           List.map (function var -> (var, context2)) ss'.ss_vars
-                 (* TODO: what about the unspecified parameters? *)  
-     end
-   @ List.flatten (List.map (locals_subroutine context1) ss.ss_subroutines)
-   @ List.flatten (List.map (locals_lexical_block context1) ss.ss_lexical_blocks)
-          
+          (* TODO: what about the unspecified parameters? *)
+    end
+  @ List.flatten (List.map (locals_subroutine context1) ss.ss_subroutines)
+  @ List.flatten (List.map (locals_lexical_block context1) ss.ss_lexical_blocks)
+
 (*   
     ^ (indent (*^ "name:"                   ^*) ^ (pp_sdt_maybe ss.ss_name (fun name1 -> name1 ^ "\n")
   (*  ^ indent ^ "cupdie:"                 ^ pp_cupdie3 ss.ss_cupdie ^ "\n"*)
@@ -2160,12 +2172,12 @@ let rec locals_subroutine context (ss:Dwarf.sdt_subroutine) =
   (*  ^ indent ^ "external:"               ^ show ss.ss_external ^"\n"*)
   ^ "\n")))))))))))))))))))))))))   
  *)
-                 
-and locals_lexical_block context (lb:Dwarf.sdt_lexical_block) = 
-   let context1 = ("lexblock")::context in
-   List.map (function var -> (var, context1)) lb.slb_vars
-   @ List.flatten (List.map (locals_subroutine context1) lb.slb_subroutines)
-   @ List.flatten (List.map (locals_lexical_block context1) lb.slb_lexical_blocks)
+and locals_lexical_block context (lb : Dwarf.sdt_lexical_block) =
+  let context1 = "lexblock" :: context in
+  List.map (function var -> (var, context1)) lb.slb_vars
+  @ List.flatten (List.map (locals_subroutine context1) lb.slb_subroutines)
+  @ List.flatten (List.map (locals_lexical_block context1) lb.slb_lexical_blocks)
+
 (*
   ""
   (*  ^ indent ^ "cupdie:"         ^ pp_cupdie3 lb.slb_cupdie ^ "\n"*)
@@ -2175,12 +2187,13 @@ and locals_lexical_block context (lb:Dwarf.sdt_lexical_block) =
   ^ (indent ^ ("lexical_blocks:" ^ (pp_sdt_list lb.slb_lexical_blocks (locals__lexical_block (Nat_big_num.add level(Nat_big_num.of_int 1)))
   ^ "\n"))))))))))   
  *)
-                 
-let locals_compilation_unit context (cu:Dwarf.sdt_compilation_unit) = 
-   let name = cu.scu_name in
-   let context1 = (name)::context in
-   List.map (function var -> (var, context1)) cu.scu_vars
-   @ List.flatten (List.map (locals_subroutine context1) cu.scu_subroutines)
+
+let locals_compilation_unit context (cu : Dwarf.sdt_compilation_unit) =
+  let name = cu.scu_name in
+  let context1 = name :: context in
+  List.map (function var -> (var, context1)) cu.scu_vars
+  @ List.flatten (List.map (locals_subroutine context1) cu.scu_subroutines)
+
 (*
   ""
   ^ (indent (*^ "name:"         *) ^ (cu.scu_name ^ ("\n"
@@ -2188,13 +2201,18 @@ let locals_compilation_unit context (cu:Dwarf.sdt_compilation_unit) =
   ^ (indent ^ ("vars:"         ^ (pp_sdt_list cu.scu_vars (pp_sdt_concise_variable_or_formal_parameter (Nat_big_num.add level(Nat_big_num.of_int 1)))
   ^ (indent ^ ("subroutines :" ^ pp_sdt_list cu.scu_subroutines (locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1))))))))))))
  *)
-let locals_dwarf (sdt_d:Dwarf.sdt_dwarf) =
-  let context = [] in 
+let locals_dwarf (sdt_d : Dwarf.sdt_dwarf) =
+  let context = [] in
   List.flatten (List.map (locals_compilation_unit context) sdt_d.sd_compilation_units)
-   
-let pp_locals sdt_d = 
-  String.concat "" (List.map (function (var,context) -> String.concat ":" context ^ "\n" ^ pp_sdt_concise_variable_or_formal_parameter 1 var) (locals_dwarf sdt_d))
-  
+
+let pp_locals sdt_d =
+  String.concat ""
+    (List.map
+       (function
+         | (var, context) ->
+             String.concat ":" context ^ "\n" ^ pp_sdt_concise_variable_or_formal_parameter 1 var)
+       (locals_dwarf sdt_d))
+
 (*****************************************************************************)
 (*        pretty-print one instruction                                       *)
 (*****************************************************************************)
@@ -2309,13 +2327,11 @@ let pp_instruction test an k i =
 (*****************************************************************************)
 
 let pp_test_analysis test an =
-
-  let sdt = Dwarf.mk_sdt_dwarf test.dwarf_static.ds_dwarf test.dwarf_static.ds_subprogram_line_extents in 
-  "************** globals *****************\n"
-  ^ pp_sdt_globals_dwarf sdt
-  ^ "************** locals *****************\n"
-  ^ pp_locals sdt
-    
+  let sdt =
+    Dwarf.mk_sdt_dwarf test.dwarf_static.ds_dwarf test.dwarf_static.ds_subprogram_line_extents
+  in
+  "************** globals *****************\n" ^ pp_sdt_globals_dwarf sdt
+  ^ "************** locals *****************\n" ^ pp_locals sdt
   ^ "************** aggregate type definitions *****************\n"
   ^ (let d = test.dwarf_static.ds_dwarf in
      let c = Dwarf.p_context_of_d d in
