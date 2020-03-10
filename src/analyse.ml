@@ -2201,7 +2201,8 @@ let locals_compilation_unit context (cu : Dwarf.sdt_compilation_unit) =
   ^ (indent ^ ("vars:"         ^ (pp_sdt_list cu.scu_vars (pp_sdt_concise_variable_or_formal_parameter (Nat_big_num.add level(Nat_big_num.of_int 1)))
   ^ (indent ^ ("subroutines :" ^ pp_sdt_list cu.scu_subroutines (locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1))))))))))))
  *)
-let locals_dwarf (sdt_d : Dwarf.sdt_dwarf) =
+let locals_dwarf (sdt_d : Dwarf.sdt_dwarf) :
+    (Dwarf.sdt_variable_or_formal_parameter * string list) (*context*) list =
   let context = [] in
   List.flatten (List.map (locals_compilation_unit context) sdt_d.sd_compilation_units)
 
@@ -2212,6 +2213,34 @@ let pp_locals sdt_d =
          | (var, context) ->
              String.concat ":" context ^ "\n" ^ pp_sdt_concise_variable_or_formal_parameter 1 var)
        (locals_dwarf sdt_d))
+
+type ranged_var =
+  (natural * natural * Dwarf.operation list)
+  * (Dwarf.sdt_variable_or_formal_parameter * string list)
+
+type ranged_vars_at_locations = {
+  rv_current : ranged_var list array;
+  rv_new : ranged_var list array;
+  rv_old : ranged_var list array;
+}
+
+let compare_pc_ranges (((n1, n2, ops) as pc_range), var) (((n1', n2', ops') as pc_range'), var') =
+  compare n1 n1'
+
+let local_by_pc_ranges (((svfp : Dwarf.sdt_variable_or_formal_parameter), context) as var) :
+    ranged_var list =
+  List.map
+    (function (n1, n2, ops) as pc_range -> (pc_range, var))
+    (match svfp.svfp_locations with Some locs -> locs | None -> [])
+
+let locals_by_pc_ranges
+    (vars : (Dwarf.sdt_variable_or_formal_parameter * string list) (*context*) list) :
+    ranged_var list =
+  List.stable_sort compare_pc_ranges (List.flatten (List.map local_by_pc_ranges vars))
+
+(*   
+let local_locals (vars: ranged_var list) instructions  : ranged_vars_at_locations
+   *)
 
 (*****************************************************************************)
 (*        pretty-print one instruction                                       *)
