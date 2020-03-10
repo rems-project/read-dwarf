@@ -2238,6 +2238,9 @@ let locals_by_pc_ranges
     ranged_var list =
   List.stable_sort compare_pc_ranges (List.flatten (List.map local_by_pc_ranges vars))
 
+(* TODO: sometimes an absence of location list means it doesn't exist at runtime, and sometimes it uses the enclosing PC range in some way? *)
+
+    
 (*   
 let local_locals (vars: ranged_var list) instructions  : ranged_vars_at_locations
    *)
