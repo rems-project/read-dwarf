@@ -111,7 +111,7 @@ let input imode (arg : string) : (string * string) Term.ret =
       let filename = s ^ " in " ^ arg in
       let elf = Elf.File.of_file arg in
       let (sym, off) = Elf.SymTbl.sym_offset_of_string elf.symbols s in
-      `Ok (filename, BytesSeq.to_string (BytesSeq.sub sym.data off (off + 4)))
+      `Ok (filename, BytesSeq.to_string (BytesSeq.sub sym.data off 4))
 
 let input_term = Term.(ret (const input $ imode_term $ arg))
 

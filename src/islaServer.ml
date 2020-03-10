@@ -11,7 +11,7 @@ open Logs.Logger (struct
 end)
 
 (** Bump when updating isla *)
-let required_version = "dev-17b3d0eafa04bb839817434c7e639d7b56fd2ed9"
+let required_version = "dev-02999dd10c9293d6c00250c43dc5de919150a795"
 
 let req_num = ref (-1)
 
@@ -110,7 +110,9 @@ type request = TEXT_ASM of string | ASM of BytesSeq.t | VERSION | STOP
     This should match the protocol *)
 let string_of_request = function
   | TEXT_ASM s -> Printf.sprintf "execute_asm %s" s
-  | ASM b -> PPI.(sprintc @@ !^"execute " ^^ byteseq32le b)
+  | ASM b ->
+      assert (BytesSeq.length b = 4);
+      PPI.(sprintc @@ !^"execute " ^^ byteseq32le b)
   | VERSION -> "version"
   | STOP -> "stop"
 
