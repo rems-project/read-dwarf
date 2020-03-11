@@ -2,8 +2,8 @@
 
 The goal of this project is to be able to symbolically execute binaries
 using the `isla` project and then prove (as) automatically (as possible)
-that two different optimisation levels have the exact same behavior. 
-This is done by using intensively DWARF debugging information, in particular 
+that two different optimisation levels have the exact same behavior.
+This is done by using intensively DWARF debugging information, in particular
 C type information. The project will only work for binaries generated from C.
 
 ## Dependencies
@@ -25,7 +25,7 @@ Finally you need `cmdliner`, `pprint`, `res` and `ocamlgraph` from opam:
 
 ## Auto-formatting
 
-To have auto-formatting you need exactly version 0.12 of `ocamlformat`. 
+To have auto-formatting you need exactly version 0.12 of `ocamlformat`.
 For example one could do:
 
 `opam pin ocamlformat 0.12` and `opam install ocamlformat`.
@@ -40,7 +40,7 @@ Ask everyone if you want to change ocamlformat options or bump the version.
 
 ## Usage
 
-You can run `./read-dwarf --help` to get the list of subcommand. For each 
+You can run `./read-dwarf --help` to get the list of subcommand. For each
 subcommand you can run `./read-dwarf subcommand --help` to learn more about
 the subcommand
 
@@ -56,14 +56,24 @@ You can run `make test` for self testing.
    - `intro.smt2`: Common SMT definition used when calling a SMT solver.
      This is embedded in the binary.
  - `dune-project`: Global dune configuration
- - `notes`: Various notes and thought about the project development. 
+ - `notes`: Various notes and thought about the project development.
  - `TODO.md`: The current TODO list.
- - `hafnium\*`: Each folder is a specific hafnium build to test on. 
+ - `hafnium\*`: Each folder is a specific hafnium build to test on.
    The binaries are frozen and should not be changed.
  - `compare-O0-O2`: Folder for graphs comparing `O0` and `O2` hafnium builds.
  - `test_asm`: Simple assembly test to test `run-bb` subcommand.
  - `tiny_test`: Simple C tests, see the corresponding README inside the folder.
  - `mpool`: Folder to build some mpool specific tests
- - `emacs-highlighting`: Emacs coloring for read-dwarf rd output. 
+ - `emacs-highlighting`: Emacs coloring for read-dwarf rd output.
    Add the beginning of such file and follow the instructions.
- 
+
+## Caching
+
+Read-dwarf may create a cache in a directory named `.rdcache`. When searching for a cache,
+read-dwarf will search if there already is a `.rdcache` directory either in the current
+directory or one of its parent and use the closest one it find. If it finds none and need
+a cache, it will create a .rdcache in the current directory. This directory contains several
+caches indexed by name.
+
+Use `read-dwarf clear-cache name` to delete such a cache or
+`read-dwarf clear-cache -a` to clear the whole `.rdcache` directory.

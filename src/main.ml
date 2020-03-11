@@ -23,6 +23,7 @@ let pcommands =
     IslaServer.Cmd.command;
     RunBB.command;
     DumpDwarf.command;
+    Cache.Cmd.command;
   ]
 
 (** Add the test command if tests are enabled *)

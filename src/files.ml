@@ -20,6 +20,11 @@ let read_file (f : string) : string =
   let c = open_in f in
   Protect.protect (fun () -> read_all c) (fun () -> close_in c)
 
+(** [write_file file cont] write cont as the content of file s which is overwritten if it exists *)
+let write_file (filename : string) (content : string) : unit =
+  let c = open_out filename in
+  Protect.protect (fun () -> output_string c content) (fun () -> close_out c)
+
 (** Reads a S-expression from the input, line by line *)
 let read_sexp (i : in_channel) : string =
   let line0 = input_line i in
