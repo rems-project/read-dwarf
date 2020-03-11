@@ -5,7 +5,6 @@
 % (setq hi-lock-file-patterns-policy #'(lambda (dummy) t)) 
 % (global-font-lock-mode 1)
 %
-%
 % Hi-lock: (("^.*\\(?:inlined from\\).*$" (0 (quote hi-red-b) prepend)))
 %  hi-red-b:              red1     bold  
 %  widget-button-pressed  red1   not bold
@@ -16,12 +15,12 @@
 % Hi-lock: (("^.*\\(?:\\.c\\:\\).*$" (0 (quote font-lock-comment-face) prepend)))
 % chocolate1
 %
-% Hi-lock: (("^ .*\\(?:>,var\\).*$" (0 (quote font-lock-constant-face) prepend)))
-% Hi-lock: (("^ .*\\(?:>,param\\).*$" (0 (quote font-lock-constant-face) prepend)))
+% Hi-lock: (("^.*\\(?:^[+].*$\\).*$" (0 (quote font-lock-constant-face) prepend)))
+% Hi-lock: (("^.*\\(?:^[+].*$\\).*$" (0 (quote font-lock-constant-face) prepend)))
 % Acquamarine, #7fffd4
 %
-% Hi-lock: (("^-.*\\(?:>,var\\).*$" (0 (quote shadow) prepend)))
-% Hi-lock: (("^-.*\\(?:>,param\\).*$" (0 (quote shadow) prepend)))
+% Hi-lock: (("^.*\\(?:^[-].*$\\).*$" (0 (quote shadow) prepend)))
+% Hi-lock: (("^.*\\(?:^[-].*$\\).*$" (0 (quote shadow) prepend)))
 % grey70
 %
 % Hi-lock: (("^.*\\(?:CFA\\).*$" (0 (quote minibuffer-prompt) prepend)))

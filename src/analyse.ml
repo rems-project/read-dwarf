@@ -93,6 +93,7 @@ type ranged_vars_at_instructions = {
   rvai_current : ranged_var list array;
   rvai_new : ranged_var list array;
   rvai_old : ranged_var list array;
+  rvai_remaining : ranged_var list array;
 }
 
 (*****************************************************************************)
@@ -2093,14 +2094,16 @@ let locals_compilation_unit context (cu : Dwarf.sdt_compilation_unit) =
 let locals_dwarf (sdt_d : Dwarf.sdt_dwarf) :
     (Dwarf.sdt_variable_or_formal_parameter * string list) (*context*) list =
   let context = [] in
+  (*List.map (function var -> (var, context1)) cu.scu_vars
+  @*)
   List.flatten (List.map (locals_compilation_unit context) sdt_d.sd_compilation_units)
 
 let globals_compilation_unit context (cu : Dwarf.sdt_compilation_unit) =
   let name = cu.scu_name in
   let context1 = name :: context in
-  (*List.map (function var -> (var, context1)) cu.scu_vars
-  @*)
-  List.flatten (List.map (locals_subroutine context1) cu.scu_subroutines)
+  List.map (function var -> (var, context1)) cu.scu_vars
+  (*@
+  List.flatten (List.map (locals_subroutine context1) cu.scu_subroutines)*)
 
 let globals_dwarf (sdt_d : Dwarf.sdt_dwarf) :
     (Dwarf.sdt_variable_or_formal_parameter * string list) (*context*) list =
@@ -2150,7 +2153,7 @@ let partition_first g xs =
   let rec partition_first' g xs acc =
     match xs with
     | [] -> (List.rev acc, [])
-    | x :: xs' -> if g x then partition_first' g xs' (x :: acc) else (List.rev acc, xs')
+    | x :: xs' -> if g x then partition_first' g xs' (x :: acc) else (List.rev acc, (x::xs'))
   in
   partition_first' g xs []
 
@@ -2163,6 +2166,7 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
   let rvai_current = Array.make size [] in
   let rvai_new = Array.make size [] in
   let rvai_old = Array.make size [] in
+  let rvai_remaining = Array.make size [] in
 
   let rec f (addr_prev : addr) (prev : ranged_var list) (remaining : ranged_var list) (k : index)
       =
@@ -2184,11 +2188,12 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
       rvai_current.(k) <- current;
       rvai_new.(k) <- new';
       rvai_old.(k) <- old;
+      rvai_remaining.(k) <- remaining';
       f addr current remaining' (k + 1)
   in
   f (Nat_big_num.of_int 0) [] locals_by_pc_ranges 0;
 
-  { rvai_globals = globals_dwarf sdt_d; rvai_current; rvai_new; rvai_old }
+  { rvai_globals = globals_dwarf sdt_d; rvai_current; rvai_new; rvai_old; rvai_remaining}
 
 (*   
 let local_locals (vars: ranged_var list) instructions  : ranged_vars_at_locations
@@ -2349,7 +2354,7 @@ let last_source_info = ref ""
 
 let pp_instruction_init () =
   last_frame_info := "";
-  last_var_info := [];
+  last_var_info := ([]:string list);
   last_source_info := ""
 
 let pp_instruction test an k i =
@@ -2408,7 +2413,7 @@ let pp_instruction test an k i =
       else ""
     end
   (* the variables whose location ranges include this address - old version*)
-  ^ begin
+(*  ^ begin
       if (*true*) !Globals.show_vars then (
         let als_old = !last_var_info in
         let als_new (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
@@ -2418,12 +2423,13 @@ let pp_instruction test an k i =
       else ""
     end
   ^ "\n"
+ *)
   (* the variables whose location ranges include this address - new version*)
   ^ begin
       if !Globals.show_vars then
-        pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k)
-        ^ pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k)
-        ^ pp_ranged_vars "c" an.ranged_vars_at_instructions.rvai_current.(k)
+        pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k)
+                         (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
+                         (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
       else ""
     end
   (* the inlining label prefix *)
@@ -2453,7 +2459,9 @@ let pp_instruction test an k i =
   (* any control flow to this instruction *)
   ^ pp_come_froms addr come_froms'
   ^ "\n"
-
+  ^  if (*true*) !Globals.show_vars then (if k<Array.length an.instructions -1 then pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k+1) else "") else ""
+  
+  
 (*****************************************************************************)
 (*        pretty-print test analysis                                         *)
 (*****************************************************************************)
