@@ -90,6 +90,7 @@ type ranged_var =
 
 type ranged_vars_at_instructions = {
   rvai_globals : (Dwarf.sdt_variable_or_formal_parameter * string list) list;
+  rvai_params : (addr * (string (* function name *) * (Dwarf.sdt_variable_or_formal_parameter list))) list;
   rvai_current : ranged_var list array;
   rvai_new : ranged_var list array;
   rvai_old : ranged_var list array;
@@ -2110,6 +2111,27 @@ let globals_dwarf (sdt_d : Dwarf.sdt_dwarf) :
   let context = [] in
   List.flatten (List.map (globals_compilation_unit context) sdt_d.sd_compilation_units)
 
+
+
+let params_subroutine (ss : Dwarf.sdt_subroutine) =
+  let name = maybe_name ss.ss_name in
+  let kind1 =
+    match ss.ss_kind with SSK_subprogram -> "" | SSK_inlined_subroutine -> "(inlined)"
+  in
+  match ss.ss_entry_address with
+  | None -> None
+  | Some addr ->
+     let vars = List.filter (function (svfp:Dwarf.sdt_variable_or_formal_parameter) -> svfp.svfp_kind = SVPK_param) ss.ss_vars in
+     Some (addr, (name, vars) )
+  
+let params_compilation_unit (cu : Dwarf.sdt_compilation_unit) =
+  List.filter_map (params_subroutine) cu.scu_subroutines
+
+let params_dwarf (sdt_d : Dwarf.sdt_dwarf) = 
+
+  List.flatten (List.map (params_compilation_unit) sdt_d.sd_compilation_units)
+  
+     
 let pp_context context = String.concat ":" context
 
 let pp_vars (vars : (Dwarf.sdt_variable_or_formal_parameter * string list) list) : string =
@@ -2193,7 +2215,7 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
   in
   f (Nat_big_num.of_int 0) [] locals_by_pc_ranges 0;
 
-  { rvai_globals = globals_dwarf sdt_d; rvai_current; rvai_new; rvai_old; rvai_remaining}
+  { rvai_globals = globals_dwarf sdt_d; rvai_params = params_dwarf sdt_d; rvai_current; rvai_new; rvai_old; rvai_remaining}
 
 (*   
 let local_locals (vars: ranged_var list) instructions  : ranged_vars_at_locations
@@ -2377,6 +2399,16 @@ let pp_instruction test an k i =
   else ""
   )
   ^ String.concat "" (List.map (fun (s : string) -> pp_addr addr ^ " <" ^ s ^ ">:\n") elf_symbols)
+
+  (* function parameters at this address *)
+  ^ let pp_params addr params =
+      match List.assoc_opt addr params with 
+      | None -> ""
+      | Some (name,vars) ->
+         name ^ " params:\n"
+         ^ String.concat "" (List.map (pp_sdt_concise_variable_or_formal_parameter 0) vars) in
+    pp_params addr an.ranged_vars_at_instructions.rvai_params
+
   (* the new inlining info for this address *)
   ^ ppd_new_inlining
   (* the source file lines (if any) associated to this address *)
