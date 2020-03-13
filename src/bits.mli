@@ -10,7 +10,7 @@ module Int = IntBits
     Throw {!invalid_argument} if not *)
 val check_index : int -> int -> unit
 
-(** [check_range length i l] Check that the index [i;i+l) is valid in an bytes of length [length].
+(** [check_range length i l] Check that the range [\[i;i+l)] is inside a bytes of length [length].
     Throw {!invalid_argument} if not *)
 val check_range : int -> int -> int -> unit
 
@@ -51,15 +51,15 @@ val setb : bytes -> int -> bool -> unit
 (** Unsafe version of {!blit_to_int} *)
 val unsafe_blit_to_int : bytes -> int -> Int.t -> int -> int -> Int.t
 
-(** [blit_to_int src isrc dest idest len] blits the bits in range [isrc;isrc+len] or src
-    to the range [idest;idest + len) of dest and returns the result.
+(** [blit_to_int src isrc dest idest len] blits the bits in range [\[isrc;isrc+len)] or src
+    to the range [\[idest;idest + len)] of dest and returns the result.
     See {!unsafe_blit_to_int}.*)
 val blit_to_int : bytes -> int -> Int.t -> int -> int -> Int.t
 
 (** Unsafe version of {!blit_of_int}*)
 val unsafe_blit_of_int : Int.t -> int -> bytes -> int -> int -> unit
 
-(** [blit_of_int src isrc dest idest len] blits the bits in range [isrc;isrc+len] or src
-    to the range [idest;idest + len) of dest by mutation.
-    See {!unsafe_blit_o_int}.*)
+(** [blit_of_int src isrc dest idest len] blits the bits in range [\[isrc;isrc+len)] or src
+    to the range [\[idest;idest + len)] of dest by mutation.
+    See {!unsafe_blit_of_int}.*)
 val blit_of_int : Int.t -> int -> bytes -> int -> int -> unit

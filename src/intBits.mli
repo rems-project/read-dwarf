@@ -62,26 +62,26 @@ val init : bool -> t
 val unsafe_mask : int -> int -> t
 
 (** [mask i l] creates a mask stating at i of length l.
-    This means that the bits of the output in the range [i; i+l) are ones and the others are 0.
+    This means that the bits of the output in the range [\[i; i+l)] are ones and the others are 0.
     See {!unsafe_mask}. *)
 val mask : int -> int -> t
 
 (** Unsafe version of {!set_range} *)
 val unsafe_set_range : t -> int -> int -> t
 
-(** [set_range bf i l] sets the range [i; i+l) to ones in bf. See {!unsafe_set_range}*)
+(** [set_range bf i l] sets the range [\[i; i+l)] to ones in bf. See {!unsafe_set_range}*)
 val set_range : t -> int -> int -> t
 
 (** Unsafe version of {!clear_range} *)
 val unsafe_clear_range : t -> int -> int -> t
 
-(** [clear_range bf i l] sets the range [i; i+l) to zeroes in bf. See {!unsafe_set_range}*)
+(** [clear_range bf i l] sets the range [\[i; i+l)] to zeroes in bf. See {!unsafe_set_range}*)
 val clear_range : t -> int -> int -> t
 
 (** Unsafe version of {!sub} *)
 val unsafe_sub : t -> int -> int -> t
 
-(** [sub bf i l] outputs the range [i; i+l) of bf.
+(** [sub bf i l] outputs the range [\[i; i+l)] of bf.
     The bits above l of the result are zeroes.
     See {!unsafe_sub} *)
 val sub : t -> int -> int -> t
@@ -89,7 +89,7 @@ val sub : t -> int -> int -> t
 (** Unsafe version of {!set_sub}. However the bits above l of data must be zeroes *)
 val unsafe_set_sub : t -> int -> int -> t -> t
 
-(** [set_sub bf i l data] sets the [i; i+l) range of bf to data.
+(** [set_sub bf i l data] sets the [\[i; i+l)] range of bf to data.
     The bits above l of data are ignored
     See {!unsafe_set_sub} *)
 val set_sub : t -> int -> int -> t -> t
@@ -98,6 +98,6 @@ val set_sub : t -> int -> int -> t -> t
 val unsafe_blit : t -> int -> t -> int -> int -> t
 
 (** [unsafe_blit src isrc dest idest len] copies
-    [isrc; isrc+len) of src into [idest; idest +l) of dest
+    [\[isrc; isrc+len)] of src into [\[idest; idest +l)] of dest
     See {!unsafe_blit} *)
 val blit : t -> int -> t -> int -> int -> t
