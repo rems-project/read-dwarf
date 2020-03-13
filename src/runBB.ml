@@ -26,7 +26,11 @@ let run_code trcs typ (run : bool) simp (code : BytesSeq.t) : unit =
         Printf.printf "Starting with state %d\n" istate.id;
         BB.run_mut state bb;
         (if run then PP.(println $ State.pp state));
-        if simp then State.map_mut_exp SMT.simplify state;
+        if simp then begin
+          Z3.start ();
+          State.map_mut_exp SMT.simplify state;
+          Z3.stop ()
+        end;
         PP.(println $ State.pp state)
       end
     end
@@ -39,13 +43,11 @@ let run_bb arch trcs typ run simp elfname sym len =
     let len = match len with Some i -> i | None -> sym.size - off in
     let code = Elf.Sym.sub sym off len in
     Random.self_init ();
-    IslaServer.start arch;
-    Z3.start ();
+    IslaCache.start arch;
     Init.init ();
     run_code trcs typ run simp code;
     flush stdout;
-    Z3.stop ();
-    IslaServer.stop ()
+    IslaCache.stop ()
   with Not_found -> fatal "The symbol %s was not found in %s\n" sym elfname
 
 let trcs =

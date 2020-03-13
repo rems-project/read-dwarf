@@ -105,7 +105,7 @@ let input imode (arg : string) : (string * string) Term.ret =
   match imode with
   | CMD -> `Ok ("CLI input", arg)
   | FILE -> (
-      try `Ok (arg, read_file arg) with e -> `Error (false, Printexc.to_string e)
+      try `Ok (arg, read_string arg) with e -> `Error (false, Printexc.to_string e)
     )
   | ELF s ->
       let filename = s ^ " in " ^ arg in

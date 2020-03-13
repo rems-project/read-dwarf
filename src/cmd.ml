@@ -61,7 +61,7 @@ let input (cmd : cmd) (cont : in_channel -> 'a) : 'a =
   protect (fun () -> cont output) @@ closing_in output cmd
 
 (** Call a command and read its output in a string *)
-let input_string (cmd : string array) : string = input cmd Files.read_all
+let input_string (cmd : string array) : string = input cmd Files.input_string
 
 (*****************************************************************************)
 (*        Pipe input-output                                                  *)

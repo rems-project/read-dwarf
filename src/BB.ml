@@ -16,7 +16,7 @@ type state = State.t
 type t = { main : trc array (* TODO: branch : trc list *) }
 
 (** Take a binary block and call isla on all the instruction to get traces
-    TODO cache the results
+    TODO Support variable length instructions
 *)
 let from_binary (code : BytesSeq.t) : t =
   let num = BytesSeq.length code / 4 in
@@ -34,7 +34,7 @@ let from_binary (code : BytesSeq.t) : t =
           trc |> IslaManip.filter |> IslaManip.isla_trace_conv_svar
       | (false, _) :: l -> get_normal l
     in
-    code |> IslaServer.request_bin_parsed |> get_normal
+    code |> IslaCache.get_traces |> get_normal
   in
   let main = code |> BytesSeq.to_list32bs |> List.map process |> Array.of_list in
   { main }

@@ -121,7 +121,7 @@ module Var = struct
             | _ -> Register (Reg.path_of_string var)
             );
         }
-    | _ -> raise (Invalid_argument ("Invalid state variable: " ^ s))
+    | _ -> Raise.inv_arg "Invalid state variable: %s" s
 
   let to_exp (v : t) : exp = Isla.Var (Isla.State v, dummy_annot)
 

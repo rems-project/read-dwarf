@@ -72,7 +72,7 @@ let raw_stop () =
 *)
 let read_string_answer () : string =
   let serv = get_server () in
-  Files.read_sexp serv.input
+  Files.input_sexp serv.input
 
 (** Read one Z3 answer as a structured smt answer *)
 let read_answer () : rsmt_ans =

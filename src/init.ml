@@ -21,11 +21,7 @@ let state () =
       State.lock s;
       s
 
-(* TODO here I assume nop is a nop instruction in all architectures, this may not be true *)
-let nop = "nop"
-
 (** Intialize this module by calling isla on {!nop} to get initial machine state *)
 let init () =
-  IslaServer.(
-    TEXT_ASM nop |> request |> expect_parsed_traces |> List.assoc true |> IslaManip.split_cycle
-    |> fst |> IslaManip.remove_ignored |> IslaManip.isla_trace_conv_svar |> load_init_trc)
+  IslaCache.get_nop () |> List.assoc true |> IslaManip.split_cycle |> fst
+  |> IslaManip.remove_ignored |> IslaManip.isla_trace_conv_svar |> load_init_trc

@@ -51,6 +51,16 @@ let fatal doc =
    PP.(fatal $ doc1 ^^ doc2)
 *)
 
+(*
+   Usage in printf familly function:
+   lazy: Printf.printf "hey object %t is here" PP.(fun o -> fprint o $ doc1 ^^ doc2)
+
+   direct: Printf.printf "hey object %a is here" PP.fprint PP.(doc1 ^^ doc2)
+
+   the lazy version can be useful for logging message where you don't want to compute the document
+   If the thing is never printed.
+*)
+
 (*****************************************************************************)
 (*        Common                                                             *)
 (*****************************************************************************)

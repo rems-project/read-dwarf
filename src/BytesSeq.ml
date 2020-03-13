@@ -21,8 +21,7 @@ type t = byte_sequence
 
 (** See [Bytes.blit] *)
 let blit (bs : t) (srcoff : int) (dst : bytes) (dstoff : int) (len : int) =
-  if srcoff < 0 || srcoff + len > bs.len then
-    raise (Invalid_argument "BytesSeq.blit : out of bounds ")
+  if srcoff < 0 || srcoff + len > bs.len then Raise.inv_arg "BytesSeq.blit : out of bounds "
   else Bytes.blit bs.bytes (bs.start + srcoff) dst dstoff len
 
 (** Convert a string to a BytesSeq.t as raw data *)
@@ -51,13 +50,21 @@ let _ =
 (*         Getters                                                           *)
 (*****************************************************************************)
 
+(** The size int bytes of Ocaml int *)
+let int_bytes = if Sys.int_size <= 32 then 4 else 8
+
+(** Get an Ocaml int at index in a [bytes].
+    The size of the read is 4 or 8 depending of the size of the int
+
+    The topmost bit is discarded
+*)
+let bytes_get_intle b i =
+  if int_bytes = 4 then Int32.to_int @@ Bytes.get_int32_le b i
+  else Int64.to_int @@ Bytes.get_int64_le b i
+
 let gen_get size getter bs i =
   if 0 <= i && i <= bs.len - size then getter bs.bytes (bs.start + i)
-  else
-    raise
-      (Invalid_argument
-         (Printf.sprintf "ByteSeq: invalid access of length %d at %d but size is %d" size i
-            bs.len))
+  else Raise.inv_arg "ByteSeq: invalid access of length %d at %d but size is %d" size i bs.len
 
 let get bs i = gen_get 1 Bytes.get bs i
 
@@ -73,14 +80,25 @@ let get64le bs i = gen_get 8 Bytes.get_int64_le bs i
 
 let get64be bs i = gen_get 8 Bytes.get_int64_be bs i
 
+let getintle bs i = gen_get int_bytes bytes_get_intle bs i
+
+let gen_get_ze size getter bs i =
+  if 0 <= i && i < bs.len then (
+    let b = Bytes.make size '\x00' in
+    let actual_size = min size (bs.len - i) in
+    blit bs i b 0 actual_size;
+    getter b 0
+  )
+  else Raise.inv_arg "ByteSeq: invalid access at %d but size is %d" i bs.len
+
+(* TODO: All the other _ze accessors *)
+let getintle_ze bs i = gen_get_ze int_bytes bytes_get_intle bs i
+
 (** Extract a sub range of a byte sequence. This is O(1) *)
 let sub bs start len : t =
   if start >= 0 && len >= 0 && start + len <= bs.len then
     { bytes = bs.bytes; start = bs.start + start; len }
-  else
-    raise
-      (Invalid_argument
-         (Printf.sprintf "ByteSeq.sub at %d of length %d but total size is %d" start len bs.len))
+  else Raise.inv_arg "ByteSeq.sub at %d of length %d but total size is %d" start len bs.len
 
 (** Same as {!sub} but for bytes *)
 let bytes_sub bytes start len : t = sub (of_bytes bytes) start len
@@ -94,17 +112,13 @@ let bytes_sub_getter len bs start = bytes_sub bs start len
 (** Take the first i bytes of the sequence *)
 let front i bs =
   if i > bs.len || i < 0 then
-    raise
-      (Invalid_argument
-         (Printf.sprintf "Cannot take the first %d bytes of a bytesseq of size %d" i bs.len))
+    Raise.inv_arg "Cannot take the first %d bytes of a bytesseq of size %d" i bs.len
   else { bytes = bs.bytes; start = bs.start; len = i }
 
 (** Take the last i bytes of the sequence *)
 let back i bs =
   if i > bs.len || i < 0 then
-    raise
-      (Invalid_argument
-         (Printf.sprintf "Cannot take the last %d bytes of a bytesseq of size %d" i bs.len))
+    Raise.inv_arg "Cannot take the last %d bytes of a bytesseq of size %d" i bs.len
   else { bytes = bs.bytes; start = bs.start + bs.len - i; len = i }
 
 (** Tells if a byteseq fits this size (bs.len mod size = 0) *)
@@ -203,6 +217,19 @@ let to_list64le bs = gen_to_list fold_left64le bs
 let to_list64be bs = gen_to_list fold_left64be bs
 
 let to_list64bs bs = gen_to_list fold_left64bs bs
+
+(*****************************************************************************)
+(*        Binary IO                                                          *)
+(*****************************************************************************)
+
+let output ochannel bs =
+  output_substring ochannel (Bytes.unsafe_to_string bs.bytes) bs.start bs.len
+
+let write = Files.write_bin output
+
+let input ichannel = Files.input_bytes ichannel |> of_bytes
+
+let read = Files.read_bin input
 
 (*****************************************************************************)
 (*        Pretty printing                                                    *)

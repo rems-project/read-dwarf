@@ -248,15 +248,24 @@ module Make (Key : Key) (Value : Value) (Epoch : Epoch) :
   let make ?(fake = false) name epoch =
     let loaded = Hashtbl.create 100 in
     let rammap = RAMMap.create 100 in
-    if fake then { name; epoch; dir = ""; rammap; loaded; fake }
+    if fake then begin
+      info "Starting fake cache %s" name;
+      { name; epoch; dir = ""; rammap; loaded; fake }
+    end
     else
       let dir = Filename.concat $ find_dir () $ name in
+      info "Starting cache %s in %s" name dir;
       if not @@ Sys.file_exists dir then Unix.mkdir dir 0o777;
       let epoch_file = Filename.concat dir "epoch" in
       if Sys.file_exists epoch_file then begin
+        info "Checking epoch of %s cache" name;
         let e = Epoch.of_file epoch_file in
-        if Epoch.compat e epoch then () else cleardir dir;
-        Epoch.to_file epoch_file epoch
+        if Epoch.compat e epoch then info "Epoch of %s is compatible" name
+        else begin
+          info "Epoch of %s is incompatible, clearing %s" name dir;
+          cleardir dir;
+          Epoch.to_file epoch_file epoch
+        end
       end
       else Epoch.to_file epoch_file epoch;
       { name; epoch; dir; rammap; loaded; fake }
@@ -450,20 +459,20 @@ module Cmd = struct
       let to_file filename i =
         let keyfile = to_keyfile filename in
         let content = string_of_int (i / 10) in
-        Files.write_file keyfile content
+        Files.write_string keyfile content
 
       let of_file hash filename =
         let keyfile = to_keyfile filename in
-        let content = Files.read_file keyfile in
+        let content = Files.read_string keyfile in
         (10 * int_of_string content) + hash
     end
 
     module Value : Value with type t = string = struct
       type t = string
 
-      let to_file = Files.write_file
+      let to_file = Files.write_string
 
-      let of_file = Files.read_file
+      let of_file = Files.read_string
     end
 
     module Cache = Make (Key) (Value) (UnitEpoch)
