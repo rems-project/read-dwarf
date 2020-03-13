@@ -5,7 +5,7 @@ TOOLCHAIN=aarch64-linux-gnu-
 
 RD=../read-dwarf run-bb -a ../aarch64.ir -s
 
-all: $(foreach BIN,$(BINS), build/$(BINS))
+all: $(foreach BIN,$(BINS), build/$(BIN))
 .PHONY: all
 
 build:
@@ -36,5 +36,5 @@ $(foreach BIN,$(BINS),\
 	$(eval $(call rd_rule,$(BIN)))\
 )
 
-test_rd: $(foreach BIN,$(BINS), test_rd_$(BINS))
+test_rd: $(foreach BIN,$(BINS), test_rd_$(BIN))
 .PHONY: test_rd
