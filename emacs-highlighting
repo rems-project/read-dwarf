@@ -1,3 +1,5 @@
+* emacs colour highlighting and outline-mode configuration -*-outline-*-
+
 % add the following four lines to .emacs to turn on colour highlighting
 %
 % (global-hi-lock-mode 1)
@@ -26,3 +28,9 @@
 % Hi-lock: (("^.*\\(?:CFA\\).*$" (0 (quote minibuffer-prompt) prepend)))
 % cyan
 
+This file is best viewed in outline-mode
+https://www.gnu.org/software/emacs/manual/html_node/emacs/Outline-Visibility.html#Outline-Visibility
+C-c C-t hide all
+C-c C-a show all
+C-C C-d make current heading's body invisible
+C-C C-e make current heading's body visible

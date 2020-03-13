@@ -7,18 +7,9 @@ open Printf
 type natural = Nat_big_num.num
 
 let measure_time = false
-
-let time s f x =
-  if measure_time then (
-    let t1 : Unix.process_times = Unix.times () in
-    let y = f x in
-    let t2 : Unix.process_times = Unix.times () in
-    Printf.printf "time %s user %6.3f  system %6.3f\n" s (t2.tms_utime -. t1.tms_utime)
-      (t2.tms_stime -. t1.tms_stime);
-    y
-  )
-  else f x
-
+             
+let time s f x = if measure_time then let t1:Unix.process_times = Unix.times () in let y = f x in let t2:Unix.process_times = Unix.times () in Printf.printf "time %s user %6.3f  system %6.3f\n" s (t2.tms_utime-.t1.tms_utime) (t2.tms_stime-.t1.tms_stime); y else f x
+             
 (*****************************************************************************)
 (* collected data from linksem                                               *)
 (*****************************************************************************)
@@ -103,8 +94,7 @@ type ranged_var =
 
 type ranged_vars_at_instructions = {
   rvai_globals : (Dwarf.sdt_variable_or_formal_parameter * string list) list;
-  rvai_params :
-    (addr * (string (* function name *) * Dwarf.sdt_variable_or_formal_parameter list)) list;
+  rvai_params : (addr * (string (* function name *) * (Dwarf.sdt_variable_or_formal_parameter list))) list;
   rvai_current : ranged_var list array;
   rvai_new : ranged_var list array;
   rvai_old : ranged_var list array;
@@ -1971,7 +1961,7 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
          transitive_call_graph)
   in
 
-  pp_call_graph call_graph ^ "*************** transitive call graph **************\n"
+  pp_call_graph call_graph ^ "* ************* transitive call graph **************\n"
   ^ pp_transitive_call_graph transitive_call_graph
 
 (*****************************************************************************)
@@ -2117,14 +2107,15 @@ let globals_compilation_unit context (cu : Dwarf.sdt_compilation_unit) =
   let name = cu.scu_name in
   let context1 = name :: context in
   List.map (function var -> (var, context1)) cu.scu_vars
-
-(*@
+  (*@
   List.flatten (List.map (locals_subroutine context1) cu.scu_subroutines)*)
 
 let globals_dwarf (sdt_d : Dwarf.sdt_dwarf) :
     (Dwarf.sdt_variable_or_formal_parameter * string list) (*context*) list =
   let context = [] in
   List.flatten (List.map (globals_compilation_unit context) sdt_d.sd_compilation_units)
+
+
 
 let params_subroutine (ss : Dwarf.sdt_subroutine) =
   let name = maybe_name ss.ss_name in
@@ -2134,20 +2125,17 @@ let params_subroutine (ss : Dwarf.sdt_subroutine) =
   match ss.ss_entry_address with
   | None -> None
   | Some addr ->
-      let vars =
-        List.filter
-          (function
-            | (svfp : Dwarf.sdt_variable_or_formal_parameter) -> svfp.svfp_kind = SVPK_param)
-          ss.ss_vars
-      in
-      Some (addr, (name, vars))
-
+     let vars = List.filter (function (svfp:Dwarf.sdt_variable_or_formal_parameter) -> svfp.svfp_kind = SVPK_param) ss.ss_vars in
+     Some (addr, (name, vars) )
+  
 let params_compilation_unit (cu : Dwarf.sdt_compilation_unit) =
-  List.filter_map params_subroutine cu.scu_subroutines
+  List.filter_map (params_subroutine) cu.scu_subroutines
 
-let params_dwarf (sdt_d : Dwarf.sdt_dwarf) =
-  List.flatten (List.map params_compilation_unit sdt_d.sd_compilation_units)
+let params_dwarf (sdt_d : Dwarf.sdt_dwarf) = 
 
+  List.flatten (List.map (params_compilation_unit) sdt_d.sd_compilation_units)
+  
+     
 let pp_context context = String.concat ":" context
 
 let pp_vars (vars : (Dwarf.sdt_variable_or_formal_parameter * string list) list) : string =
@@ -2191,7 +2179,7 @@ let partition_first g xs =
   let rec partition_first' g xs acc =
     match xs with
     | [] -> (List.rev acc, [])
-    | x :: xs' -> if g x then partition_first' g xs' (x :: acc) else (List.rev acc, x :: xs')
+    | x :: xs' -> if g x then partition_first' g xs' (x :: acc) else (List.rev acc, (x::xs'))
   in
   partition_first' g xs []
 
@@ -2231,14 +2219,7 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
   in
   f (Nat_big_num.of_int 0) [] locals_by_pc_ranges 0;
 
-  {
-    rvai_globals = globals_dwarf sdt_d;
-    rvai_params = params_dwarf sdt_d;
-    rvai_current;
-    rvai_new;
-    rvai_old;
-    rvai_remaining;
-  }
+  { rvai_globals = globals_dwarf sdt_d; rvai_params = params_dwarf sdt_d; rvai_current; rvai_new; rvai_old; rvai_remaining}
 
 (*   
 let local_locals (vars: ranged_var list) instructions  : ranged_vars_at_locations
@@ -2345,15 +2326,11 @@ let mk_analysis test filename_objdump_d filename_branch_table =
 
   let come_froms = time "mk_come_froms" mk_come_froms instructions in
 
-  let sdt =
-    time "mk_sdt_dwarf"
-      (Dwarf.mk_sdt_dwarf test.dwarf_static.ds_dwarf)
-      test.dwarf_static.ds_subprogram_line_extents
+  let sdt = time "mk_sdt_dwarf" 
+    (Dwarf.mk_sdt_dwarf test.dwarf_static.ds_dwarf) test.dwarf_static.ds_subprogram_line_extents
   in
 
-  let ranged_vars_at_instructions =
-    time "mk_ranged_vars_at_instructions" (mk_ranged_vars_at_instructions sdt) instructions
-  in
+  let ranged_vars_at_instructions = time "mk_ranged_vars_at_instructions" (mk_ranged_vars_at_instructions sdt) instructions in
 
   let elf_symbols = time "mk_elf_symbols" (mk_elf_symbols test) instructions in
 
@@ -2365,9 +2342,7 @@ let mk_analysis test filename_objdump_d filename_branch_table =
   let acf_width = 60 in
   let max_branch_distance = None (* Some instruction_count, or None for unlimited *) in
   let (rendered_control_flow, rendered_control_flow_inbetweens, rendered_control_flow_width) =
-    time "render_ascii_control_flow"
-      (render_ascii_control_flow max_branch_distance acf_width)
-      instructions
+    time "render_ascii_control_flow" (render_ascii_control_flow max_branch_distance acf_width) instructions
   in
 
   let an =
@@ -2405,7 +2380,7 @@ let last_source_info = ref ""
 
 let pp_instruction_init () =
   last_frame_info := "";
-  last_var_info := ([] : string list);
+  last_var_info := ([]:string list);
   last_source_info := ""
 
 let pp_instruction test an k i =
@@ -2427,17 +2402,17 @@ let pp_instruction test an k i =
     an.pp_inlining_label_prefix "" ^ an.rendered_control_flow_inbetweens.(k) ^ "\n"
   else ""
   )
-  ^ String.concat "" (List.map (fun (s : string) -> pp_addr addr ^ " <" ^ s ^ ">:\n") elf_symbols)
+  ^ String.concat "" (List.mapi (fun (j:int) ->  fun (s : string) -> (if j=0 then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:\n") (let syms_nostar,syms_star = List.partition (fun s -> not (String.contains s '$')) elf_symbols in syms_nostar @ syms_star))
+
   (* function parameters at this address *)
-  ^
-  let pp_params addr params =
-    match List.assoc_opt addr params with
-    | None -> ""
-    | Some (name, vars) ->
-        name ^ " params:\n"
-        ^ String.concat "" (List.map (pp_sdt_concise_variable_or_formal_parameter 0) vars)
-  in
-  pp_params addr an.ranged_vars_at_instructions.rvai_params
+  ^ let pp_params addr params =
+      match List.assoc_opt addr params with 
+      | None -> ""
+      | Some (name,vars) ->
+         name ^ " params:\n"
+         ^ String.concat "" (List.map (pp_sdt_concise_variable_or_formal_parameter 0) vars) in
+    pp_params addr an.ranged_vars_at_instructions.rvai_params
+
   (* the new inlining info for this address *)
   ^ ppd_new_inlining
   (* the source file lines (if any) associated to this address *)
@@ -2474,7 +2449,7 @@ let pp_instruction test an k i =
       else ""
     end
   (* the variables whose location ranges include this address - old version*)
-  (*  ^ begin
+(*  ^ begin
       if (*true*) !Globals.show_vars then (
         let als_old = !last_var_info in
         let als_new (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
@@ -2487,9 +2462,10 @@ let pp_instruction test an k i =
  *)
   (* the variables whose location ranges include this address - new version*)
   ^ begin
-      if !Globals.show_vars then pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k)
-        (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
-        (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
+      if !Globals.show_vars then
+        pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k)
+                         (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
+                         (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
       else ""
     end
   (* the inlining label prefix *)
@@ -2519,34 +2495,30 @@ let pp_instruction test an k i =
   (* any control flow to this instruction *)
   ^ pp_come_froms addr come_froms'
   ^ "\n"
-  ^
-  if (*true*) !Globals.show_vars then
-    if k < Array.length an.instructions - 1 then
-      pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1)
-    else ""
-  else ""
-
+  ^  if (*true*) !Globals.show_vars then (if k<Array.length an.instructions -1 then pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k+1) else "") else ""
+  
+  
 (*****************************************************************************)
 (*        pretty-print test analysis                                         *)
 (*****************************************************************************)
 
 let pp_test_analysis test an =
-  "************** globals *****************\n"
+  "* ************* globals *****************\n"
   ^ pp_vars an.ranged_vars_at_instructions.rvai_globals
   (*  ^ "************** locals *****************\n"
   ^ pp_ranged_vars
  *)
-  ^ "************** aggregate type definitions *****************\n"
-  ^ (let d = test.dwarf_static.ds_dwarf in
-     let c = Dwarf.p_context_of_d d in
-     Dwarf.pp_all_aggregate_types c d)
-  ^ "\n************** instructions *****************\n"
+  ^ "\n* ************* instructions *****************\n"
   ^ ( pp_instruction_init ();
       String.concat "" (Array.to_list (Array.mapi (pp_instruction test an) an.instructions))
     )
-  (*  ^ "\n************** branch targets *****************\n"*)
+  ^ "* ************* aggregate type definitions *****************\n"
+  ^ (let d = test.dwarf_static.ds_dwarf in
+     let c = Dwarf.p_context_of_d d in
+     Dwarf.pp_all_aggregate_types c d)
+  (*  ^ "\n* ************* branch targets *****************\n"*)
   (*  ^ pp_branch_targets instructions*)
-  ^ "\n************** call graph *****************\n"
+  ^ "\n* ************* call graph *****************\n"
   ^ pp_call_graph test
       ( (*instructions,*)
         an.instructions,
