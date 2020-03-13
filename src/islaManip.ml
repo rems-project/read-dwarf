@@ -3,8 +3,9 @@
 open Isla
 
 (*****************************************************************************)
-(*        Trace Properties                                                   *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Trace Properties} *)
 
 (** Check if a trace is linear (has no branches) *)
 let is_linear (Trace events : ('v, 'a) trc) =
@@ -16,8 +17,9 @@ let is_linear (Trace events : ('v, 'a) trc) =
   no_branch events
 
 (*****************************************************************************)
-(*        Get annotations                                                    *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Get annotations } *)
 
 (** Get the annotation of an expression *)
 let annot_exp : ('v, 'a) exp -> 'a = function
@@ -44,8 +46,17 @@ let annot_event : ('v, 'a) event -> 'a = function
   | WriteMem (_, _, _, _, _, a) -> a
 
 (*****************************************************************************)
-(*        Non-recursive maps                                                 *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Non-recursive maps and iters }
+
+   This section is filled on demand.
+
+   [direct_a_map_b] take a function [b -> b] and applies it to all [b] in [a], non-recursively.
+   Then a new a with the same structure is formed.
+
+   [direct_a_iter_b] take a function [b -> unit] and applies it to all [b] in [a], non-recursively.
+*)
 
 let direct_exp_map_exp (f : ('a, 'b) exp -> ('a, 'b) exp) = function
   | Unop (u, e, l) -> Unop (u, f e, l)
@@ -76,11 +87,50 @@ let direct_exp_iter_exp (i : ('a, 'b) exp -> unit) = function
   | Enum (e, a) -> ()
   | Var (v, a) -> ()
 
-(*****************************************************************************)
-(*        Generic conversion                                                 *)
-(*****************************************************************************)
+let direct_event_iter_valu (i : valu -> unit) = function
+  | Smt _ -> ()
+  | DefineEnum (_, _) -> ()
+  | Branch (_, _, _) -> ()
+  | BranchAddress (v, _) -> i v
+  | ReadReg (_, _, v, _) -> i v
+  | WriteReg (_, _, v, _) -> i v
+  | Cycle _ -> ()
+  | ReadMem (v, v', v'', _, _) ->
+      i v;
+      i v';
+      i v''
+  | WriteMem (_, v, v', v'', _, _) ->
+      i v;
+      i v';
+      i v''
 
-(* All of those function convert the underlying state variable type through the AST *)
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Recursive maps and iters }
+
+    This section is filled on demand.
+
+    [a_map_b] take a function [b -> b] and applies it to all the [b] in [a], and do that
+    recursively on all b that appear directly or indirectly in a
+
+    [a_iter_b] take a function [b -> unit] and applies it to all the [b] in [a], and do that
+    recursively
+*)
+
+(** iterate a function on all the variable of an expression *)
+let rec exp_iter_var (f : 'v var -> unit) : ('v, 'a) exp -> unit = function
+  | Var (v, a) -> f v
+  | exp -> direct_exp_iter_exp (exp_iter_var f) exp
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 State variable conversion }
+
+    All of those function convert the underlying state variable type through the AST.
+    They cannot be the usual map function because they change the type of the var
+*)
 
 let var_conv_svar (conv : 'a -> 'b) : 'a var -> 'b var = function
   | State a -> State (conv a)
@@ -122,23 +172,19 @@ let isla_trace_conv_svar trc =
   trace_conv_svar (fun i -> failwith "isla_trace_conv_svar : there were state variable") trc
 
 (*****************************************************************************)
-(*        Exp substitution                                                   *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Variable substitution } *)
 
 (** Substitute variable with expression according to subst function *)
 let rec var_subst (subst : 'v var -> 'a -> ('v, 'a) exp) (exp : ('v, 'a) exp) : ('v, 'a) exp =
-  (* PPI.(println @@ !^"Calling vc_subst_full " ^^ sexp exp); *)
   let s = var_subst subst in
   match exp with Var (v, a) -> subst v a | _ -> direct_exp_map_exp s exp
 
-(** iterate a function on all the variable of an expression *)
-let rec exp_iter_var (f : 'v var -> unit) : ('v, 'a) exp -> unit = function
-  | Var (v, a) -> f v
-  | exp -> direct_exp_iter_exp (exp_iter_var f) exp
-
 (*****************************************************************************)
-(*        Accessor list conversion                                           *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Accessor list conversion } *)
 
 let accessor_of_string s = Field s
 
@@ -149,8 +195,9 @@ let accessor_of_string_list = function [] -> Nil | l -> Cons (List.map accessor_
 let string_of_accessor_list = function Nil -> [] | Cons l -> List.map string_of_accessor l
 
 (*****************************************************************************)
-(*        valu string path access                                            *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Valu string path access } *)
 
 (** Follow the path in a value like A.B.C in (struct (|B| (struct (|C| ...)))) *)
 let rec valu_get valu path =
@@ -160,8 +207,9 @@ let rec valu_get valu path =
   | _ -> failwith "islaManip.valu_get: Invalid path in IslaManip.valu_get"
 
 (*****************************************************************************)
-(*         bvi conversion                                                    *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 bvi conversion } *)
 
 (** Convert the bvi constant style like (_ bv42 6) to explicit style #b101010 *)
 let bvi_to_bv (bvi : bvi) (size : int) =
@@ -176,10 +224,15 @@ let bvi_to_bv (bvi : bvi) (size : int) =
   end
 
 (*****************************************************************************)
-(*        Isla Filtering                                                     *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Isla Filtering }
 
-(* TODO Make a configuration file and read that from the config *)
+    This is some basic trace filtering that remove unwanted item from the trace in
+    various situations
+
+    TODO: Make a configuration file and read that from the config
+*)
 
 (** List of ignored register for the purposes of the semantics. *)
 let ignored_regs = ["SEE"; "__unconditional"; "__v85_implemented"; "DBGEN"]
@@ -223,9 +276,11 @@ let remove_ignored : ('a, 'v) trc -> ('a, 'v) trc = function
 let filter t = t |> remove_init |> remove_ignored
 
 (*****************************************************************************)
-(*         Let unfolding                                                     *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Let unfolding } *)
 
+(** Unfolds all the lets from the expression. Can start with a context if required *)
 let rec unfold_lets ?(context = Hashtbl.create 5) : ('a, 'v) exp -> ('a, 'v) exp = function
   | Var (Bound b, l) -> Hashtbl.find context b
   | Let (b, e1, e2, l) ->
