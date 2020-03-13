@@ -1,10 +1,5 @@
-(** This module handle the register abstraction:
-    - map string to identifiers
-    - remember register characteristics (for now only bit size)
-    - remember structure of register (like PSTATE)
-*)
+(* The documentation is in the mli file *)
 
-(** The type of a register. users can do type reg = Reg.t*)
 type t = int
 
 type typ = Plain of Isla.ty | Struct of reg_struct
@@ -17,11 +12,13 @@ let assert_plain : typ -> Isla.ty = function
   | Plain t -> t
   | Struct _ -> failwith "assert_plain failed"
 
-(** The set of register is represented as a massive structure*)
 let index = make_struct ()
 
-(** register map *)
 let rmap = index.fields
+
+(*****************************************************************************)
+(*        Accessors                                                          *)
+(*****************************************************************************)
 
 let field_to_string rs reg = Bimap.of_ident rs.fields reg
 
@@ -80,7 +77,6 @@ let add_field rs name typ =
   Vector.add_one rs.types typ;
   id
 
-(** Add a new register by name and throws Bimap.Exists if it already exists. return Reg.t*)
 let add_reg name typ = add_field index name typ
 
 (*****************************************************************************)
