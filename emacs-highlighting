@@ -14,7 +14,8 @@
 % Hi-lock: (("^.*\\(?:^[0-9a-f]* <.*>\\:$\\).*$" (0 (quote hi-green) prepend)))
 %   black / light geen
 %
-% Hi-lock: (("^.*\\(?:\\.c\\:\\).*$" (0 (quote font-lock-comment-face) prepend)))
+% Hi-lock: (("^[^+-].*\\(?:\\.c\\:\\).*$" (0 (quote font-lock-comment-face) prepend)))
+% Hi-lock: (("^[^+-].*\\(?:\\.h\\:\\).*$" (0 (quote font-lock-comment-face) prepend)))
 % chocolate1
 %
 % Hi-lock: (("^.*\\(?:^[+].*$\\).*$" (0 (quote font-lock-constant-face) prepend)))
