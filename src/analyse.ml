@@ -116,24 +116,25 @@ type ranged_vars_at_instructions = {
 (*****************************************************************************)
 
 type evaluated_line_info_sequence = {
-    elis_first: addr;
-    elis_last: addr; (* the address of the end_sequence - half-open interval *)
-    elis_lnh: Dwarf.line_number_header;
-    elis_lines: Dwarf.line_number_registers list;
-  }
+  elis_first : addr;
+  elis_last : addr;
+  (* the address of the end_sequence - half-open interval *)
+  elis_lnh : Dwarf.line_number_header;
+  elis_lines : Dwarf.line_number_registers list;
+}
 
 type evaluated_line_info_entry = {
-    elie_first: addr;
-    elie_last: addr; (* closed interval *)
-    elie_lnh: Dwarf.line_number_header;
-    elie_lnr: Dwarf.line_number_registers;
-  }
+  elie_first : addr;
+  elie_last : addr;
+  (* closed interval *)
+  elie_lnh : Dwarf.line_number_header;
+  elie_lnr : Dwarf.line_number_registers;
+}
 
-                                  
 type evaluated_line_info_for_instruction = {
-    elifi_start: bool;
-    elifi_entry: evaluated_line_info_entry;
-  }
+  elifi_start : bool;
+  elifi_entry : evaluated_line_info_entry;
+}
 
 (*****************************************************************************)
 (*        collect test analysis                                              *)
@@ -172,11 +173,7 @@ let rec list_last xs =
   | _ -> raise (Failure "list_last")
 
 let rec list_last_opt xs =
-match xs with
-| [x] -> Some x
-| x :: (x' :: xs' as xs'') -> list_last_opt xs''
-| _ -> None
-
+  match xs with [x] -> Some x | x :: (x' :: xs' as xs'') -> list_last_opt xs'' | _ -> None
 
 (*****************************************************************************)
 (*        pp symbol map                                                      *)
@@ -356,9 +353,10 @@ let read_file_lines (name : string) : string array ok_or_fail =
 (*****************************************************************************)
 
 (* line number sequences can overlap, and we have to walk through instructions (not addresses), so we simplify by splitting all of them into individual entries, sort them by first address, and then walk through them painting a per-instruction array.  This is algorithmically a bit terrible, but seems to add only a couple of seconds to read-dwarf rd *)
-                           
-let pp_line_number_header_concise (lnh:Dwarf.line_number_header) :string=
+
+let pp_line_number_header_concise (lnh : Dwarf.line_number_header) : string =
   "lnh offset =    " ^ Dwarf.pphex lnh.lnh_offset ^ "\n"
+
 (*^ ("dwarf_format =                       " ^ (pp_dwarf_format lnh.lnh_dwarf_format ^ ("\n"
 ^ ("unit_length =                        " ^ (Nat_big_num.to_string lnh.lnh_unit_length ^ ("\n"
 ^ ("version =                            " ^ (Nat_big_num.to_string lnh.lnh_version ^ ("\n"
@@ -376,61 +374,73 @@ let pp_line_number_header_concise (lnh:Dwarf.line_number_header) :string=
 ^ ("include_directories =                " ^ (Lem_string.concat ", " (Lem_list.map string_of_bytes  lnh.lnh_include_directories) ^ ("\n"
 ^ ("file_entries =                   \n\n" ^ (Lem_string.concat "\n" (Lem_list.map pp_line_number_file_entry  lnh.lnh_file_entries) ^ "\n"))))))))))))))))))))))))))))))))))))))))))))
  *)
-                           
-let pp_sequence_concise (s:evaluated_line_info_sequence) = 
-  "first: " ^ pp_addr s.elis_first ^ "\n"
-  ^ "last:  " ^ pp_addr s.elis_last ^ "\n"
+
+let pp_sequence_concise (s : evaluated_line_info_sequence) =
+  "first: " ^ pp_addr s.elis_first ^ "\n" ^ "last:  " ^ pp_addr s.elis_last ^ "\n"
   ^ pp_line_number_header_concise s.elis_lnh
   ^ Dwarf.pp_line_number_registerss s.elis_lines
 
-let pp_elie_concise (elie:evaluated_line_info_entry) = 
-  "first: " ^ pp_addr elie.elie_first ^ " "
-  ^ "last: " ^ pp_addr elie.elie_last ^ "\n"
+let pp_elie_concise (elie : evaluated_line_info_entry) =
+  "first: " ^ pp_addr elie.elie_first ^ " " ^ "last: " ^ pp_addr elie.elie_last ^ "\n"
   ^ pp_line_number_header_concise elie.elie_lnh
+
 (*  ^ Dwarf.pp_line_number_registerss s.elis_lines*)
 
-  
-let split_into_sequences ((lnh:Dwarf.line_number_header), (lnrs: Dwarf.line_number_registers list)) : evaluated_line_info_sequence list =
-  let rec f (acc1: Dwarf.line_number_registers list) (acc2: evaluated_line_info_sequence list) (lnrs:Dwarf.line_number_registers list) =
+let split_into_sequences
+    ((lnh : Dwarf.line_number_header), (lnrs : Dwarf.line_number_registers list)) :
+    evaluated_line_info_sequence list =
+  let rec f (acc1 : Dwarf.line_number_registers list) (acc2 : evaluated_line_info_sequence list)
+      (lnrs : Dwarf.line_number_registers list) =
     match lnrs with
-    | [] ->
-       begin
-         match acc1 with
-         | [] -> List.rev acc2
-         | _ -> Warn.fatal "split_into_sequences found premature end of sequence"
-       end
-    | lnr::lnrs' ->
-       if lnr.lnr_end_sequence then
-         let first =
-           match list_last_opt acc1 with
-           | Some lnr_first -> lnr_first.lnr_address
-           | None -> Warn.fatal "split_into_sequences found sequence of length 0" in
-         let last = lnr.lnr_address in
-         (if Nat_big_num.equal first last then Warn.fatal "split_into_sequences found first=last" else ());
-         let elis = {
-             elis_first= first;
-             elis_last=last;
-             elis_lnh = lnh;
-             elis_lines = List.rev (lnr::acc1);} in 
-         f [] (elis::acc2) lnrs'
-       else
-         f (lnr::acc1) acc2 lnrs' in
+    | [] -> (
+        match acc1 with
+        | [] -> List.rev acc2
+        | _ -> Warn.fatal "split_into_sequences found premature end of sequence"
+      )
+    | lnr :: lnrs' ->
+        if lnr.lnr_end_sequence then (
+          let first =
+            match list_last_opt acc1 with
+            | Some lnr_first -> lnr_first.lnr_address
+            | None -> Warn.fatal "split_into_sequences found sequence of length 0"
+          in
+          let last = lnr.lnr_address in
+          if Nat_big_num.equal first last then Warn.fatal "split_into_sequences found first=last"
+          else ();
+          let elis =
+            {
+              elis_first = first;
+              elis_last = last;
+              elis_lnh = lnh;
+              elis_lines = List.rev (lnr :: acc1);
+            }
+          in
+          f [] (elis :: acc2) lnrs'
+        )
+        else f (lnr :: acc1) acc2 lnrs'
+  in
   f [] [] lnrs
 
-
-let split_into_entries (s:evaluated_line_info_sequence) : evaluated_line_info_entry list =
-  let rec f acc (remaining_lines: Dwarf.line_number_registers list) = 
-      match remaining_lines with
-      | l1::((l2::remaining_lines') as remaining_lines'') ->
-         let elie = {
-             elie_first = l1.lnr_address;
-             elie_last = if Nat_big_num.equal l2.lnr_address l1.lnr_address then l1.lnr_address else Nat_big_num.sub (l2.lnr_address) (Nat_big_num.of_int 1);
-             elie_lnh = s.elis_lnh;
-             elie_lnr = l1; } in
-         f (elie::acc) remaining_lines''
-      | _ -> List.rev acc in
+let split_into_entries (s : evaluated_line_info_sequence) : evaluated_line_info_entry list =
+  let rec f acc (remaining_lines : Dwarf.line_number_registers list) =
+    match remaining_lines with
+    | l1 :: (l2 :: remaining_lines' as remaining_lines'') ->
+        let elie =
+          {
+            elie_first = l1.lnr_address;
+            elie_last =
+              ( if Nat_big_num.equal l2.lnr_address l1.lnr_address then l1.lnr_address
+              else Nat_big_num.sub l2.lnr_address (Nat_big_num.of_int 1)
+              );
+            elie_lnh = s.elis_lnh;
+            elie_lnr = l1;
+          }
+        in
+        f (elie :: acc) remaining_lines''
+    | _ -> List.rev acc
+  in
   f [] s.elis_lines
-  
+
 (*           
         
 let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_info_for_instruction option array =
@@ -519,8 +529,9 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
 
 NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW 
  *)
-  
-let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_info_for_instruction list array =
+
+let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
+    evaluated_line_info_for_instruction list array =
   let size = Array.length instructions in
   (*  let elies = Array.make size [] in*)
   let elifis = Array.make size [] in
@@ -534,49 +545,49 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
   let entries_sorted = List.sort compare_entry entries in
 
   (*List.iter (function elie -> Printf.printf "%s" (pp_elie_concise elie)) entries_sorted;*)
-  
   let rec f active_entries remaining_entries k =
-    if k>= size then ()
+    if k >= size then ()
     else
-      begin
-        let addr = instructions.(k).i_addr in
+      let addr = instructions.(k).i_addr in
 
-        let rec mk_new_perhaps_relevant acc remaining = 
-          match remaining with
-          | [] -> (acc,remaining)
-          | elie::remaining' ->
-             if Nat_big_num.less_equal elie.elie_first addr then
-               mk_new_perhaps_relevant (elie::acc) remaining'
-             else
-               (acc,remaining) in
-        
-        let (new_perhaps_relevant, remaining') = mk_new_perhaps_relevant [] remaining_entries in
+      let rec mk_new_perhaps_relevant acc remaining =
+        match remaining with
+        | [] -> (acc, remaining)
+        | elie :: remaining' ->
+            if Nat_big_num.less_equal elie.elie_first addr then
+              mk_new_perhaps_relevant (elie :: acc) remaining'
+            else (acc, remaining)
+      in
 
-        let addr_in elie = 
-          Nat_big_num.less_equal elie.elie_first addr && Nat_big_num.less_equal addr elie.elie_last in
+      let (new_perhaps_relevant, remaining') = mk_new_perhaps_relevant [] remaining_entries in
 
-        let still_active_entries =
-          List.filter addr_in active_entries @ List.filter addr_in new_perhaps_relevant in
+      let addr_in elie =
+        Nat_big_num.less_equal elie.elie_first addr && Nat_big_num.less_equal addr elie.elie_last
+      in
 
-        (elifis.(k) <- List.map (function elie -> let elifi = {elifi_start = Nat_big_num.equal addr elie.elie_first; elifi_entry=elie} in elifi) still_active_entries);
-        
-        f still_active_entries remaining' (k+1)
-      end
+      let still_active_entries =
+        List.filter addr_in active_entries @ List.filter addr_in new_perhaps_relevant
+      in
+
+      elifis.(k) <-
+        List.map
+          (function
+            | elie ->
+                let elifi =
+                  { elifi_start = Nat_big_num.equal addr elie.elie_first; elifi_entry = elie }
+                in
+                elifi)
+          still_active_entries;
+
+      f still_active_entries remaining' (k + 1)
   in
-  
+
   f [] entries_sorted 0;
   elifis
-      
-  
 
-             
-             
-                 
 (*****************************************************************************)
 (*        find and pretty-print source lines for addresses                   *)
 (*****************************************************************************)
-
-
 
 let source_file_cache =
   ref ([] : ((string option * string option * string) * string array option) list)
@@ -621,13 +632,12 @@ let pp_source_line so column =
   let marker = (*pp_glyph Gud B*) "\u{2551}" in
   match so with
   | Some s ->
-     let len = String.length s in
-     if column <= 1 then
-       marker ^ s
-     else if column < len-1 then
-       String.sub s 0 (column-1) ^ marker  ^ String.sub s (column-1) (len-column+1) (*" (" ^ s ^ ")"*)
-     else
-       s
+      let len = String.length s in
+      if column <= 1 then marker ^ s
+      else if column < len - 1 then
+        String.sub s 0 (column - 1) ^ marker ^ String.sub s (column - 1) (len - column + 1)
+        (*" (" ^ s ^ ")"*)
+      else s
   | None -> "file not found"
 
 let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : string option =
@@ -655,23 +665,28 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
                 else "")
               sls))
 
-
-let pp_dwarf_source_file_lines' (ds:Dwarf.dwarf_static) (pp_actual_line : bool) multiple elifi : string =
+let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool) multiple elifi :
+    string =
   let lnh = elifi.elifi_entry.elie_lnh in
   let lnr = elifi.elifi_entry.elie_lnr in
   let ((comp_dir, dir, file), subprogram_name) =
-    let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in 
-    (ufe, Dwarf.subprogram_at_line ds.ds_subprogram_line_extents ufe lnr.lnr_line) in 
+    let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
+    (ufe, Dwarf.subprogram_at_line ds.ds_subprogram_line_extents ufe lnr.lnr_line)
+  in
   let comp_dir' =
     match !Globals.comp_dir with
     | None -> comp_dir
     | Some comp_dir'' -> (
-      match comp_dir with
-      | None -> Some comp_dir''
-      | Some s -> Some (Filename.concat comp_dir'' s)
-    )
+        match comp_dir with
+        | None -> Some comp_dir''
+        | Some s -> Some (Filename.concat comp_dir'' s)
+      )
   in
-  file ^ ":" ^ Nat_big_num.to_string lnr.lnr_line ^ "." ^ Nat_big_num.to_string lnr.lnr_column ^ " (" ^ subprogram_name ^ ")"
+  file ^ ":"
+  ^ Nat_big_num.to_string lnr.lnr_line
+  ^ "."
+  ^ Nat_big_num.to_string lnr.lnr_column
+  ^ " (" ^ subprogram_name ^ ")"
   (*  ^ (if elifi.elifi_start then "S" else "s")*)
   ^ (if lnr.lnr_is_stmt then "S" else "s")
   ^ (if lnr.lnr_basic_block then "B" else "b")
@@ -681,12 +696,12 @@ let pp_dwarf_source_file_lines' (ds:Dwarf.dwarf_static) (pp_actual_line : bool) 
   ^ (if multiple then "M" else " ")
   ^ " "
   ^
-    if pp_actual_line then
-      pp_source_line (source_line (comp_dir', dir, file) (Nat_big_num.to_int lnr.lnr_line)) (Nat_big_num.to_int  lnr.lnr_column)
-    else ""
+  if pp_actual_line then
+    pp_source_line
+      (source_line (comp_dir', dir, file) (Nat_big_num.to_int lnr.lnr_line))
+      (Nat_big_num.to_int lnr.lnr_column)
+  else ""
 
-
-    
 (* source line info for matching instructions between binaries - ignoring inlining for now, and supposing there is always a predecessor with a source line. Should pay more careful attention to the actual line number table *)
 let rec dwarf_source_file_line_numbers' test recursion_limit (a : natural) :
     (string (*subprogram name*) * int) (*line number*) list =
@@ -1054,7 +1069,13 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
     | C_branch_cond (is, a, s) ->
         [(T_branch_cond_branch, a, s); (T_branch_cond_successor, succ_addr, "<fallthrough>")]
     | C_branch_register r1 ->
-        let addresses = try List.assoc addr branch_table_targets with Not_found -> Warn.fatal "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n" (pp_addr addr) in
+        let addresses =
+          try List.assoc addr branch_table_targets
+          with Not_found ->
+            Warn.fatal
+              "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
+              (pp_addr addr)
+        in
         List.mapi
           (function
             | i -> (
@@ -2465,7 +2486,10 @@ let pp_ranged_var (prefix : string) (var : ranged_var) : string =
   (*hackish stripping of trailing \n from linksem - TODO: fix linksem interface*)
   ^ " "
   ^ pp_context context
-  ^ (match svfp.svfp_decl with None -> "" | Some ((ufe,line,subprogram_name) as ud) -> ":" ^ string_of_int line)
+  ^ ( match svfp.svfp_decl with
+    | None -> ""
+    | Some ((ufe, line, subprogram_name) as ud) -> ":" ^ string_of_int line
+    )
   ^ "\n"
 
 let pp_ranged_vars (prefix : string) (vars : ranged_var list) : string =
@@ -2642,8 +2666,10 @@ let mk_analysis test filename_objdump_d filename_branch_table =
     time "mk_instructions" (mk_instructions test filename_objdump_d) filename_branch_table
   in
 
-  let line_info = time "mk_line_info" (mk_line_info test.dwarf_static.ds_evaluated_line_info) instructions in
-  
+  let line_info =
+    time "mk_line_info" (mk_line_info test.dwarf_static.ds_evaluated_line_info) instructions
+  in
+
   let indirect_branches = time "mk_indirect_branches" mk_indirect_branches instructions in
 
   let come_froms = time "mk_come_froms" mk_come_froms instructions in
@@ -2774,23 +2800,18 @@ let pp_instruction test an k i =
     *)
   (* NEW VERSION *)
   ^ begin
-      let pp_line multiple elifi = 
+      let pp_line multiple elifi =
         an.pp_inlining_label_prefix ppd_labels
         ^ an.rendered_control_flow_inbetweens.(k)
-        ^ "" ^ pp_dwarf_source_file_lines' test.dwarf_static (!Globals.show_source) multiple elifi
+        ^ ""
+        ^ pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source multiple elifi
         ^ "\n"
       in
       (* if there's just a single entry, suppress iff it's a non-start entry, but if there are (confusingly) multiple, show all *)
       match an.line_info.(k) with
       | [] -> ""
-      | [elifi] ->
-         if elifi.elifi_start then 
-           pp_line false elifi
-         else
-           ""
-      | elifis -> 
-         String.concat ""
-           (List.map (pp_line true) elifis)
+      | [elifi] -> if elifi.elifi_start then pp_line false elifi else ""
+      | elifis -> String.concat "" (List.map (pp_line true) elifis)
     end
   (* the frame info for this address *)
   ^ begin
