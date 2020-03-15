@@ -640,6 +640,7 @@ let pp_source_line so column =
       else s
   | None -> "file not found"
 
+(* OLD source file lines 
 let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : string option =
   let sls = Dwarf.source_lines_of_address ds a in
   match sls with
@@ -664,6 +665,16 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
                   pp_source_line (source_line (comp_dir', dir, file) (Nat_big_num.to_int n)) 200
                 else "")
               sls))
+           *)
+
+let mk_subprogram_name (ds : Dwarf.dwarf_static) elifi : string =
+  let lnh = elifi.elifi_entry.elie_lnh in
+  let lnr = elifi.elifi_entry.elie_lnr in
+  let ((comp_dir, dir, file), subprogram_name) =
+    let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
+    (ufe, Dwarf.subprogram_at_line ds.ds_subprogram_line_extents ufe lnr.lnr_line)
+  in
+  subprogram_name
 
 let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool) multiple elifi :
     string =
@@ -703,6 +714,7 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
       pp_source_line (source_line (comp_dir', dir, file) line) (Nat_big_num.to_int lnr.lnr_column)
   else ""
 
+(* OLD source line number for O0/2 correlation
 (* source line info for matching instructions between binaries - ignoring inlining for now, and supposing there is always a predecessor with a source line. Should pay more careful attention to the actual line number table *)
 let rec dwarf_source_file_line_numbers' test recursion_limit (a : natural) :
     (string (*subprogram name*) * int) (*line number*) list =
@@ -721,6 +733,24 @@ let rec dwarf_source_file_line_numbers' test recursion_limit (a : natural) :
 
 let dwarf_source_file_line_numbers test (a : natural) =
   dwarf_source_file_line_numbers' test 100 (a : natural)
+
+  *)
+
+let dwarf_source_file_line_numbers_by_index test line_info k :
+    (string (*subprogram name*) * int) (*line number*) list =
+  match line_info.(k) with
+  | [] -> []
+  | [elifi] ->
+      let lnh = elifi.elifi_entry.elie_lnh in
+      let lnr = elifi.elifi_entry.elie_lnr in
+      let ((comp_dir, dir, file), subprogram_name) =
+        let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
+        ( ufe,
+          Dwarf.subprogram_at_line test.dwarf_static.ds_subprogram_line_extents ufe lnr.lnr_line
+        )
+      in
+      [(subprogram_name, Nat_big_num.to_int lnr.lnr_line)]
+  | elifis -> []
 
 (*****************************************************************************)
 (*        look up address in ELF symbol table                                *)
@@ -1521,11 +1551,20 @@ let colours_dot_complains =
 
 let colours = List.filter (function c -> not (List.mem c colours_dot_complains)) colours_svg
 
-let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_address : graph_cfg
-    =
-  let colour label addr =
-    (*    if label ="<sl_lock>" then "plum" else if label="<sl_unlock>" then "forestgreen" else "black"*)
-    match dwarf_source_file_line_numbers test addr with
+let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms index_of_address :
+    graph_cfg =
+  let colour label k =
+    match line_info.(k) with
+    | [elifi] ->
+        let subprogram_name = mk_subprogram_name test.dwarf_static elifi in
+        let colour =
+          List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
+        in
+        colour
+    | _ -> "black"
+  in
+  (*    if label ="<sl_lock>" then "plum" else if label="<sl_unlock>" then "forestgreen" else "black"*)
+  (*    match dwarf_source_file_line_numbers test addr with
     | [(subprogram_name, line)] ->
         let colour =
           List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
@@ -1533,7 +1572,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
         colour
     | _ -> "black"
   in
-
+ *)
   (* the graphette source nodes are the addresses which are either
        - elf symbols
        - the branch target (but not the successor) of a C_branch_and_link
@@ -1604,7 +1643,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
       | _ -> (List.hd (List.rev ss), node_name_source i.i_addr)
     in
     let label = s in
-    let node = (nn, CFG_node_source, label, i.i_addr, k, colour label i.i_addr) in
+    let node = (nn, CFG_node_source, label, i.i_addr, k, colour label k) in
     let nn' = next_non_source_node_name [] k in
     let edge = (nn, nn', CFG_edge_flow) in
     ([node], [edge])
@@ -1613,7 +1652,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
   let sink_node addr s ckn k =
     let nn = node_name addr in
     let label = s in
-    let node = (nn, CFG_node_ret, label, addr, k, colour label addr) in
+    let node = (nn, CFG_node_ret, label, addr, k, colour label k) in
     (*    let nn' = next_non_source_node_name [] k in
     let edge = (nn,nn') in*)
     ([node], [])
@@ -1622,7 +1661,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
   let simple_edge addr s ckn k =
     let nn = node_name addr in
     let label = s in
-    let node = (nn, CFG_node_ret, label, addr, k, colour label addr) in
+    let node = (nn, CFG_node_ret, label, addr, k, colour label k) in
     let nn' = next_non_source_node_name [] k in
     let edge = (nn, nn', CFG_edge_flow) in
     ([node], [edge])
@@ -1646,7 +1685,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
     | C_branch_and_link (a, s) ->
         let nn = node_name i.i_addr in
         let label = s in
-        let node = (nn, CFG_node_branch_and_link, label, i.i_addr, k, colour label i.i_addr) in
+        let node = (nn, CFG_node_branch_and_link, label, i.i_addr, k, colour label k) in
         let edges =
           List.filter_map
             (function
@@ -1660,7 +1699,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
     | C_smc_hvc s ->
         let nn = node_name i.i_addr in
         let label = "smc/hvc " ^ s in
-        let node = (nn, CFG_node_smc_hvc, label, i.i_addr, k, colour label i.i_addr) in
+        let node = (nn, CFG_node_smc_hvc, label, i.i_addr, k, colour label k) in
         let edges =
           List.filter_map
             (function
@@ -1674,7 +1713,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
     | C_branch_cond (mnemonic, a, s) ->
         let nn = node_name i.i_addr in
         let label = pp_addr i.i_addr in
-        let node = (nn, CFG_node_branch_cond, label, i.i_addr, k, colour label i.i_addr) in
+        let node = (nn, CFG_node_branch_cond, label, i.i_addr, k, colour label k) in
         let edges =
           List.map
             (function
@@ -1687,7 +1726,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions come_froms index_of_ad
     | C_branch_register _ ->
         let nn = node_name i.i_addr in
         let label = pp_addr i.i_addr in
-        let node = (nn, CFG_node_branch_register, label, i.i_addr, k, colour label i.i_addr) in
+        let node = (nn, CFG_node_branch_register, label, i.i_addr, k, colour label k) in
         let edges =
           List.sort_uniq compare
             (List.map
@@ -1824,7 +1863,7 @@ http://ocamlgraph.lri.fr/doc/Fixpoint.html
 
 (* same-source-line edges *)
 
-let correlate_source_line test1 graph1 test2 graph2 : graph_cfg =
+let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : graph_cfg =
   let (nodes_source1, nodes_rest1, edges1) = graph1 in
   let (nodes_source2, nodes_rest2, edges2) = graph2 in
   let is_branch_cond = function
@@ -1838,11 +1877,16 @@ let correlate_source_line test1 graph1 test2 graph2 : graph_cfg =
   in
   let nodes_branch_cond1 = List.filter is_branch_cond nodes_rest1 in
   let nodes_branch_cond2 = List.filter is_branch_cond nodes_rest2 in
-  let with_source_lines test = function
-    | (nn, cnk, label, addr, k, col) as n -> (nn, dwarf_source_file_line_numbers test addr)
+  let with_source_lines test line_info = function
+    | (nn, cnk, label, addr, k, col) as n ->
+        (nn, dwarf_source_file_line_numbers_by_index test line_info k)
   in
-  let nodes_branch_cond_with1 = List.map (with_source_lines test1) nodes_branch_cond1 in
-  let nodes_branch_cond_with2 = List.map (with_source_lines test2) nodes_branch_cond2 in
+  let nodes_branch_cond_with1 =
+    List.map (with_source_lines test1 line_info1) nodes_branch_cond1
+  in
+  let nodes_branch_cond_with2 =
+    List.map (with_source_lines test2 line_info2) nodes_branch_cond2
+  in
   let intersects xs ys = List.exists (function x -> List.mem x ys) xs in
   let edges =
     List.concat
@@ -2970,7 +3014,8 @@ let process_file () : unit =
       ( match !Globals.cfg_dot_file with
       | Some cfg_dot_file ->
           let graph =
-            mk_cfg test "" an.elf_symbols an.instructions an.come_froms an.index_of_address
+            mk_cfg test "" an.elf_symbols an.instructions an.line_info an.come_froms
+              an.index_of_address
           in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
           pp_cfg graph cfg_dot_file
@@ -2999,11 +3044,12 @@ let process_file () : unit =
           let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables2 in
 
           let graph0 =
-            mk_cfg test "O0_" an.elf_symbols an.instructions an.come_froms an.index_of_address
+            mk_cfg test "O0_" an.elf_symbols an.instructions an.line_info an.come_froms
+              an.index_of_address
           in
 
           let graph2 =
-            mk_cfg test2 "O2_" an2.elf_symbols an2.instructions an2.come_froms
+            mk_cfg test2 "O2_" an2.elf_symbols an2.instructions an2.line_info an2.come_froms
               an2.index_of_address
           in
 
@@ -3027,7 +3073,9 @@ let process_file () : unit =
 
           let graph = graph_union graph0' graph2' in
 
-          let graph' = correlate_source_line test graph0' test2 graph2' in
+          let graph' =
+            correlate_source_line test an.line_info graph0' test2 an2.line_info graph2'
+          in
 
           let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
           let cfg_dot_file_base = cfg_dot_file_root ^ "_base.dot" in
