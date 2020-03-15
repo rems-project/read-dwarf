@@ -697,9 +697,10 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
   ^ " "
   ^
   if pp_actual_line then
-    pp_source_line
-      (source_line (comp_dir', dir, file) (Nat_big_num.to_int lnr.lnr_line))
-      (Nat_big_num.to_int lnr.lnr_column)
+    let line = Nat_big_num.to_int lnr.lnr_line in
+    if line = 0 then "line 0"
+    else
+      pp_source_line (source_line (comp_dir', dir, file) line) (Nat_big_num.to_int lnr.lnr_column)
   else ""
 
 (* source line info for matching instructions between binaries - ignoring inlining for now, and supposing there is always a predecessor with a source line. Should pay more careful attention to the actual line number table *)
@@ -2322,17 +2323,24 @@ let pp_sdt_concise_variable_or_formal_parameter_main (level : int)
 (*^ indent ^ "declaration:" ^  show svfp.svfp_declaration ^ "\n"*)
 (*^ indent ^ "locations:" *)
 
-let pp_sdt_concise_variable_or_formal_parameter (level : int)
+let pp_sdt_concise_variable_or_formal_parameter (level : int) (is_params : bool)
     (svfp : Dwarf.sdt_variable_or_formal_parameter) : string =
-  pp_sdt_concise_variable_or_formal_parameter_main level svfp
+  (if is_params then "+" else "")
+  ^ pp_sdt_concise_variable_or_formal_parameter_main level svfp
   ^
   match svfp.svfp_locations with
   | None -> "no locations\n"
+  | Some [loc] -> " " ^ Dwarf.pp_parsed_single_location_description (Nat_big_num.of_int 0) loc
   | Some locs ->
       "\n"
       ^ String.concat ""
           (Lem_list.map
-             (Dwarf.pp_parsed_single_location_description (Nat_big_num.of_int (level + 1)))
+             (function
+               | loc ->
+                   "+"
+                   ^ Dwarf.pp_parsed_single_location_description
+                       (Nat_big_num.of_int (level + 1))
+                       loc)
              locs)
 
 (*  ^ indent ^ "decl:" ^ (match svfp.svfp_decl with Nothing -> "none\n" | Just ((ufe,line) as ud) -> "\n" ^ indent_level true (level+1) ^ pp_ufe ufe ^ " " ^ show line ^ "\n" end)*)
@@ -2346,7 +2354,7 @@ let pp_sdt_globals_compilation_unit (level : int) (cu : Dwarf.sdt_compilation_un
   ^ "\n"
   (*  ^ indent ^ "vars:" ^  "\n"*)
   ^ String.concat ""
-      (Lem_list.map (pp_sdt_concise_variable_or_formal_parameter (level + 1)) cu.scu_vars)
+      (Lem_list.map (pp_sdt_concise_variable_or_formal_parameter (level + 1) false) cu.scu_vars)
 
 (*  ^ indent ^ "subroutines :" ^  (match cu.scu_subroutines with | [] -> "none\n" | sus -> "\n" ^ String.concat "\n" (List.map  (pp_sdt_subroutine (level+1)) sus) end) *)
 
@@ -2474,7 +2482,7 @@ let pp_vars (vars : (Dwarf.sdt_variable_or_formal_parameter * string list) list)
     (List.map
        (function
          | (var, context) ->
-             pp_context context ^ "\n" ^ pp_sdt_concise_variable_or_formal_parameter 1 var)
+             pp_context context ^ "\n" ^ pp_sdt_concise_variable_or_formal_parameter 1 false var)
        vars)
 
 let pp_ranged_var (prefix : string) (var : ranged_var) : string =
@@ -2770,9 +2778,16 @@ let pp_instruction test an k i =
   let pp_params addr params =
     match List.assoc_opt addr params with
     | None -> ""
-    | Some (name, vars) ->
-        name ^ " params:\n"
-        ^ String.concat "" (List.map (pp_sdt_concise_variable_or_formal_parameter 0) vars)
+    | Some (name, vars) -> (
+        "+ " ^ name ^ " params:"
+        ^
+        match vars with
+        | [] -> " none\n"
+        | _ ->
+            "\n"
+            ^ String.concat ""
+                (List.map (pp_sdt_concise_variable_or_formal_parameter 0 true) vars)
+      )
   in
   pp_params addr an.ranged_vars_at_instructions.rvai_params
   (* the new inlining info for this address *)
