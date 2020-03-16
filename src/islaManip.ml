@@ -9,11 +9,7 @@ open Isla
 
 (** Check if a trace is linear (has no branches) *)
 let is_linear (Trace events : ('v, 'a) trc) =
-  let rec no_branch = function
-    | [] -> true
-    | Branch (_, _, _) :: _ -> false
-    | _ :: l -> no_branch l
-  in
+  let rec no_branch = function [] -> true | Branch _ :: _ -> false | _ :: l -> no_branch l in
   no_branch events
 
 (*****************************************************************************)
@@ -87,10 +83,21 @@ let direct_exp_iter_exp (i : ('a, 'b) exp -> unit) = function
   | Enum (e, a) -> ()
   | Var (v, a) -> ()
 
-let direct_event_iter_valu (i : valu -> unit) = function
+let direct_smt_map_exp (m : ('a, 'b) exp -> ('a, 'b) exp) : ('a, 'b) smt -> ('a, 'b) smt =
+  function
+  | DefineConst (v, exp) -> DefineConst (v, m exp)
+  | Assert exp -> Assert (m exp)
+  | DeclareConst _ as d -> d
+
+let direct_event_map_exp (m : ('a, 'b) exp -> ('a, 'b) exp) : ('a, 'b) event -> ('a, 'b) event =
+  function
+  | Smt (smt, l) -> Smt (direct_smt_map_exp m smt, l)
+  | event -> event
+
+let direct_event_iter_valu (i : valu -> unit) : ('a, 'b) event -> unit = function
   | Smt _ -> ()
-  | DefineEnum (_, _) -> ()
-  | Branch (_, _, _) -> ()
+  | DefineEnum _ -> ()
+  | Branch _ -> ()
   | BranchAddress (v, _) -> i v
   | ReadReg (_, _, v, _) -> i v
   | WriteReg (_, _, v, _) -> i v
@@ -104,6 +111,34 @@ let direct_event_iter_valu (i : valu -> unit) = function
       i v';
       i v''
 
+let direct_event_map_valu (m : valu -> valu) : ('a, 'b) event -> ('a, 'b) event = function
+  | BranchAddress (v, l) -> BranchAddress (m v, l)
+  | ReadReg (a, b, v, c) -> ReadReg (a, b, m v, c)
+  | WriteReg (a, b, v, c) -> WriteReg (a, b, m v, c)
+  | ReadMem (v, v', v'', a, b) -> ReadMem (m v, m v', m v'', a, b)
+  | WriteMem (a, v, v', v'', b, c) -> WriteMem (a, m v, m v', m v'', b, c)
+  | e -> e
+
+let direct_valu_iter_valu (i : valu -> unit) : valu -> unit = function
+  | Val_Symbolic _ -> ()
+  | Val_Bool _ -> ()
+  | Val_I _ -> ()
+  | Val_Bits _ -> ()
+  | Val_Enum _ -> ()
+  | Val_String _ -> ()
+  | Val_Unit -> ()
+  | Val_NamedUnit _ -> ()
+  | Val_Vector l -> List.iter i l
+  | Val_List l -> List.iter i l
+  | Val_Struct l -> List.iter (fun (_, v) -> i v) l
+  | Val_Poison -> ()
+
+let direct_valu_map_valu (m : valu -> valu) : valu -> valu = function
+  | Val_Vector l -> Val_Vector (List.map m l)
+  | Val_List l -> Val_List (List.map m l)
+  | Val_Struct l -> Val_Struct (List.map (Pair.map Fun.id m) l)
+  | valu -> valu
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -116,6 +151,10 @@ let direct_event_iter_valu (i : valu -> unit) = function
 
     [a_iter_b] take a function [b -> unit] and applies it to all the [b] in [a], and do that
     recursively
+
+    Doing this when a = b is not well defined, and can be easily done using the direct
+    version from previous section.
+
 *)
 
 (** iterate a function on all the variable of an expression *)

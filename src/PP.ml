@@ -51,6 +51,12 @@ let fatal doc =
    PP.(fatal $ doc1 ^^ doc2)
 *)
 
+(** To printf *)
+let top pp obj o = fprint o (pp obj)
+
+(** To sprintf *)
+let tos pp obj () = sprint (pp obj)
+
 (*
    Usage in printf familly function:
    lazy: Printf.printf "hey object %t is here" PP.(fun o -> fprint o $ doc1 ^^ doc2)
@@ -59,6 +65,9 @@ let fatal doc =
 
    the lazy version can be useful for logging message where you don't want to compute the document
    If the thing is never printed.
+
+   Case when there is one object :
+   Printf.printf "hey %t" PP.(top printer object)
 *)
 
 (*****************************************************************************)

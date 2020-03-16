@@ -73,7 +73,7 @@ end
     For now, for each elements of the list, the first line is a boolean and then starting on next
     line, we'll have the corresponding trace. Then the boolean of the next trace.
 *)
-module TraceList (*: Cache.Value *) = struct
+module BoolTraceList (*: Cache.Value *) = struct
   type t = (bool * Isla.rtrc) list
 
   let to_file file trcs =
@@ -94,6 +94,26 @@ module TraceList (*: Cache.Value *) = struct
       let filename = Printf.sprintf "Trace %i of %s" !num file in
       incr num;
       (b, Isla.parse_trc_string ~filename trc)
+    in
+    let input_trcs = Files.input_list input_trc in
+    Files.read input_trcs file
+end
+
+module TraceList (*: Cache.Value *) = struct
+  type t = Isla.rtrc list
+
+  let to_file file (trcs : t) =
+    let output_trc ochannel trc = PP.(fprint ochannel $ pp_trc erase trc) in
+    let output_trcs = Files.output_list output_trc in
+    Files.write output_trcs file trcs
+
+  let of_file file : t =
+    let num = ref 0 in
+    let input_trc ichannel =
+      let trc = Files.input_sexp ichannel in
+      let filename = Printf.sprintf "Trace %i of %s" !num file in
+      incr num;
+      Isla.parse_trc_string ~filename trc
     in
     let input_trcs = Files.input_list input_trc in
     Files.read input_trcs file
@@ -123,7 +143,7 @@ module IC = Cache.Make (Opcode) (TraceList) (Epoch)
 (** An epoch independant of the isla version, bump if you change the representation
     of the traces on disk.
     Reset (or not) when bumping isla version ({!IslaServer.required_version}) *)
-let epoch = 0
+let epoch = 1
 
 (** This varaible stores the cache RAM representation *)
 let cache : IC.t option ref = ref None
@@ -168,20 +188,23 @@ let get_traces (opcode : BytesSeq.t) =
   | None ->
       ensure_started ();
       let trcs = IslaServer.request_bin_parsed opcode in
-      IC.add cache (Some opcode) trcs;
-      trcs
+      let ptrcs = IslaPreprocess.preprocess trcs in
+      IC.add cache (Some opcode) ptrcs;
+      ptrcs
 
 (* TODO here I assume nop is a nop instruction in all architectures, this may not be true *)
 let nop = "nop"
 
 (** Get the traces of the nop opcode (The initialization code).
     Use {!IslaServer} if the value is not in the cache *)
-let get_nop () =
+let get_nop () : Isla.rtrc =
   let cache = get_cache () in
   match IC.get_opt cache None with
-  | Some trcs -> trcs
+  | Some [trc] -> trc
+  | Some _ -> fatal "Corrupted cache, nop hasn't exactly one trace"
   | None ->
       ensure_started ();
       let trcs = IslaServer.(TEXT_ASM nop |> request |> expect_parsed_traces) in
-      IC.add cache None trcs;
-      trcs
+      let trc = List.assoc true trcs in
+      IC.add cache None [trc];
+      trc

@@ -23,5 +23,5 @@ let state () =
 
 (** Intialize this module by calling isla on {!nop} to get initial machine state *)
 let init () =
-  IslaCache.get_nop () |> List.assoc true |> IslaManip.split_cycle |> fst
-  |> IslaManip.remove_ignored |> IslaManip.isla_trace_conv_svar |> load_init_trc
+  IslaCache.get_nop () |> IslaManip.split_cycle |> fst |> IslaManip.remove_ignored
+  |> IslaManip.isla_trace_conv_svar |> load_init_trc

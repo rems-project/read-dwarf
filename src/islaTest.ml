@@ -70,6 +70,10 @@ let noparse =
   let doc = "Do not try to parse isla output. Just dump it" in
   Arg.(value & flag & info ["n"; "no-parse"] ~doc)
 
+let preprocess =
+  let doc = "Preprocess the trace before doing the rest" in
+  Arg.(value & flag & info ["p"; "preprocess"] ~doc)
+
 let typer =
   let doc = "Type the isla output, dump the types and the register file" in
   Arg.(value & flag & info ["t"; "type"] ~doc)
@@ -166,13 +170,19 @@ let processing_f2m noparse typer run simp =
 let pmode_term = Term.(const processing_f2m $ noparse $ typer $ run $ simp)
 
 (** Does the actual processing of the trace *)
-let processing pmode (filename, input) : unit =
+let processing preprocessing pmode (filename, input) : unit =
   let parse input =
     let t = Isla.parse_trc_string ~filename input in
     let t = IslaManip.remove_ignored t in
-    (* TODO make filter an intermediate step *)
-    PPA.(println @@ pp_trc string t);
-    t
+    if preprocessing then begin
+      let pre = IslaPreprocess.simplify_trc t in
+      PPA.(println @@ pp_trc string pre);
+      pre
+    end
+    else begin
+      PPA.(println @@ pp_trc string t);
+      t
+    end
   in
   let typer t =
     let c = IslaType.type_trc t in
@@ -205,7 +215,7 @@ let processing pmode (filename, input) : unit =
       input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run |> simp |> PPA.state
       |> PPA.println
 
-let term = Term.(func_option z3 processing $ pmode_term $ isla_term)
+let term = Term.(func_option z3 processing $ preprocess $ pmode_term $ isla_term)
 
 let info =
   let doc = "Test the isla interaction" in

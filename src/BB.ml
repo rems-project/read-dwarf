@@ -24,15 +24,10 @@ let from_binary (code : BytesSeq.t) : t =
   if BytesSeq.length code != num * 4 then
     failwith "BB.from_binary: The specified range cuts an instruction";
   let process (code : BytesSeq.t) : trc =
-    let check : (bool * Isla.rtrc) list -> unit =
-      List.iter (fun (b, _) -> if b then failwith "BB.from_binary: branching instruction")
-    in
-    let rec get_normal : (bool * Isla.rtrc) list -> trc = function
+    let get_normal : Isla.rtrc list -> trc = function
       | [] -> failwith "BB.from_binary: no normal path"
-      | (true, trc) :: l ->
-          check l;
-          trc |> IslaManip.filter |> IslaManip.isla_trace_conv_svar
-      | (false, _) :: l -> get_normal l
+      | [trc] -> trc |> IslaManip.isla_trace_conv_svar
+      | _ -> failwith "BB.from_binary: Multiple path i.e. branching instruction"
     in
     code |> IslaCache.get_traces |> get_normal
   in
