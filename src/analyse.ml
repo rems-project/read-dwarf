@@ -1368,7 +1368,10 @@ type edge_kind_cfg = CFG_edge_flow | CFG_edge_correlate
 
 type node_name = string (*graphviz node name*)
 
-type node_cfg = node_name * node_kind_cfg * string (*label*) * addr * index * string (*colour*)
+type node_cfg =
+  node_name * node_kind_cfg * string (*label*) * addr * index * string (*colour*) * string
+
+(*tooltip *)
 
 type edge_cfg = node_name * node_name * edge_kind_cfg
 
@@ -1551,10 +1554,66 @@ let colours_dot_complains =
 
 let colours = List.filter (function c -> not (List.mem c colours_dot_complains)) colours_svg
 
-let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms index_of_address :
-    graph_cfg =
+let char_list_of_string s =
+  let n = String.length s in
+  let rec f i = if i = n then [] else s.[i] :: f (i + 1) in
+  f 0
+
+let html_escape s =
+  String.concat ""
+    (List.map
+       (fun c ->
+         match c with
+         | '&' -> "&amp;"
+         | '<' -> "&lt;"
+         | '>' -> "&gt;"
+         | '\"' -> "&quot;"
+         | '\'' -> "&apos;"
+         | _ -> String.make 1 c)
+       (char_list_of_string s))
+
+let mk_tooltip test an label k =
+  (* TODO: reduce the nasty code duplication between this and pp_instruction *)
+  let i = an.instructions.(k) in
+  let addr = i.i_addr in
+  let come_froms' =
+    List.filter (function cf -> cf.cf_target_kind <> T_plain_successor) an.come_froms.(k)
+  in
+  let lines =
+    [label]
+    @ List.map
+        (pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source false)
+        an.line_info.(k)
+    (* the address and (hex) instruction *)
+    @ [
+        pp_addr addr ^ ":  "
+        ^ pp_opcode_bytes test.arch i.i_opcode
+        (* the dissassembly from objdump *)
+        ^ "  "
+        ^ i.i_mnemonic ^ "\t" ^ i.i_operands
+        (* any indirect-branch control flow from this instruction *)
+        ^ begin
+            match i.i_control_flow with
+            | C_branch_register _ ->
+                " -> "
+                ^ String.concat ","
+                    (List.map
+                       (function
+                         | (tk, a', k', s) ->
+                             pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
+                       i.i_targets)
+                ^ " "
+            | _ -> ""
+          end
+        (* any control flow to this instruction *)
+        ^ pp_come_froms addr come_froms';
+      ]
+  in
+  html_escape (String.concat "\n" lines)
+
+let mk_cfg test an node_name_prefix : graph_cfg =
   let colour label k =
-    match line_info.(k) with
+    match an.line_info.(k) with
     | [elifi] ->
         let subprogram_name = mk_subprogram_name test.dwarf_static elifi in
         let colour =
@@ -1592,11 +1651,11 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
   in
 
   let is_graphette_source k =
-    elf_symbols.(k) <> [] || List.exists is_graphette_source_target come_froms.(k)
+    an.elf_symbols.(k) <> [] || List.exists is_graphette_source_target an.come_froms.(k)
   in
 
   let is_graph_non_source_node k =
-    let i = instructions.(k) in
+    let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_no_instruction -> false
     | C_plain -> false
@@ -1614,7 +1673,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
   let node_name addr = node_name_prefix ^ pp_addr addr in
 
   let rec next_non_source_node_name visited k =
-    let i = instructions.(k) in
+    let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_plain -> (
         match i.i_targets with
@@ -1631,19 +1690,20 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
     | _ -> node_name i.i_addr
   in
 
-  let k_max = Array.length elf_symbols in
+  let k_max = Array.length an.elf_symbols in
 
   (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
   let graphette_source k : node_cfg list * edge_cfg list =
-    let i = instructions.(k) in
-    let ss = elf_symbols.(k) in
+    let i = an.instructions.(k) in
+    let ss = an.elf_symbols.(k) in
     let (s, nn) =
       match ss with
       | [] -> (pp_addr i.i_addr, node_name i.i_addr)
       | _ -> (List.hd (List.rev ss), node_name_source i.i_addr)
     in
     let label = s in
-    let node = (nn, CFG_node_source, label, i.i_addr, k, colour label k) in
+    let tooltip = mk_tooltip test an label k in
+    let node = (nn, CFG_node_source, label, i.i_addr, k, colour label k, tooltip) in
     let nn' = next_non_source_node_name [] k in
     let edge = (nn, nn', CFG_edge_flow) in
     ([node], [edge])
@@ -1652,7 +1712,8 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
   let sink_node addr s ckn k =
     let nn = node_name addr in
     let label = s in
-    let node = (nn, CFG_node_ret, label, addr, k, colour label k) in
+    let tooltip = mk_tooltip test an label k in
+    let node = (nn, CFG_node_ret, label, addr, k, colour label k, tooltip) in
     (*    let nn' = next_non_source_node_name [] k in
     let edge = (nn,nn') in*)
     ([node], [])
@@ -1661,7 +1722,8 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
   let simple_edge addr s ckn k =
     let nn = node_name addr in
     let label = s in
-    let node = (nn, CFG_node_ret, label, addr, k, colour label k) in
+    let tooltip = mk_tooltip test an label k in
+    let node = (nn, CFG_node_ret, label, addr, k, colour label k, tooltip) in
     let nn' = next_non_source_node_name [] k in
     let edge = (nn, nn', CFG_edge_flow) in
     ([node], [edge])
@@ -1669,7 +1731,7 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
 
   let graphette_normal k : node_cfg list * edge_cfg list =
     (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
-    let i = instructions.(k) in
+    let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_no_instruction ->
         Warn.fatal "graphette_normal on C_no_instruction"
@@ -1685,7 +1747,8 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
     | C_branch_and_link (a, s) ->
         let nn = node_name i.i_addr in
         let label = s in
-        let node = (nn, CFG_node_branch_and_link, label, i.i_addr, k, colour label k) in
+        let tooltip = mk_tooltip test an label k in
+        let node = (nn, CFG_node_branch_and_link, label, i.i_addr, k, colour label k, tooltip) in
         let edges =
           List.filter_map
             (function
@@ -1699,7 +1762,8 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
     | C_smc_hvc s ->
         let nn = node_name i.i_addr in
         let label = "smc/hvc " ^ s in
-        let node = (nn, CFG_node_smc_hvc, label, i.i_addr, k, colour label k) in
+        let tooltip = mk_tooltip test an label k in
+        let node = (nn, CFG_node_smc_hvc, label, i.i_addr, k, colour label k, tooltip) in
         let edges =
           List.filter_map
             (function
@@ -1713,7 +1777,8 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
     | C_branch_cond (mnemonic, a, s) ->
         let nn = node_name i.i_addr in
         let label = pp_addr i.i_addr in
-        let node = (nn, CFG_node_branch_cond, label, i.i_addr, k, colour label k) in
+        let tooltip = mk_tooltip test an label k in
+        let node = (nn, CFG_node_branch_cond, label, i.i_addr, k, colour label k, tooltip) in
         let edges =
           List.map
             (function
@@ -1726,7 +1791,8 @@ let mk_cfg test node_name_prefix elf_symbols instructions line_info come_froms i
     | C_branch_register _ ->
         let nn = node_name i.i_addr in
         let label = pp_addr i.i_addr in
-        let node = (nn, CFG_node_branch_register, label, i.i_addr, k, colour label k) in
+        let tooltip = mk_tooltip test an label k in
+        let node = (nn, CFG_node_branch_register, label, i.i_addr, k, colour label k, tooltip) in
         let edges =
           List.sort_uniq compare
             (List.map
@@ -1780,11 +1846,11 @@ let pp_edge (nn, nn', cek) =
 
 let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) cfg_dot_file : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
-  let pp_node ((nn, cnk, label, addr, k, col) as n) =
+  let pp_node ((nn, cnk, label, addr, k, col, tooltip) as n) =
     let shape =
       match cnk with CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]" | _ -> ""
     in
-    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name nn) label label
+    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name nn) label tooltip
       margin shape (pp_colour col)
   in
 
@@ -1794,7 +1860,7 @@ let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) cfg_dot_file : unit =
   List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes_source;
   Printf.fprintf c "{ rank=min; %s }\n"
     (String.concat ""
-       (List.map (function (nn, _, _, _, _, _) -> pp_node_name nn ^ ";") nodes_source));
+       (List.map (function (nn, _, _, _, _, _, _) -> pp_node_name nn ^ ";") nodes_source));
   List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes;
   List.iter (function e -> Printf.fprintf c "%s\n" (pp_edge e)) edges;
   Printf.fprintf c "}\n";
@@ -1807,7 +1873,7 @@ let reachable_subgraph ((nodes_source, nodes, edges) : graph_cfg) (labels_start 
   let edges_all : (node_name * node_name list) list =
     List.map
       (function
-        | (nn, cnk, label, addr, k, col) ->
+        | (nn, cnk, label, addr, k, col, tooltip) ->
             ( nn,
               List.filter_map
                 (function (nn1, nn2, cek) -> if nn1 = nn then Some nn2 else None)
@@ -1830,7 +1896,8 @@ let reachable_subgraph ((nodes_source, nodes, edges) : graph_cfg) (labels_start 
   let start_node_names =
     List.filter_map
       (function
-        | (nn, cnk, label, addr, k, col) -> if List.mem label labels_start then Some nn else None)
+        | (nn, cnk, label, addr, k, col, tooltip) ->
+            if List.mem label labels_start then Some nn else None)
       nodes_all
   in
   let node_names_reachable = stupid_reachability false [] start_node_names in
@@ -1842,12 +1909,12 @@ let reachable_subgraph ((nodes_source, nodes, edges) : graph_cfg) (labels_start 
   in
   let nodes_reachable_source =
     List.filter
-      (function (nn, cnk, label, addr, k, col) -> List.mem nn node_names_reachable)
+      (function (nn, cnk, label, addr, k, col, tooltip) -> List.mem nn node_names_reachable)
       nodes_source
   in
   let nodes_reachable_rest =
     List.filter
-      (function (nn, cnk, label, addr, k, col) -> List.mem nn node_names_reachable)
+      (function (nn, cnk, label, addr, k, col, tooltip) -> List.mem nn node_names_reachable)
       nodes
   in
   (nodes_reachable_source, nodes_reachable_rest, edges_reachable)
@@ -1867,7 +1934,7 @@ let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : grap
   let (nodes_source1, nodes_rest1, edges1) = graph1 in
   let (nodes_source2, nodes_rest2, edges2) = graph2 in
   let is_branch_cond = function
-    | (nn, cnk, label, addr, k, col) -> (
+    | (nn, cnk, label, addr, k, col, tooltip) -> (
         match cnk with
         | CFG_node_branch_cond | CFG_node_branch_register | CFG_node_ret
          |CFG_node_branch_and_link ->
@@ -1878,7 +1945,7 @@ let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : grap
   let nodes_branch_cond1 = List.filter is_branch_cond nodes_rest1 in
   let nodes_branch_cond2 = List.filter is_branch_cond nodes_rest2 in
   let with_source_lines test line_info = function
-    | (nn, cnk, label, addr, k, col) as n ->
+    | (nn, cnk, label, addr, k, col, tooltip) as n ->
         (nn, dwarf_source_file_line_numbers_by_index test line_info k)
   in
   let nodes_branch_cond_with1 =
@@ -3016,10 +3083,7 @@ let process_file () : unit =
       (* output CFG dot file *)
       ( match !Globals.cfg_dot_file with
       | Some cfg_dot_file ->
-          let graph =
-            mk_cfg test "" an.elf_symbols an.instructions an.line_info an.come_froms
-              an.index_of_address
-          in
+          let graph = mk_cfg test an "" in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
           pp_cfg graph cfg_dot_file
       | None -> ()
@@ -3046,15 +3110,9 @@ let process_file () : unit =
 
           let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables2 in
 
-          let graph0 =
-            mk_cfg test "O0_" an.elf_symbols an.instructions an.line_info an.come_froms
-              an.index_of_address
-          in
+          let graph0 = mk_cfg test an "O0_" in
 
-          let graph2 =
-            mk_cfg test2 "O2_" an2.elf_symbols an2.instructions an2.line_info an2.come_froms
-              an2.index_of_address
-          in
+          let graph2 = mk_cfg test2 an2 "O2_" in
 
           let parse_source_node_list (so : string option) : string list =
             match so with
