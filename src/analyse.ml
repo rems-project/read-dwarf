@@ -2624,9 +2624,10 @@ let local_locals (vars: ranged_var list) instructions  : ranged_vars_at_location
 (*        extract inlining data                                              *)
 (*****************************************************************************)
 
-let mk_inlining test instructions =
+let mk_inlining test sdt instructions =
   (* compute the inlining data *)
-  let iss = Dwarf.analyse_inlined_subroutines test.dwarf_static.ds_dwarf in
+  (*let iss = Dwarf.analyse_inlined_subroutines test.dwarf_static.ds_dwarf in*)
+  let iss = Dwarf.analyse_inlined_subroutines_sdt_dwarf sdt in
   let issr = Dwarf.analyse_inlined_subroutines_by_range iss in
 
   (* walk over instructions annotating with inlining data *)
@@ -2741,7 +2742,9 @@ let mk_analysis test filename_objdump_d filename_branch_table =
   let frame_info = time "mk_frame_info" (mk_frame_info test) instructions in
 
   (*Printf.printf  "%s" (pp_indirect_branches indirect_branches); flush stdout;*)
-  let (inlining, pp_inlining_label_prefix) = time "mk_inlining" mk_inlining test instructions in
+  let (inlining, pp_inlining_label_prefix) =
+    time "mk_inlining" (mk_inlining test sdt) instructions
+  in
 
   let acf_width = 60 in
   let max_branch_distance = None (* Some instruction_count, or None for unlimited *) in
