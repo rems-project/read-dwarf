@@ -20,9 +20,10 @@
    - Need to swap ott pp generation to StdLib.Format, which is good for portability
  - Do a rd2 command that basically does the same thing as rd but using internal data structure
    and not Linksem's data structures.
- - Do a html command that basically does the same thing as rd2 but with a collapsible 
-   html file and way more information, in particular with an option to have 
+ - Do a html command that basically does the same thing as rd2 but with a collapsible
+   html file and way more information, in particular with an option to have
    the result of symbolic evaluation
+ - Improve preprocessing like simplify with Z3 at preprocessing time
 
 ## Linksem
 
@@ -53,37 +54,11 @@
 # Required Plumbing
 
  - isla
-   - Write the system that caches results.
    - Move the initial state from isla to readDwarf
 
 # Content
 
-## Memory
-
-### Pointer location tags
-
- - `stack` : lower stack
- - `code` : .text and other code sections
- - `data` : .data
- - `rodata` : .rodata
- - `global` : .data or heap (anything passed as a pointer argument)
- - `roglobal` : .rodata or .data or heap (anything passed as a const pointer argument)
- - `glocal` : anything except .rodata (something return as a pointer by a subroutine)
- - `roglocal` : anything (something returned as a const pointer by a subroutine)
-
-### Simulation
-
- - Handle read-mem and write-mem calls
- - Memory is represented as a global trace: list of memory event from latest to oldest
-   The only optimization is:
-     if someone reads from constant memory (rodata) with a concrete address
-     then they receive a concrete value. (This is mostly to handle naively jump tables)
-     if they write to it: UB
-
-#### C type and location inference
- - Basic C type inference on linear traces
-
-### Matching
+## Matching
  - Finding the simulation relation on global variables.
  - First try : Just match elf symbols with size and index lower stack with start sp
    and handle all the rest symbolically.
@@ -92,13 +67,16 @@
  - Start by handling that the exponential way and wait until it blows up
  - Don't deal with loops for now
 
-
 ## Function calling API
  - Add a format to specify the calling convention
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Decide whether to stick with PPrint or swap to StdLib.Format
+ - Implement the C types from the notes and do the DWARF to internal type conversion
+ - Build the ABI concept into the code, and add room for all Arch-dependent things
+ - Do a start of the AArch64 ABI encoding sufficient to run a function.
+ - Do a system to drive isla through a loop less-function, including respecting the ABI.
+ - Start implementing the basic type inference system: stage 1.
 
 ## Memory stack
 
@@ -141,3 +119,5 @@
    This location concept need to be integrated with isla states and use reg.ml register concepts
  - Simple location evaluator
  - Add logging system with backtraces on fatal errors.
+ - Add a caching system to store computed trace on disk
+ - Add a preprocessing system to shorten the trace output by isla
