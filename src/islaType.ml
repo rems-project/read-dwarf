@@ -146,7 +146,7 @@ let type_trc ?(tc = HashVector.empty ()) (isla_trace : 'v ltrc) =
         if Reg.mem_string name then
           tassert l "Register structure cannot change"
           @@ Reg.type_weak_eq tv (Reg.reg_type (Reg.of_string name))
-        else ignore @@ Reg.add_reg name tv
+        else Reg.adds name tv
     | _ -> ()
   in
   List.iter process events;

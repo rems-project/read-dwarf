@@ -12,8 +12,6 @@ let vector conv v = Vector.pp conv v
 
 let hvector conv hv = HashVector.pp conv hv
 
-let bimap conv bm = Bimap.pp conv bm
-
 let reg = Reg.pp
 
 let rmap conv map = Reg.Map.pp conv map

@@ -12,7 +12,11 @@ let map = map
 
 let get = get
 
+let unsafe_get = unsafe_get
+
 let set = set
+
+let unsafe_set = unsafe_set
 
 let map = map
 

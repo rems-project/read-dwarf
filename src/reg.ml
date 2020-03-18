@@ -4,9 +4,9 @@ type t = int
 
 type typ = Plain of Isla.ty | Struct of reg_struct
 
-and reg_struct = { fields : string Bimap.t; types : typ Vector.t }
+and reg_struct = (string, typ) IdMap.t
 
-let make_struct () = { fields = Bimap.make (); types = Vector.empty () }
+let make_struct () = IdMap.make ()
 
 let assert_plain : typ -> Isla.ty = function
   | Plain t -> t
@@ -14,29 +14,27 @@ let assert_plain : typ -> Isla.ty = function
 
 let index = make_struct ()
 
-let rmap = index.fields
-
 (*****************************************************************************)
 (*        Accessors                                                          *)
 (*****************************************************************************)
 
-let field_to_string rs reg = Bimap.of_ident rs.fields reg
+let field_to_string = IdMap.of_ident
 
-let to_string reg = Bimap.of_ident rmap reg
+let to_string = IdMap.of_ident index
 
-let field_of_string rs s = Bimap.to_ident rs.fields s
+let field_of_string = IdMap.to_ident
 
-let of_string s = Bimap.to_ident rmap s
+let of_string = IdMap.to_ident index
 
-let mem reg = Bimap.mem_id rmap reg
+let mem = IdMap.mem_id index
 
-let mem_string s = Bimap.mem rmap s
+let mem_string = IdMap.mem index
 
-let num_field rs = Vector.length rs.types
+let num_field = IdMap.length
 
 let num_reg () = num_field index
 
-let field_type rs field = Vector.get rs.types field
+let field_type = IdMap.geti
 
 let reg_type = field_type index
 
@@ -47,14 +45,14 @@ let reg_type = field_type index
 (** Check that s is included in s' *)
 let rec struct_weak_inc s s' =
   let exception Nope in
-  let field n i =
-    match (field_type s i, field_type s' (field_of_string s' n)) with
+  let field name _ typ =
+    match (typ, IdMap.getk s' name) with
     | (Plain i, Plain j) when i = j -> ()
     | (Struct rs, Struct rs') -> if not @@ struct_weak_inc rs rs' then raise Nope
     | _ -> raise Nope
   in
   try
-    Bimap.iter field s.fields;
+    IdMap.iter field s;
     true
   with Nope -> false
 
@@ -71,13 +69,13 @@ let type_weak_eq t t' =
 (*        Adding                                                             *)
 (*****************************************************************************)
 
-let add_field rs name typ =
-  let id = Bimap.add_ident rs.fields name in
-  assert (id = Vector.length rs.types);
-  Vector.add_one rs.types typ;
-  id
+let add_field = IdMap.add
 
-let add_reg name typ = add_field index name typ
+let adds_field = IdMap.adds
+
+let add name typ = add_field index name typ
+
+let adds name typ = adds_field index name typ
 
 (*****************************************************************************)
 (*        Path manipulation                                                  *)
@@ -151,7 +149,7 @@ module Map = struct
       | Plain _ -> MPlain (f root)
       | Struct rs -> MStruct (initm root f rs)
     and initm root f rs =
-      rs.types |> Vector.mapi (fun i t -> initc (root @ [i]) f t) |> Vector.to_array
+      Array.init (num_field rs) (fun i -> initc (root @ [i]) f (field_type rs i))
     in
     initm [] f index
 
@@ -221,7 +219,7 @@ module Map = struct
             let old_len = Array.length arr in
             fun i -> if i < old_len then new_init (Some arr.(i)) i else new_init None i
       in
-      Array.init (Vector.length rs.types) init
+      Array.init (num_field rs) init
     in
     cestruct index ~prev:m []
 
@@ -247,15 +245,6 @@ let pp reg = reg |> to_string |> PP.string
 
 let pp_field rs reg = reg |> field_to_string rs |> PP.string
 
-let rec pp_rstruct rs =
-  PP.(
-    surround 2 0 !^"struct{"
-      (Vector.map2
-         (fun name typ -> infix 2 1 !^":" (string name) (pp_rtype typ))
-         (Bimap.vec rs.fields) rs.types
-      |> Vector.to_list
-      |> separate (semi ^^ space)
-      )
-      !^"}")
+let rec pp_rstruct rs = IdMap.pp ~name:"struct" ~keys:PP.string ~vals:pp_rtype rs
 
 and pp_rtype = PP.(function Plain i -> pp_ty i | Struct s -> pp_rstruct s)

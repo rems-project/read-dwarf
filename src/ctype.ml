@@ -17,14 +17,81 @@ let vDW_ATE_unsigned = "DW_ATE_unsigned" |> Dwarf.base_type_attribute_encode |> 
 
 let vDW_ATE_unsigned_char = "DW_ATE_unsigned_char" |> Dwarf.base_type_attribute_encode |> Z.to_int
 
-(** Pointer location helper. This a small abstract poset. This is just an example
-
-    It will be refined when used
-
-    In particular ptrloc may use location provenance,
-    like from which source the pointer came from.
-*)
-type ptrloc = STACK | CODE | RODATA | DATA | ROGLOBAL | GLOBAL | ROANY | ANY
+(* type enum_id = int
+ *
+ * type structure_id = int
+ *
+ * type fragment_id = int
+ *
+ * (\** TODO This need to be specified by the architecture *\)
+ * let ptrsize = 8
+ *
+ *
+ * type unqualified =
+ *   | Machine of int  (\** Size in bytes for now*\)
+ *   | Cint of { name: string; signed: bool; size: int; ischar: bool }
+ *   | Cbool
+ *   | Ptr of { fragment: fragment; offset : offset}
+ *   | Struct of structure_id
+ *   | Array of { elem: t; dims: int option list }
+ *   | Enum of enum_id (\* Keep them separate, but coercible *\)
+ *
+ * and t = { unqualified: unqualified; const: bool; volatile: bool; restrict: bool; constexpr: bool }
+ *
+ * and fragment =
+ *   | Unknown (\** Unknown type, without fragment. *\)
+ *   | Single of t (\* Single type, for accessing of a global (on constexpr uint to pointer cast) *\)
+ *   | DynArray of t
+ *   | FreeLayout of fragment_id
+ *
+ * (\** This is not an option because I will add other types later when we decide what to do
+ *     about symbolic array indexing *\)
+ * and offset =
+ *   | Const of int (\** Constant offset *\)
+ *   | Unknown
+ *
+ * let cint = {
+ *   unqualified = Cint {name = "int"; signed= true; size = 4; ischar = false };
+ *   const = false;
+ *   volatile = false;
+ *   restrict = false;
+ *   constexpr = false;
+ * }
+ *
+ * let rec sizeof_unqualified = function
+ *   | Machine i -> i;
+ *   | Cint {size;_} -> size
+ *   | Cbool -> 1
+ *   | Ptr _ -> ptrsize
+ *   | Struct _ -> assert(false)
+ *   | Array _ -> assert(false)
+ *   | Enum _ -> sizeof_unqualified cint.unqualified
+ *
+ * let sizeof t = sizeof_unqualified t.unqualified
+ *
+ * module Struct = struct
+ *
+ *   module Field = struct
+ *     type t = {fname : string option; offset : int; typ : t; size : int}
+ *
+ *     let len t = t.size
+ *   end
+ *
+ *   module FieldMap = RngMap.Make(Field)
+ *
+ *   type t = {layout :FieldMap.t; name : string option}
+ *
+ *   module Env = struct
+ *     type struc = t
+ *
+ *     type t = {layouts: struc Vector.t; names : string Bimap.t}
+ *   end
+ * end
+ *
+ *
+ * type enum = {name: string option; labels: (int, string) HashMap.t }
+ *
+ * type enum_env = enum vector *)
 
 type cinteger = { name : string; signed : bool; size : int }
 
@@ -46,7 +113,7 @@ and arr = { elem : t; dims : arr_dim list }
 
 and t = { base : base; const : bool; volatile : bool; restrict : bool }
 
-and ptr = { target : t; location : ptrloc }
+and ptr = { target : t }
 
 and field = { offset : int; typ : t }
 
@@ -91,8 +158,8 @@ let base_type_of_linksem name encoding size =
 let of_linksem (ltyp : linksem_t) : t =
   let rec ol_without_qualifiers : linksem_t -> base = function
     | CT (CT_base (cupdie, name, encoding, size)) -> base_type_of_linksem name encoding size
-    | CT (CT_pointer (_, Some t)) -> Ptr { target = ol t; location = ANY }
-    | CT (CT_pointer (_, None)) -> Ptr { target = unknown; location = ANY }
+    | CT (CT_pointer (_, Some t)) -> Ptr { target = ol t }
+    | CT (CT_pointer (_, None)) -> Ptr { target = unknown }
     | CT (CT_array (_, elem, l)) -> Array { elem = ol elem; dims = List.map arr_dim_ol l }
     | _ -> Unknown
   and arr_dim_ol (count, typ) = { count = Option.map Z.to_int count }
@@ -118,7 +185,7 @@ let rec pp typ =
           !^name ^^ lbrace ^^ pp_signed signed ^^ int (8 * size) ^^ rbrace
       | Cbool -> !^"bool"
       | Cchar { name; signed } -> !^name ^^ lbrace ^^ pp_signed signed ^^ rbrace
-      | Ptr { target; location } -> surround 2 0 lparen (pp target) rparen ^^ star
+      | Ptr { target; _ } -> surround 2 0 lparen (pp target) rparen ^^ star
       | Array arr -> pp_arr arr
       | Unknown -> !^"unknown"
     in

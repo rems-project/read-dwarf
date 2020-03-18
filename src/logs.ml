@@ -62,39 +62,34 @@ let baselogd_fatal ~code name lvl doc =
   flush out;
   exit code
 
-let loggers : string Bimap.t = Bimap.make ()
+let loggers : (string, level) IdMap.t = IdMap.make ()
 
-let levels : level Vector.t = Vector.empty ()
-
-let register (name : string) =
-  let i = Bimap.add_ident loggers name in
-  Vector.add_one levels default_level;
-  i
+let register (name : string) = IdMap.add loggers name default_level
 
 let mainlog i lvl fmt =
-  if lvl <= Vector.get levels i then
-    let name = Bimap.of_ident loggers i in
+  if lvl <= IdMap.geti loggers i then
+    let name = IdMap.of_ident loggers i in
     baselog name lvl fmt
   else Printf.ifprintf stdout fmt
 
 let mainlog_fatal ~code i lvl fmt =
-  let name = Bimap.of_ident loggers i in
+  let name = IdMap.of_ident loggers i in
   baselog_fatal ~code name lvl fmt
 
 let mainlogd i lvl ldoc =
-  if lvl <= Vector.get levels i then
-    let name = Bimap.of_ident loggers i in
+  if lvl <= IdMap.geti loggers i then
+    let name = IdMap.of_ident loggers i in
     baselogd name lvl $ ldoc ()
   else ()
 
 let mainlogd_fatal ~code i lvl ldoc =
-  let name = Bimap.of_ident loggers i in
+  let name = IdMap.of_ident loggers i in
   baselogd_fatal ~code name lvl $ ldoc ()
 
-let set_default_level lvl = Vector.fill_all levels lvl
+let set_default_level lvl = IdMap.fill_all loggers lvl
 
 let set_level name lvl =
-  try Vector.set levels (Bimap.to_ident loggers name) lvl
+  try IdMap.setk loggers name lvl
   with Not_found -> failwith (Printf.sprintf "Logging module %s not found" name)
 
 module type String = sig
@@ -104,7 +99,7 @@ end
 module Logger (S : String) = struct
   let id = register S.str
 
-  let set_level lvl = Vector.set levels id lvl
+  let set_level lvl = IdMap.seti loggers id lvl
 
   let log lvl fmt = mainlog id lvl fmt
 

@@ -9,7 +9,11 @@ val empty : unit -> 'a t
 
 val get : 'a t -> int -> 'a
 
+val unsafe_get : 'a t -> int -> 'a
+
 val set : 'a t -> int -> 'a -> unit
+
+val unsafe_set : 'a t -> int -> 'a -> unit
 
 val map : ('a -> 'b) -> 'a t -> 'b t
 

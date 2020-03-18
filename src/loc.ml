@@ -18,9 +18,9 @@ type arch_map = Reg.path array
 let aarch64_map : arch_map =
   let res = Array.make 32 Reg.empty_path in
   for i = 0 to 30 do
-    res.(i) <- [Reg.add_reg (Printf.sprintf "R%d" i) (Reg.Plain (Isla.Ty_BitVec 64))]
+    res.(i) <- [Reg.add (Printf.sprintf "R%d" i) (Reg.Plain (Isla.Ty_BitVec 64))]
   done;
-  res.(31) <- [Reg.add_reg "SP_EL2" (Reg.Plain (Isla.Ty_BitVec 64))];
+  res.(31) <- [Reg.add "SP_EL2" (Reg.Plain (Isla.Ty_BitVec 64))];
   res
 
 (** The type of a dwarf location stack operation *)

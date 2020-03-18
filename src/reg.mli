@@ -75,12 +75,18 @@ val type_weak_eq : typ -> typ -> bool
 (*****************************************************************************)
 (** {1 Adding elements } *)
 
-(** Add a filed to a structure. *)
+(** Add a filed to a structure. Return the field *)
 val add_field : reg_struct -> string -> typ -> t
+
+(** Add a filed to a structure. Do not return the field *)
+val adds_field : reg_struct -> string -> typ -> unit
 
 (** Add a new register by name and throws Bimap.Exists if it already exists.
     Return the internal representation of the register*)
-val add_reg : string -> typ -> t
+val add : string -> typ -> t
+
+(** Same as add but do not return the register *)
+val adds : string -> typ -> unit
 
 (*****************************************************************************)
 (*****************************************************************************)
