@@ -175,6 +175,11 @@ let rec list_last xs =
 let rec list_last_opt xs =
   match xs with [x] -> Some x | x :: (x' :: xs' as xs'') -> list_last_opt xs'' | _ -> None
 
+let char_list_of_string s =
+  let n = String.length s in
+  let rec f i = if i = n then [] else s.[i] :: f (i + 1) in
+  f 0
+
 (*****************************************************************************)
 (*        pp symbol map                                                      *)
 (*****************************************************************************)
@@ -738,19 +743,24 @@ let dwarf_source_file_line_numbers test (a : natural) =
 
 let dwarf_source_file_line_numbers_by_index test line_info k :
     (string (*subprogram name*) * int) (*line number*) list =
-  match line_info.(k) with
-  | [] -> []
-  | [elifi] ->
-      let lnh = elifi.elifi_entry.elie_lnh in
-      let lnr = elifi.elifi_entry.elie_lnr in
-      let ((comp_dir, dir, file), subprogram_name) =
-        let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
-        ( ufe,
-          Dwarf.subprogram_at_line test.dwarf_static.ds_subprogram_line_extents ufe lnr.lnr_line
-        )
-      in
-      [(subprogram_name, Nat_big_num.to_int lnr.lnr_line)]
-  | elifis -> []
+  let elifis = line_info.(k) in
+  let lines =
+    List.sort_uniq compare
+      (List.map
+         (function
+           | elifi ->
+               let lnh = elifi.elifi_entry.elie_lnh in
+               let lnr = elifi.elifi_entry.elie_lnr in
+               let ((comp_dir, dir, file), subprogram_name) =
+                 let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
+                 ( ufe,
+                   Dwarf.subprogram_at_line test.dwarf_static.ds_subprogram_line_extents ufe
+                     lnr.lnr_line )
+               in
+               (subprogram_name, Nat_big_num.to_int lnr.lnr_line))
+         elifis)
+  in
+  match lines with [_] -> lines | [] -> lines | _ -> []
 
 (*****************************************************************************)
 (*        look up address in ELF symbol table                                *)
@@ -1037,44 +1047,49 @@ let parse_drop_one s =
   | exception _ -> None
 
 let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
-  (* Printf.printf "s=\"%s\" mnemonic=\"%s\" s'=\"%s\"\n"s mnemonic s';flush stdout;*)
-  if List.mem mnemonic [".word"] then C_no_instruction
-  else if List.mem mnemonic ["ret"] then C_ret
-  else if List.mem mnemonic ["eret"] then C_eret
-  else if List.mem mnemonic ["br"] then C_branch_register mnemonic
-  else if
-    (String.length mnemonic >= 2 && String.sub s 0 2 = "b.") || List.mem mnemonic ["b"; "bl"]
-  then
-    match parse_target s' with
-    | None -> raise (Failure ("b./b/bl parse error for: \"" ^ s ^ "\"\n"))
-    | Some (a, s) ->
-        if mnemonic = "b" then C_branch (a, s)
-        else if mnemonic = "bl" then C_branch_and_link (a, s)
-        else C_branch_cond (mnemonic, a, s)
-  else if List.mem mnemonic ["cbz"; "cbnz"] then
-    match parse_drop_one s' with
-    | None -> raise (Failure ("cbz/cbnz 1 parse error for: " ^ s ^ "\n"))
-    | Some s' -> (
-        match parse_target s' with
-        | None -> raise (Failure ("cbz/cbnz 2 parse error for: " ^ s ^ "\n"))
-        | Some (a, s) -> C_branch_cond (mnemonic, a, s)
-      )
-  else if List.mem mnemonic ["tbz"; "tbnz"] then
-    match parse_drop_one s' with
-    | None -> raise (Failure ("tbz/tbnz 1 parse error for: " ^ s ^ "\n"))
-    | Some s'' -> (
-        match parse_drop_one s'' with
-        | None -> raise (Failure ("tbz/tbnz 2 parse error for: " ^ s ^ "\n"))
-        | Some s''' -> (
-            match parse_target s''' with
-            | None -> raise (Failure ("tbz/tbnz 3 parse error for: " ^ s ^ "\n"))
-            | Some (a, s'''') ->
-                (*                Printf.printf "s=%s mnemonic=%s s'=%s s''=%s s'''=%s s''''=%s\n"s mnemonic s' s'' s''' s'''';*)
-                C_branch_cond (mnemonic, a, s'''')
-          )
-      )
-  else if List.mem mnemonic ["smc"; "hvc"] then C_smc_hvc s'
-  else C_plain
+  (*   Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic (String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic))) s';flush stdout;*)
+  let c =
+    if List.mem mnemonic [".word"] then C_no_instruction
+    else if List.mem mnemonic ["ret"] then C_ret
+    else if List.mem mnemonic ["eret"] then C_eret
+    else if List.mem mnemonic ["br"] then C_branch_register mnemonic
+    else if
+      (String.length mnemonic >= 2 && String.sub mnemonic 0 2 = "b.")
+      || List.mem mnemonic ["b"; "bl"]
+    then
+      match parse_target s' with
+      | None -> raise (Failure ("b./b/bl parse error for: \"" ^ s ^ "\"\n"))
+      | Some (a, s) ->
+          if mnemonic = "b" then C_branch (a, s)
+          else if mnemonic = "bl" then C_branch_and_link (a, s)
+          else C_branch_cond (mnemonic, a, s)
+    else if List.mem mnemonic ["cbz"; "cbnz"] then
+      match parse_drop_one s' with
+      | None -> raise (Failure ("cbz/cbnz 1 parse error for: " ^ s ^ "\n"))
+      | Some s' -> (
+          match parse_target s' with
+          | None -> raise (Failure ("cbz/cbnz 2 parse error for: " ^ s ^ "\n"))
+          | Some (a, s) -> C_branch_cond (mnemonic, a, s)
+        )
+    else if List.mem mnemonic ["tbz"; "tbnz"] then
+      match parse_drop_one s' with
+      | None -> raise (Failure ("tbz/tbnz 1 parse error for: " ^ s ^ "\n"))
+      | Some s'' -> (
+          match parse_drop_one s'' with
+          | None -> raise (Failure ("tbz/tbnz 2 parse error for: " ^ s ^ "\n"))
+          | Some s''' -> (
+              match parse_target s''' with
+              | None -> raise (Failure ("tbz/tbnz 3 parse error for: " ^ s ^ "\n"))
+              | Some (a, s'''') ->
+                  (*                Printf.printf "s=%s mnemonic=%s s'=%s s''=%s s'''=%s s''''=%s\n"s mnemonic s' s'' s''' s'''';*)
+                  C_branch_cond (mnemonic, a, s'''')
+            )
+        )
+    else if List.mem mnemonic ["smc"; "hvc"] then C_smc_hvc s'
+    else C_plain
+  in
+  (*Printf.printf "%s\n" (pp_control_flow_instruction c);*)
+  c
 
 (*****************************************************************************)
 (*   compute targets of an instruction                                       *)
@@ -1553,11 +1568,6 @@ let colours_dot_complains =
   ]
 
 let colours = List.filter (function c -> not (List.mem c colours_dot_complains)) colours_svg
-
-let char_list_of_string s =
-  let n = String.length s in
-  let rec f i = if i = n then [] else s.[i] :: f (i + 1) in
-  f 0
 
 let html_escape s =
   String.concat ""
