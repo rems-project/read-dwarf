@@ -180,6 +180,20 @@ let char_list_of_string s =
   let rec f i = if i = n then [] else s.[i] :: f (i + 1) in
   f 0
 
+let array_indices_such_that (f : 'a -> bool) (a : 'array) : int list =
+  let len = Array.length a in
+  let rec g acc k =
+    if k >= len then acc else if f a.(k) then g (k :: acc) (k + 1) else g acc (k + 1)
+  in
+  g [] 0
+
+(* in 4.10 *)
+let rec find_map f = function
+  | [] -> None
+  | x :: l -> (
+      match f x with Some _ as result -> result | None -> find_map f l
+    )
+
 (*****************************************************************************)
 (*        pp symbol map                                                      *)
 (*****************************************************************************)
@@ -773,6 +787,11 @@ let elf_symbols_of_address (test : test) (addr : natural) : string list =
 
 let mk_elf_symbols test instructions : string list array =
   Array.map (function i -> elf_symbols_of_address test i.i_addr) instructions
+
+let address_of_elf_symbol test (s : string) : addr option =
+  find_map
+    (fun (name, (typ, size, address, mb, binding)) -> if s = name then Some address else None)
+    test.symbol_map
 
 (*****************************************************************************)
 (*        look up address in frame info                                      *)
@@ -1645,7 +1664,8 @@ let mk_tooltip test an label k =
   in
   html_escape (String.concat "\n" lines)
 
-let mk_cfg test an node_name_prefix : graph_cfg =
+let mk_cfg test an node_name_prefix (start_indices : index list (*should be ELF symbol indices*))
+    : graph_cfg =
   let colour k =
     match an.line_info.(k) with
     | [elifi] ->
@@ -1697,7 +1717,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
   let node_name_start addr = node_name_prefix ^ "start_" ^ pp_addr addr in
   let node_name addr = node_name_prefix ^ pp_addr addr in
 
-  (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
+  (* need to track branch-visited edges because Hf loops back to a nop (abort.c) and a wfi (wait for interrupt)*)
   let rec next_non_start_node_name visited k =
     let i = an.instructions.(k) in
     match i.i_control_flow with
@@ -1709,11 +1729,11 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     | C_branch (a, s) -> (
         match i.i_targets with
         | [(tk, addr', k', s)] ->
-            if List.mem k' visited then node_name addr' (* TODO: something more useful *)
+            if List.mem k' visited then (node_name addr', k') (* TODO: something more useful *)
             else next_non_start_node_name (k' :: visited) k'
         | _ -> Warn.fatal "non-unique branch targets at %s" (pp_addr i.i_addr)
       )
-    | _ -> node_name i.i_addr
+    | _ -> (node_name i.i_addr, k)
   in
 
   let mk_node k kind label =
@@ -1735,10 +1755,10 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     mk_node k kind label
   in
 
-  let k_max = Array.length an.elf_symbols in
+  let k_max = Array.length an.instructions in
 
   (* make the little piece of graph from a start node at k to its first non-start node *)
-  let graphette_start k : graph_cfg =
+  let graphette_start k : graph_cfg * index list (* work_list_new *) =
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
     let (s, nn) =
@@ -1757,13 +1777,14 @@ let mk_cfg test an node_name_prefix : graph_cfg =
         nc_tooltip = mk_tooltip test an s k;
       }
     in
-    let nn' = next_non_start_node_name [] k in
+    let (nn', k') = next_non_start_node_name [] k in
     let edge = (node.nc_name, nn', CFG_edge_flow) in
-    { gc_start_nodes = [node]; gc_nodes = []; gc_edges = [edge] }
+    ({ gc_start_nodes = [node]; gc_nodes = []; gc_edges = [edge] }, [k'])
   in
 
   (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes  *)
-  let graphette_normal k : graph_cfg =
+  let graphette_normal k : graph_cfg * index list * (* work_list_new *) index list
+      (* bl targets *) =
     (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
     let i = an.instructions.(k) in
     match i.i_control_flow with
@@ -1778,59 +1799,74 @@ let mk_cfg test an node_name_prefix : graph_cfg =
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_ret ->
         let node = mk_node k CFG_node_ret "ret" in
-        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }
+        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }, [], [])
     | C_eret ->
         let node = mk_node k CFG_node_eret "eret" in
-        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }
-    | C_branch_and_link (a, s) ->
+        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }, [], [])
+    | C_branch_and_link (a, s) -> (
         let node = mk_node_simple k CFG_node_branch_and_link "" in
-        let edges =
+        let k_call =
           List.filter_map
             (function
-              | (T_branch_and_link_successor, a', k', s') ->
-                  let nn' = next_non_start_node_name [] k' in
-                  Some (node.nc_name, nn', CFG_edge_flow)
+              | (T_branch_and_link_call, a', k', s') -> Some k'
+              | (T_branch_and_link_call_noreturn, a', k', s') -> Some k'
               | _ -> None)
             i.i_targets
         in
-        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
+        match
+          List.filter_map
+            (function (T_branch_and_link_successor, a', k', s') -> Some k' | _ -> None)
+            i.i_targets
+        with
+        | [k'] ->
+            let (nn', k'') = next_non_start_node_name [] k' in
+            let edges = [(node.nc_name, nn', CFG_edge_flow)] in
+            ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }, [k''], k_call)
+        | _ ->
+            (* noreturn *)
+            ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }, [], k_call)
+      )
     | C_smc_hvc s ->
         let node = mk_node_simple k CFG_node_smc_hvc "smc/hvc " in
-        let edges =
-          List.filter_map
-            (function
-              | (T_smc_hvc_successor, a', k', s') ->
-                  let nn' = next_non_start_node_name [] k' in
-                  Some (node.nc_name, nn', CFG_edge_flow)
-              | _ -> None)
-            i.i_targets
+        let (edges, work_list_new) =
+          List.split
+            (List.filter_map
+               (function
+                 | (T_smc_hvc_successor, a', k', s') ->
+                     let (nn', k'') = next_non_start_node_name [] k' in
+                     Some ((node.nc_name, nn', CFG_edge_flow), k'')
+                 | _ -> None)
+               i.i_targets)
         in
-        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
+        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }, work_list_new, [])
     | C_branch_cond (mnemonic, a, s) ->
         let node = mk_node_simple k CFG_node_branch_cond "" in
-        let edges =
-          List.map
-            (function
-              | (tk, addr', k', s') ->
-                  let nn' = next_non_start_node_name [] k' in
-                  (node.nc_name, nn', CFG_edge_flow))
-            i.i_targets
-        in
-        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
-    | C_branch_register _ ->
-        let node = mk_node_simple k CFG_node_branch_register "" in
-        let edges =
-          List.sort_uniq compare
+        let (edges, work_list_new) =
+          List.split
             (List.map
                (function
                  | (tk, addr', k', s') ->
-                     let nn' = next_non_start_node_name [] k' in
-                     (node.nc_name, nn', CFG_edge_flow))
+                     let (nn', k'') = next_non_start_node_name [] k' in
+                     ((node.nc_name, nn', CFG_edge_flow), k''))
                i.i_targets)
         in
-        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
+        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }, work_list_new, [])
+    | C_branch_register _ ->
+        let node = mk_node_simple k CFG_node_branch_register "" in
+        let (edges, work_list_new) =
+          List.split
+            (List.sort_uniq compare
+               (List.map
+                  (function
+                    | (tk, addr', k', s') ->
+                        let (nn', k'') = next_non_start_node_name [] k' in
+                        ((node.nc_name, nn', CFG_edge_flow), k''))
+                  i.i_targets))
+        in
+        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }, work_list_new, [])
   in
 
+  (*
   (* glom together the bits of graph constructed starting from each instruction index *)
   let rec mk_graph g_acc n k =
     if k >= n then g_acc
@@ -1846,6 +1882,43 @@ let mk_cfg test an node_name_prefix : graph_cfg =
   let (graph : graph_cfg) = mk_graph (graph_cfg_empty ()) k_max 0 in
 
   graph
+   *)
+  let rec mk_graph g_acc (visited : index list) (work_list : index list) =
+    match work_list with
+    | [] -> g_acc
+    | k :: work_list' -> (
+        if List.mem k visited then mk_graph g_acc visited work_list'
+        else
+          match (is_graphette_start k, is_graph_non_start_node k) with
+          | (true, true) ->
+              let (g1, _) = graphette_start k in
+              let (g2, work_list_new, bl_target_indices) = graphette_normal k in
+              let g_acc' = graph_cfg_union g1 (graph_cfg_union g2 g_acc) in
+              let visited' = k :: visited in
+              let work_list' = work_list_new @ bl_target_indices @ work_list' in
+              mk_graph g_acc' visited' work_list'
+          | (true, false) ->
+              let (g1, work_list_new) = graphette_start k in
+              let g_acc' = graph_cfg_union g1 g_acc in
+              let visited' = k :: visited in
+              let work_list' = work_list_new @ work_list' in
+              mk_graph g_acc' visited' work_list'
+          | (false, true) ->
+              let (g2, work_list_new, bl_target_indices) = graphette_normal k in
+              let g_acc' = graph_cfg_union g2 g_acc in
+              let visited' = k :: visited in
+              let work_list' = work_list_new @ bl_target_indices @ work_list' in
+              mk_graph g_acc' visited' work_list'
+          | (false, false) ->
+              Warn.nonfatal
+                "mk_graph called on index %d at %s which is neither is_graphette_start nor \
+                 is_graph_non_start_node - could be a self-loop"
+                k
+                (pp_addr an.instructions.(k).i_addr);
+              mk_graph g_acc visited work_list'
+      )
+  in
+  mk_graph (graph_cfg_empty ()) [] start_indices
 
 (* render graph to graphviz dot file *)
 
@@ -3100,7 +3173,10 @@ let process_file () : unit =
       (* output CFG dot file *)
       ( match !Globals.cfg_dot_file with
       | Some cfg_dot_file ->
-          let graph = mk_cfg test an "" in
+          let start_indices =
+            array_indices_such_that (function ss -> ss <> []) an.elf_symbols
+          in
+          let graph = mk_cfg test an "" start_indices in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
           pp_cfg graph cfg_dot_file
       | None -> ()
@@ -3127,32 +3203,45 @@ let process_file () : unit =
 
           let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables2 in
 
-          let graph0 = mk_cfg test an "O0_" in
-
-          let graph2 = mk_cfg test2 an2 "O2_" in
-
-          let parse_source_node_list (so : string option) : string list =
+          let parse_source_node_list test an (so : string option) : index list =
             match so with
             | None -> []
-            | Some s -> List.filter (function s' -> s' <> "") (String.split_on_char ' ' s)
+            | Some s ->
+                List.map
+                  (function
+                    | s' ->
+                        an.index_of_address
+                          ( match address_of_elf_symbol test s' with
+                          | Some addr -> addr
+                          | None -> Warn.fatal "address_of_elf_symbol failed on \"%s\"\n" s'
+                          ))
+                  (String.split_on_char ' ' s)
           in
 
-          let graph0' =
-            match parse_source_node_list !Globals.cfg_source_nodes with
-            | [] -> graph0
-            | cfg_source_node_list0 -> reachable_subgraph graph0 cfg_source_node_list0
+          let all_elf_symbol_indices an =
+            array_indices_such_that (function ss -> ss <> []) an.elf_symbols
           in
 
-          let graph2' =
-            match parse_source_node_list !Globals.cfg_source_nodes2 with
-            | [] -> graph2
-            | cfg_source_node_list2 -> reachable_subgraph graph2 cfg_source_node_list2
+          let start_indices =
+            match parse_source_node_list test an !Globals.cfg_source_nodes with
+            | [] -> all_elf_symbol_indices an
+            | cfg_source_node_list0 -> cfg_source_node_list0
           in
 
-          let graph = graph_cfg_union graph0' graph2' in
+          let start_indices2 =
+            match parse_source_node_list test2 an2 !Globals.cfg_source_nodes2 with
+            | [] -> all_elf_symbol_indices an2
+            | cfg_source_node_list2 -> cfg_source_node_list2
+          in
+
+          let graph0 = mk_cfg test an "O0_" start_indices in
+
+          let graph2 = mk_cfg test2 an2 "O2_" start_indices2 in
+
+          let graph = graph_cfg_union graph0 graph2 in
 
           let graph' =
-            correlate_source_line test an.line_info graph0' test2 an2.line_info graph2'
+            correlate_source_line test an.line_info graph0 test2 an2.line_info graph2
           in
 
           let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
