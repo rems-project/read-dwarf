@@ -1405,14 +1405,23 @@ type node_cfg = {
 
 type edge_cfg = node_name * node_name * edge_kind_cfg
 
-type graph_cfg =
-  node_cfg list
-  (* "start" nodes - elf symbols or other bl targets*)
-  * node_cfg list
-  (* interior nodes*)
-  * edge_cfg list
+(* graphs and graph fragments (in which the edges may mention other nodes) *)
+type graph_cfg = {
+  gc_start_nodes : node_cfg list;
+  (* "start" nodes - synthetic nodes, for elf symbols or other bl targets*)
+  gc_nodes : node_cfg list;
+  (* non-start interior nodes  - corresponding to particular interesting control-flow instructions *)
+  gc_edges : edge_cfg list; (* edges *)
+}
 
-(*edges*)
+let graph_cfg_empty () = { gc_start_nodes = []; gc_nodes = []; gc_edges = [] }
+
+let graph_cfg_union g1 g2 =
+  {
+    gc_start_nodes = g1.gc_start_nodes @ g2.gc_start_nodes;
+    gc_nodes = g1.gc_nodes @ g2.gc_nodes;
+    gc_edges = g1.gc_edges @ g2.gc_edges;
+  }
 
 (* the graphviz svg colours from https://www.graphviz.org/doc/info/colors.html without those too close to white or those that dot complains about*)
 let colours_svg =
@@ -1729,7 +1738,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
   let k_max = Array.length an.elf_symbols in
 
   (* make the little piece of graph from a start node at k to its first non-start node *)
-  let graphette_start k : node_cfg list * edge_cfg list =
+  let graphette_start k : graph_cfg =
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
     let (s, nn) =
@@ -1750,11 +1759,11 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     in
     let nn' = next_non_start_node_name [] k in
     let edge = (node.nc_name, nn', CFG_edge_flow) in
-    ([node], [edge])
+    { gc_start_nodes = [node]; gc_nodes = []; gc_edges = [edge] }
   in
 
   (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes  *)
-  let graphette_normal k : node_cfg list * edge_cfg list =
+  let graphette_normal k : graph_cfg =
     (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
     let i = an.instructions.(k) in
     match i.i_control_flow with
@@ -1769,10 +1778,10 @@ let mk_cfg test an node_name_prefix : graph_cfg =
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_ret ->
         let node = mk_node k CFG_node_ret "ret" in
-        ([node], [])
+        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }
     | C_eret ->
         let node = mk_node k CFG_node_eret "eret" in
-        ([node], [])
+        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }
     | C_branch_and_link (a, s) ->
         let node = mk_node_simple k CFG_node_branch_and_link "" in
         let edges =
@@ -1784,7 +1793,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
               | _ -> None)
             i.i_targets
         in
-        ([node], edges)
+        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
     | C_smc_hvc s ->
         let node = mk_node_simple k CFG_node_smc_hvc "smc/hvc " in
         let edges =
@@ -1796,7 +1805,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
               | _ -> None)
             i.i_targets
         in
-        ([node], edges)
+        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
     | C_branch_cond (mnemonic, a, s) ->
         let node = mk_node_simple k CFG_node_branch_cond "" in
         let edges =
@@ -1807,7 +1816,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
                   (node.nc_name, nn', CFG_edge_flow))
             i.i_targets
         in
-        ([node], edges)
+        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
     | C_branch_register _ ->
         let node = mk_node_simple k CFG_node_branch_register "" in
         let edges =
@@ -1819,28 +1828,22 @@ let mk_cfg test an node_name_prefix : graph_cfg =
                      (node.nc_name, nn', CFG_edge_flow))
                i.i_targets)
         in
-        ([node], edges)
+        { gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }
   in
 
   (* glom together the bits of graph constructed starting from each instruction index *)
-  let rec mk_graph acc_nodes_start acc_nodes acc_edges n k =
-    if k >= n then (acc_nodes_start, acc_nodes, acc_edges)
+  let rec mk_graph g_acc n k =
+    if k >= n then g_acc
     else
-      let (acc_nodes_start', acc_nodes', acc_edges') =
-        if is_graphette_start k then
-          let (nodes_start, edges) = graphette_start k in
-          (nodes_start @ acc_nodes_start, acc_nodes, edges @ acc_edges)
-        else (acc_nodes_start, acc_nodes, acc_edges)
+      let g_acc' =
+        if is_graphette_start k then graph_cfg_union (graphette_start k) g_acc else g_acc
       in
-      let (acc_nodes_start'', acc_nodes'', acc_edges'') =
-        if is_graph_non_start_node k then
-          let (nodes, edges) = graphette_normal k in
-          (acc_nodes_start', nodes @ acc_nodes', edges @ acc_edges')
-        else (acc_nodes_start', acc_nodes', acc_edges')
+      let g_acc'' =
+        if is_graph_non_start_node k then graph_cfg_union (graphette_normal k) g_acc' else g_acc'
       in
-      mk_graph acc_nodes_start'' acc_nodes'' acc_edges'' n (k + 1)
+      mk_graph g_acc'' n (k + 1)
   in
-  let ((nodes_start, nodes, edges) as graph : graph_cfg) = mk_graph [] [] [] k_max 0 in
+  let (graph : graph_cfg) = mk_graph (graph_cfg_empty ()) k_max 0 in
 
   graph
 
@@ -1864,7 +1867,7 @@ let pp_edge (nn, nn', cek) =
       pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep
       ^ "[constraint=\"false\";style=\"dashed\"];\n"
 
-let pp_cfg ((nodes_start, nodes, edges) : graph_cfg) cfg_dot_file : unit =
+let pp_cfg (g : graph_cfg) cfg_dot_file : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
   let pp_node node =
     let shape =
@@ -1879,20 +1882,20 @@ let pp_cfg ((nodes_start, nodes, edges) : graph_cfg) cfg_dot_file : unit =
   let c = open_out cfg_dot_file in
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
-  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes_start;
+  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) g.gc_start_nodes;
   Printf.fprintf c "{ rank=min; %s }\n"
-    (String.concat "" (List.map (function node -> pp_node_name node.nc_name ^ ";") nodes_start));
-  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes;
-  List.iter (function e -> Printf.fprintf c "%s\n" (pp_edge e)) edges;
+    (String.concat ""
+       (List.map (function node -> pp_node_name node.nc_name ^ ";") g.gc_start_nodes));
+  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) g.gc_nodes;
+  List.iter (function e -> Printf.fprintf c "%s\n" (pp_edge e)) g.gc_edges;
   Printf.fprintf c "}\n";
   let _ = close_out c in
   ()
 
 (* carve out reachable subgraph from some starting node labels (using that so that the user can just paste in from the rendered graph if need be) *)
 
-let reachable_subgraph ((nodes_start, nodes, edges) : graph_cfg) (labels_start : string list) :
-    graph_cfg =
-  let nodes_all : node_cfg list = nodes_start @ nodes in
+let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg =
+  let nodes_all : node_cfg list = g.gc_start_nodes @ g.gc_nodes in
   let edges_all : (node_name * node_name list) list =
     List.map
       (function
@@ -1900,7 +1903,7 @@ let reachable_subgraph ((nodes_start, nodes, edges) : graph_cfg) (labels_start :
             ( node.nc_name,
               List.filter_map
                 (function (nn1, nn2, cek) -> if nn1 = node.nc_name then Some nn2 else None)
-                edges ))
+                g.gc_edges ))
       nodes_all
   in
 
@@ -1926,19 +1929,19 @@ let reachable_subgraph ((nodes_start, nodes, edges) : graph_cfg) (labels_start :
     List.filter
       (function
         | (nn, nn', cek) -> List.mem nn node_names_reachable && List.mem nn' node_names_reachable)
-      edges
+      g.gc_edges
   in
   let nodes_reachable_start =
-    List.filter (function node -> List.mem node.nc_name node_names_reachable) nodes_start
+    List.filter (function node -> List.mem node.nc_name node_names_reachable) g.gc_start_nodes
   in
   let nodes_reachable_rest =
-    List.filter (function node -> List.mem node.nc_name node_names_reachable) nodes
+    List.filter (function node -> List.mem node.nc_name node_names_reachable) g.gc_nodes
   in
-  (nodes_reachable_start, nodes_reachable_rest, edges_reachable)
-
-let graph_union ((nodes_start, nodes, edges) : graph_cfg)
-    ((nodes_start', nodes', edges') : graph_cfg) =
-  (nodes_start @ nodes_start', nodes @ nodes', edges @ edges')
+  {
+    gc_start_nodes = nodes_reachable_start;
+    gc_nodes = nodes_reachable_rest;
+    gc_edges = edges_reachable;
+  }
 
 (*
 module P = Graph.Pack
@@ -1947,9 +1950,7 @@ http://ocamlgraph.lri.fr/doc/Fixpoint.html
 
 (* same-source-line edges *)
 
-let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : graph_cfg =
-  let (nodes_start1, nodes_rest1, edges1) = graph1 in
-  let (nodes_start2, nodes_rest2, edges2) = graph2 in
+let correlate_source_line test1 line_info1 g1 test2 line_info2 g2 : graph_cfg =
   let is_branch_cond = function
     | node -> (
         match node.nc_kind with
@@ -1959,8 +1960,8 @@ let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : grap
         | _ -> false
       )
   in
-  let nodes_branch_cond1 = List.filter is_branch_cond nodes_rest1 in
-  let nodes_branch_cond2 = List.filter is_branch_cond nodes_rest2 in
+  let nodes_branch_cond1 = List.filter is_branch_cond g1.gc_nodes in
+  let nodes_branch_cond2 = List.filter is_branch_cond g2.gc_nodes in
   let with_source_lines test line_info = function
     | node -> (node.nc_name, dwarf_source_file_line_numbers_by_index test line_info node.nc_index)
   in
@@ -1984,7 +1985,7 @@ let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : grap
                  nodes_branch_cond_with2)
          nodes_branch_cond_with1)
   in
-  ([], [], edges)
+  { gc_start_nodes = []; gc_nodes = []; gc_edges = edges }
 
 (*****************************************************************************)
 (*        render control-flow branches in text output                        *)
@@ -3148,7 +3149,7 @@ let process_file () : unit =
             | cfg_source_node_list2 -> reachable_subgraph graph2 cfg_source_node_list2
           in
 
-          let graph = graph_union graph0' graph2' in
+          let graph = graph_cfg_union graph0' graph2' in
 
           let graph' =
             correlate_source_line test an.line_info graph0' test2 an2.line_info graph2'
@@ -3166,10 +3167,7 @@ let process_file () : unit =
             | Ok lines -> lines
             | MyFail s -> Warn.fatal "couldn't read cfg_dot_file_layout %s" s
           in
-          let ppd_correlate_edges =
-            let (_, _, edges) = graph' in
-            List.map pp_edge edges
-          in
+          let ppd_correlate_edges = List.map pp_edge graph'.gc_edges in
           let c = open_out cfg_dot_file in
           Array.iteri
             (function
