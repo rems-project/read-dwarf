@@ -17,7 +17,6 @@
 *)
 type ('a, 'b) t
 
-
 (** Gives the number of bindings in the idmap *)
 val length : ('a, 'b) t -> int
 
@@ -50,7 +49,6 @@ val mem : ('a, 'b) t -> 'a -> bool
 
 (** Check if an id is bound *)
 val mem_id : ('a, 'b) t -> int -> bool
-
 
 (*****************************************************************************)
 (*****************************************************************************)
