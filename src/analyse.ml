@@ -1370,7 +1370,7 @@ let pp_come_froms (addr : addr) (cfs : come_from list) : string =
    target.  *)
 
 type node_kind_cfg =
-  | CFG_node_source (* elf symbol or other bl target *)
+  | CFG_node_start (* elf symbol or other bl target *)
   | CFG_node_branch_cond
   | CFG_node_branch_register
   | CFG_node_branch_and_link
@@ -1383,16 +1383,22 @@ type edge_kind_cfg = CFG_edge_flow | CFG_edge_correlate
 
 type node_name = string (*graphviz node name*)
 
-type node_cfg =
-  node_name * node_kind_cfg * string (*label*) * addr * index * string (*colour*) * string
-
-(*tooltip *)
+type node_cfg = {
+  (*  node_name * node_kind_cfg * string (*label*) * addr * index * string (*colour*) * string*)
+  nc_name : node_name;
+  nc_kind : node_kind_cfg;
+  nc_label : string;
+  nc_addr : addr;
+  nc_index : index;
+  nc_colour : string;
+  nc_tooltip : string;
+}
 
 type edge_cfg = node_name * node_name * edge_kind_cfg
 
 type graph_cfg =
   node_cfg list
-  (* "source" nodes - elf symbols or other bl targets*)
+  (* "start" nodes - elf symbols or other bl targets*)
   * node_cfg list
   (* interior nodes*)
   * edge_cfg list
@@ -1622,7 +1628,7 @@ let mk_tooltip test an label k =
   html_escape (String.concat "\n" lines)
 
 let mk_cfg test an node_name_prefix : graph_cfg =
-  let colour label k =
+  let colour k =
     match an.line_info.(k) with
     | [elifi] ->
         let subprogram_name = mk_subprogram_name test.dwarf_static elifi in
@@ -1642,12 +1648,12 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     | _ -> "black"
   in
  *)
-  (* the graphette source nodes are the addresses which are either
+  (* the graphette start nodes are the addresses which are either
        - elf symbols
        - the branch target (but not the successor) of a C_branch_and_link
        - the targets (branch and fall-through) of a C_branch_cond, and/or
        - the targets of a C_branch_register *)
-  let is_graphette_source_target (cf : come_from) =
+  let is_graphette_start_target (cf : come_from) =
     match cf.cf_target_kind with
     | T_plain_successor -> false
     | T_branch -> false
@@ -1660,11 +1666,11 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     | T_smc_hvc_successor -> false
   in
 
-  let is_graphette_source k =
-    an.elf_symbols.(k) <> [] || List.exists is_graphette_source_target an.come_froms.(k)
+  let is_graphette_start k =
+    an.elf_symbols.(k) <> [] || List.exists is_graphette_start_target an.come_froms.(k)
   in
 
-  let is_graph_non_source_node k =
+  let is_graph_non_start_node k =
     let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_no_instruction -> false
@@ -1679,64 +1685,71 @@ let mk_cfg test an node_name_prefix : graph_cfg =
   in
 
   (* we make up an additional node for all ELF symbols and bl targets; all others are just the address *)
-  let node_name_source addr = node_name_prefix ^ "source_" ^ pp_addr addr in
+  let node_name_start addr = node_name_prefix ^ "start_" ^ pp_addr addr in
   let node_name addr = node_name_prefix ^ pp_addr addr in
 
-  let rec next_non_source_node_name visited k =
+  (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
+  let rec next_non_start_node_name visited k =
     let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_plain -> (
         match i.i_targets with
-        | [(tk, addr', k', s)] -> next_non_source_node_name visited k'
+        | [(tk, addr', k', s)] -> next_non_start_node_name visited k'
         | _ -> Warn.fatal "non-unique plain targets at %s" (pp_addr i.i_addr)
       )
     | C_branch (a, s) -> (
         match i.i_targets with
         | [(tk, addr', k', s)] ->
             if List.mem k' visited then node_name addr' (* TODO: something more useful *)
-            else next_non_source_node_name (k' :: visited) k'
+            else next_non_start_node_name (k' :: visited) k'
         | _ -> Warn.fatal "non-unique branch targets at %s" (pp_addr i.i_addr)
       )
     | _ -> node_name i.i_addr
   in
 
+  let mk_node_simple k kind label_prefix =
+    let i = an.instructions.(k) in
+    let label = label_prefix ^ pp_addr i.i_addr in
+    {
+      nc_name = node_name i.i_addr;
+      nc_kind = kind;
+      nc_label = label;
+      nc_addr = i.i_addr;
+      nc_index = k;
+      nc_colour = colour k;
+      nc_tooltip = mk_tooltip test an label k;
+    }
+  in
+
   let k_max = Array.length an.elf_symbols in
 
-  (* need to track branch-visited edges because Hf loops back to a wfi (wait for interrupt)*)
-  let graphette_source k : node_cfg list * edge_cfg list =
+  let graphette_start k : node_cfg list * edge_cfg list =
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
     let (s, nn) =
       match ss with
       | [] -> (pp_addr i.i_addr, node_name i.i_addr)
-      | _ -> (List.hd (List.rev ss), node_name_source i.i_addr)
+      | _ -> (List.hd (List.rev ss), node_name_start i.i_addr)
     in
-    let label = s in
-    let tooltip = mk_tooltip test an label k in
-    let node = (nn, CFG_node_source, label, i.i_addr, k, colour label k, tooltip) in
-    let nn' = next_non_source_node_name [] k in
-    let edge = (nn, nn', CFG_edge_flow) in
+    let node =
+      {
+        nc_name = nn;
+        nc_kind = CFG_node_start;
+        nc_label = s;
+        nc_addr = i.i_addr;
+        nc_index = k;
+        nc_colour = colour k;
+        nc_tooltip = mk_tooltip test an s k;
+      }
+    in
+    let nn' = next_non_start_node_name [] k in
+    let edge = (node.nc_name, nn', CFG_edge_flow) in
     ([node], [edge])
   in
 
   let sink_node addr s ckn k =
-    let nn = node_name addr in
-    let label = s in
-    let tooltip = mk_tooltip test an label k in
-    let node = (nn, CFG_node_ret, label, addr, k, colour label k, tooltip) in
-    (*    let nn' = next_non_source_node_name [] k in
-    let edge = (nn,nn') in*)
+    let node = mk_node_simple k CFG_node_ret "" in
     ([node], [])
-  in
-
-  let simple_edge addr s ckn k =
-    let nn = node_name addr in
-    let label = s in
-    let tooltip = mk_tooltip test an label k in
-    let node = (nn, CFG_node_ret, label, addr, k, colour label k, tooltip) in
-    let nn' = next_non_source_node_name [] k in
-    let edge = (nn, nn', CFG_edge_flow) in
-    ([node], [edge])
   in
 
   let graphette_normal k : node_cfg list * edge_cfg list =
@@ -1755,84 +1768,72 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     | C_ret -> sink_node i.i_addr "ret" CFG_node_ret k
     | C_eret -> sink_node i.i_addr "eret" CFG_node_eret k
     | C_branch_and_link (a, s) ->
-        let nn = node_name i.i_addr in
-        let label = s in
-        let tooltip = mk_tooltip test an label k in
-        let node = (nn, CFG_node_branch_and_link, label, i.i_addr, k, colour label k, tooltip) in
+        let node = mk_node_simple k CFG_node_branch_and_link "" in
         let edges =
           List.filter_map
             (function
               | (T_branch_and_link_successor, a', k', s') ->
-                  let nn' = next_non_source_node_name [] k' in
-                  Some (nn, nn', CFG_edge_flow)
+                  let nn' = next_non_start_node_name [] k' in
+                  Some (node.nc_name, nn', CFG_edge_flow)
               | _ -> None)
             i.i_targets
         in
         ([node], edges)
     | C_smc_hvc s ->
-        let nn = node_name i.i_addr in
-        let label = "smc/hvc " ^ s in
-        let tooltip = mk_tooltip test an label k in
-        let node = (nn, CFG_node_smc_hvc, label, i.i_addr, k, colour label k, tooltip) in
+        let node = mk_node_simple k CFG_node_smc_hvc "smc/hvc " in
         let edges =
           List.filter_map
             (function
               | (T_smc_hvc_successor, a', k', s') ->
-                  let nn' = next_non_source_node_name [] k' in
-                  Some (nn, nn', CFG_edge_flow)
+                  let nn' = next_non_start_node_name [] k' in
+                  Some (node.nc_name, nn', CFG_edge_flow)
               | _ -> None)
             i.i_targets
         in
         ([node], edges)
     | C_branch_cond (mnemonic, a, s) ->
-        let nn = node_name i.i_addr in
-        let label = pp_addr i.i_addr in
-        let tooltip = mk_tooltip test an label k in
-        let node = (nn, CFG_node_branch_cond, label, i.i_addr, k, colour label k, tooltip) in
+        let node = mk_node_simple k CFG_node_branch_cond "" in
         let edges =
           List.map
             (function
               | (tk, addr', k', s') ->
-                  let nn' = next_non_source_node_name [] k' in
-                  (nn, nn', CFG_edge_flow))
+                  let nn' = next_non_start_node_name [] k' in
+                  (node.nc_name, nn', CFG_edge_flow))
             i.i_targets
         in
         ([node], edges)
     | C_branch_register _ ->
-        let nn = node_name i.i_addr in
-        let label = pp_addr i.i_addr in
-        let tooltip = mk_tooltip test an label k in
-        let node = (nn, CFG_node_branch_register, label, i.i_addr, k, colour label k, tooltip) in
+        let node = mk_node_simple k CFG_node_branch_register "" in
         let edges =
           List.sort_uniq compare
             (List.map
                (function
                  | (tk, addr', k', s') ->
-                     let nn' = next_non_source_node_name [] k' in
-                     (nn, nn', CFG_edge_flow))
+                     let nn' = next_non_start_node_name [] k' in
+                     (node.nc_name, nn', CFG_edge_flow))
                i.i_targets)
         in
         ([node], edges)
   in
 
-  let rec mk_graph acc_nodes_source acc_nodes acc_edges n k =
-    if k >= n then (acc_nodes_source, acc_nodes, acc_edges)
+  let rec mk_graph acc_nodes_start acc_nodes acc_edges n k =
+    if k >= n then (acc_nodes_start, acc_nodes, acc_edges)
     else
-      let (acc_nodes_source', acc_nodes', acc_edges') =
-        if is_graphette_source k then
-          let (nodes_source, edges) = graphette_source k in
-          (nodes_source @ acc_nodes_source, acc_nodes, edges @ acc_edges)
-        else (acc_nodes_source, acc_nodes, acc_edges)
+      let (acc_nodes_start', acc_nodes', acc_edges') =
+        if is_graphette_start k then
+          let (nodes_start, edges) = graphette_start k in
+          (nodes_start @ acc_nodes_start, acc_nodes, edges @ acc_edges)
+        else (acc_nodes_start, acc_nodes, acc_edges)
       in
-      let (acc_nodes_source'', acc_nodes'', acc_edges'') =
-        if is_graph_non_source_node k then
+      let (acc_nodes_start'', acc_nodes'', acc_edges'') =
+        if is_graph_non_start_node k then
           let (nodes, edges) = graphette_normal k in
-          (acc_nodes_source', nodes @ acc_nodes', edges @ acc_edges')
-        else (acc_nodes_source', acc_nodes', acc_edges')
+          (acc_nodes_start', nodes @ acc_nodes', edges @ acc_edges')
+        else (acc_nodes_start', acc_nodes', acc_edges')
       in
-      mk_graph acc_nodes_source'' acc_nodes'' acc_edges'' n (k + 1)
+      mk_graph acc_nodes_start'' acc_nodes'' acc_edges'' n (k + 1)
   in
-  let ((nodes_source, nodes, edges) as graph : graph_cfg) = mk_graph [] [] [] k_max 0 in
+  let ((nodes_start, nodes, edges) as graph : graph_cfg) = mk_graph [] [] [] k_max 0 in
 
   graph
 
@@ -1854,39 +1855,40 @@ let pp_edge (nn, nn', cek) =
       pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep
       ^ "[constraint=\"false\";style=\"dashed\"];\n"
 
-let pp_cfg ((nodes_source, nodes, edges) : graph_cfg) cfg_dot_file : unit =
+let pp_cfg ((nodes_start, nodes, edges) : graph_cfg) cfg_dot_file : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
-  let pp_node ((nn, cnk, label, addr, k, col, tooltip) as n) =
+  let pp_node node =
     let shape =
-      match cnk with CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]" | _ -> ""
+      match node.nc_kind with
+      | CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]"
+      | _ -> ""
     in
-    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name nn) label tooltip
-      margin shape (pp_colour col)
+    Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name node.nc_name)
+      node.nc_label node.nc_tooltip margin shape (pp_colour node.nc_colour)
   in
 
   let c = open_out cfg_dot_file in
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
-  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes_source;
+  List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes_start;
   Printf.fprintf c "{ rank=min; %s }\n"
-    (String.concat ""
-       (List.map (function (nn, _, _, _, _, _, _) -> pp_node_name nn ^ ";") nodes_source));
+    (String.concat "" (List.map (function node -> pp_node_name node.nc_name ^ ";") nodes_start));
   List.iter (function node -> Printf.fprintf c "%s\n" (pp_node node)) nodes;
   List.iter (function e -> Printf.fprintf c "%s\n" (pp_edge e)) edges;
   Printf.fprintf c "}\n";
   let _ = close_out c in
   ()
 
-let reachable_subgraph ((nodes_source, nodes, edges) : graph_cfg) (labels_start : string list) :
+let reachable_subgraph ((nodes_start, nodes, edges) : graph_cfg) (labels_start : string list) :
     graph_cfg =
-  let nodes_all : node_cfg list = nodes_source @ nodes in
+  let nodes_all : node_cfg list = nodes_start @ nodes in
   let edges_all : (node_name * node_name list) list =
     List.map
       (function
-        | (nn, cnk, label, addr, k, col, tooltip) ->
-            ( nn,
+        | node ->
+            ( node.nc_name,
               List.filter_map
-                (function (nn1, nn2, cek) -> if nn1 = nn then Some nn2 else None)
+                (function (nn1, nn2, cek) -> if nn1 = node.nc_name then Some nn2 else None)
                 edges ))
       nodes_all
   in
@@ -1905,9 +1907,7 @@ let reachable_subgraph ((nodes_source, nodes, edges) : graph_cfg) (labels_start 
   in
   let start_node_names =
     List.filter_map
-      (function
-        | (nn, cnk, label, addr, k, col, tooltip) ->
-            if List.mem label labels_start then Some nn else None)
+      (function node -> if List.mem node.nc_label labels_start then Some node.nc_name else None)
       nodes_all
   in
   let node_names_reachable = stupid_reachability false [] start_node_names in
@@ -1917,21 +1917,17 @@ let reachable_subgraph ((nodes_source, nodes, edges) : graph_cfg) (labels_start 
         | (nn, nn', cek) -> List.mem nn node_names_reachable && List.mem nn' node_names_reachable)
       edges
   in
-  let nodes_reachable_source =
-    List.filter
-      (function (nn, cnk, label, addr, k, col, tooltip) -> List.mem nn node_names_reachable)
-      nodes_source
+  let nodes_reachable_start =
+    List.filter (function node -> List.mem node.nc_name node_names_reachable) nodes_start
   in
   let nodes_reachable_rest =
-    List.filter
-      (function (nn, cnk, label, addr, k, col, tooltip) -> List.mem nn node_names_reachable)
-      nodes
+    List.filter (function node -> List.mem node.nc_name node_names_reachable) nodes
   in
-  (nodes_reachable_source, nodes_reachable_rest, edges_reachable)
+  (nodes_reachable_start, nodes_reachable_rest, edges_reachable)
 
-let graph_union ((nodes_source, nodes, edges) : graph_cfg)
-    ((nodes_source', nodes', edges') : graph_cfg) =
-  (nodes_source @ nodes_source', nodes @ nodes', edges @ edges')
+let graph_union ((nodes_start, nodes, edges) : graph_cfg)
+    ((nodes_start', nodes', edges') : graph_cfg) =
+  (nodes_start @ nodes_start', nodes @ nodes', edges @ edges')
 
 (*
 module P = Graph.Pack
@@ -1941,11 +1937,11 @@ http://ocamlgraph.lri.fr/doc/Fixpoint.html
 (* same-source-line edges *)
 
 let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : graph_cfg =
-  let (nodes_source1, nodes_rest1, edges1) = graph1 in
-  let (nodes_source2, nodes_rest2, edges2) = graph2 in
+  let (nodes_start1, nodes_rest1, edges1) = graph1 in
+  let (nodes_start2, nodes_rest2, edges2) = graph2 in
   let is_branch_cond = function
-    | (nn, cnk, label, addr, k, col, tooltip) -> (
-        match cnk with
+    | node -> (
+        match node.nc_kind with
         | CFG_node_branch_cond | CFG_node_branch_register | CFG_node_ret
          |CFG_node_branch_and_link ->
             true
@@ -1955,8 +1951,7 @@ let correlate_source_line test1 line_info1 graph1 test2 line_info2 graph2 : grap
   let nodes_branch_cond1 = List.filter is_branch_cond nodes_rest1 in
   let nodes_branch_cond2 = List.filter is_branch_cond nodes_rest2 in
   let with_source_lines test line_info = function
-    | (nn, cnk, label, addr, k, col, tooltip) as n ->
-        (nn, dwarf_source_file_line_numbers_by_index test line_info k)
+    | node -> (node.nc_name, dwarf_source_file_line_numbers_by_index test line_info node.nc_index)
   in
   let nodes_branch_cond_with1 =
     List.map (with_source_lines test1 line_info1) nodes_branch_cond1
