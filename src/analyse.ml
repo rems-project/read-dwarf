@@ -1770,7 +1770,7 @@ let mk_cfg test an node_name_prefix (start_indices : index list (*should be ELF 
       {
         nc_name = nn;
         nc_kind = CFG_node_start;
-        nc_label = s;
+        nc_label = node_name_prefix ^ s;
         nc_addr = i.i_addr;
         nc_index = k;
         nc_colour = colour k;
@@ -1804,7 +1804,7 @@ let mk_cfg test an node_name_prefix (start_indices : index list (*should be ELF 
         let node = mk_node k CFG_node_eret "eret" in
         ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }, [], [])
     | C_branch_and_link (a, s) -> (
-        let node = mk_node_simple k CFG_node_branch_and_link "" in
+        let node = mk_node k CFG_node_branch_and_link s in
         let k_call =
           List.filter_map
             (function
@@ -1821,7 +1821,8 @@ let mk_cfg test an node_name_prefix (start_indices : index list (*should be ELF 
         | [k'] ->
             let (nn', k'') = next_non_start_node_name [] k' in
             let edges = [(node.nc_name, nn', CFG_edge_flow)] in
-            ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }, [k''], k_call)
+            ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges }, [k''], (*k_call*) [])
+            (*reinstate to recurse through calls *)
         | _ ->
             (* noreturn *)
             ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = [] }, [], k_call)
