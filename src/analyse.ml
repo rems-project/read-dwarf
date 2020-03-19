@@ -1366,8 +1366,18 @@ let pp_come_froms (addr : addr) (cfs : come_from list) : string =
 (*****************************************************************************)
 
 (* pp to dot a CFG.  Make a node for each non-{C_plain, C_branch}
-   instruction, and an extra node for each ELF symbol or other bl
-   target.  *)
+   instruction, and an extra "start" node for each ELF symbol or other
+   bl target.
+
+   In choosing to only make nodes for conditional/indirect branches
+   and calls/returns, we are not making nodes for every control-flow
+   target, so this is a quotient of the underlying basic-block
+   control-flow graph.  For example, it won't visualise multiple
+   branches into distinct points of a straight-line control-flow
+   sequence.  However, it will have most of the essential choices, and
+   be simpler to look at.
+
+*)
 
 type node_kind_cfg =
   | CFG_node_start (* elf symbol or other bl target *)
@@ -1384,7 +1394,6 @@ type edge_kind_cfg = CFG_edge_flow | CFG_edge_correlate
 type node_name = string (*graphviz node name*)
 
 type node_cfg = {
-  (*  node_name * node_kind_cfg * string (*label*) * addr * index * string (*colour*) * string*)
   nc_name : node_name;
   nc_kind : node_kind_cfg;
   nc_label : string;
@@ -1638,21 +1647,11 @@ let mk_cfg test an node_name_prefix : graph_cfg =
         colour
     | _ -> "black"
   in
-  (*    if label ="<sl_lock>" then "plum" else if label="<sl_unlock>" then "forestgreen" else "black"*)
-  (*    match dwarf_source_file_line_numbers test addr with
-    | [(subprogram_name, line)] ->
-        let colour =
-          List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
-        in
-        colour
-    | _ -> "black"
-  in
- *)
-  (* the graphette start nodes are the addresses which are either
-       - elf symbols
-       - the branch target (but not the successor) of a C_branch_and_link
-       - the targets (branch and fall-through) of a C_branch_cond, and/or
-       - the targets of a C_branch_register *)
+
+  (* the graphette start nodes are the instructions which are either
+       - elf symbols, or
+       - the branch target (but not the successor) of a C_branch_and_link  
+          (probably these will all also have elf symbols) *)
   let is_graphette_start_target (cf : come_from) =
     match cf.cf_target_kind with
     | T_plain_successor -> false
@@ -1670,6 +1669,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     an.elf_symbols.(k) <> [] || List.exists is_graphette_start_target an.come_froms.(k)
   in
 
+  (* the (non-start) nodes are all the intereresting (non-unconditional-branch) control-flow instructions *)
   let is_graph_non_start_node k =
     let i = an.instructions.(k) in
     match i.i_control_flow with
@@ -1707,9 +1707,8 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     | _ -> node_name i.i_addr
   in
 
-  let mk_node_simple k kind label_prefix =
+  let mk_node k kind label =
     let i = an.instructions.(k) in
-    let label = label_prefix ^ pp_addr i.i_addr in
     {
       nc_name = node_name i.i_addr;
       nc_kind = kind;
@@ -1721,8 +1720,15 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     }
   in
 
+  let mk_node_simple k kind label_prefix =
+    let i = an.instructions.(k) in
+    let label = label_prefix ^ pp_addr i.i_addr in
+    mk_node k kind label
+  in
+
   let k_max = Array.length an.elf_symbols in
 
+  (* make the little piece of graph from a start node at k to its first non-start node *)
   let graphette_start k : node_cfg list * edge_cfg list =
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
@@ -1747,11 +1753,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     ([node], [edge])
   in
 
-  let sink_node addr s ckn k =
-    let node = mk_node_simple k CFG_node_ret "" in
-    ([node], [])
-  in
-
+  (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes  *)
   let graphette_normal k : node_cfg list * edge_cfg list =
     (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
     let i = an.instructions.(k) in
@@ -1765,8 +1767,12 @@ let mk_cfg test an node_name_prefix : graph_cfg =
     | C_branch _ ->
         Warn.fatal "graphette_normal on C_branch"
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
-    | C_ret -> sink_node i.i_addr "ret" CFG_node_ret k
-    | C_eret -> sink_node i.i_addr "eret" CFG_node_eret k
+    | C_ret ->
+        let node = mk_node k CFG_node_ret "ret" in
+        ([node], [])
+    | C_eret ->
+        let node = mk_node k CFG_node_eret "eret" in
+        ([node], [])
     | C_branch_and_link (a, s) ->
         let node = mk_node_simple k CFG_node_branch_and_link "" in
         let edges =
@@ -1816,6 +1822,7 @@ let mk_cfg test an node_name_prefix : graph_cfg =
         ([node], edges)
   in
 
+  (* glom together the bits of graph constructed starting from each instruction index *)
   let rec mk_graph acc_nodes_start acc_nodes acc_edges n k =
     if k >= n then (acc_nodes_start, acc_nodes, acc_edges)
     else
@@ -1836,6 +1843,8 @@ let mk_cfg test an node_name_prefix : graph_cfg =
   let ((nodes_start, nodes, edges) as graph : graph_cfg) = mk_graph [] [] [] k_max 0 in
 
   graph
+
+(* render graph to graphviz dot file *)
 
 let pp_colour colour =
   "[color=\"" ^ colour ^ "\"]" (*^ "[fillcolor=\"" ^ colour ^ "\"]"*) ^ "[fontcolor=\""
@@ -1878,6 +1887,8 @@ let pp_cfg ((nodes_start, nodes, edges) : graph_cfg) cfg_dot_file : unit =
   Printf.fprintf c "}\n";
   let _ = close_out c in
   ()
+
+(* carve out reachable subgraph from some starting node labels (using that so that the user can just paste in from the rendered graph if need be) *)
 
 let reachable_subgraph ((nodes_start, nodes, edges) : graph_cfg) (labels_start : string list) :
     graph_cfg =
