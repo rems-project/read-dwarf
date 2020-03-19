@@ -14,13 +14,26 @@ type linksem_typ = Z.t
 
 (** The ELF symbol. This type guarantee the data exists contrary to linksem symbols
     (it may be all zeros though) *)
-type t = { name : string; typ : typ; addr : int; size : int; data : BytesSeq.t }
+type t = {
+  name : string;
+  other_names : string list;
+  typ : typ;
+  addr : int;
+  size : int;
+  data : BytesSeq.t;
+}
 
 (** The type of an ELF symbol in linksem. See {!of_linksem}*)
 type linksem_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
 
+(** Add a name to the other names list *)
+val push_name : string -> t -> t
+
 (** Check if an address is in a symbol *)
 val is_in : t -> int -> bool
+
+(** For conformance with the {!RngMap.LenObject} module type *)
+val len : t -> int
 
 (** Convert the integer type into typ *)
 val typ_of_linksem : linksem_typ -> typ

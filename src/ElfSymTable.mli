@@ -17,7 +17,9 @@ type t
 (** The empty symbol table *)
 val empty : t
 
-(** Return a new table with the symbol added *)
+(** Return a new table with the symbol added
+    If there already exists a symbol covering the same area, merge them with
+    {!ElfSymbol.other_names} *)
 val add : t -> sym -> t
 
 (** Get a symbol by name. Raise [Not_found] if no name matches *)

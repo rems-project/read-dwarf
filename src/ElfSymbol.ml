@@ -4,11 +4,22 @@ type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
 
 type linksem_typ = Z.t
 
-type t = { name : string; typ : typ; addr : int; size : int; data : BytesSeq.t }
+type t = {
+  name : string;
+  other_names : string list;
+  typ : typ;
+  addr : int;
+  size : int;
+  data : BytesSeq.t;
+}
 
 type linksem_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
 
+let push_name s t = { t with other_names = s :: t.other_names }
+
 let is_in t addr = t.addr <= addr && addr < t.addr + t.size
+
+let len t = t.size
 
 let typ_of_linksem ltyp =
   match Z.to_int ltyp with
@@ -44,7 +55,7 @@ let of_linksem segs ((name, (typ, size, addr, data, _)) as lsym) =
         | None -> raise (LoadingError (name, addr))
       )
   in
-  { name; typ; size; addr; data }
+  { name; other_names = []; typ; size; addr; data }
 
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
@@ -71,6 +82,7 @@ let pp_raw sym =
     ^^ OCaml.record "sym"
          [
            ("name", !^(sym.name));
+           ("other names", separate nbspace (List.map string sym.other_names));
            ("typ", pp_typ sym.typ);
            ("addr", ptr sym.addr);
            ("size", ptr sym.size);
