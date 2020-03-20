@@ -119,6 +119,11 @@ let mapping (name : string) (mappings : (document * document) list) : document =
     (List.map (fun (a, b) -> infix 2 1 !^"->" a b) mappings |> separate (semi ^^ space))
     !^"}"
 
+let hashtbl ?(name = "") key value ht =
+  let res = ref [] in
+  Hashtbl.iter (fun i v -> res := (key i, value v) :: !res) ht;
+  mapping name (List.rev !res)
+
 let record name fields : document = !^name ^^ OCaml.record name fields
 
 (*****************************************************************************)

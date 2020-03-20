@@ -18,10 +18,10 @@ let rec loc_merge = function
 let clamp_z z = try Z.to_int z with Z.Overflow when Z.compare z Z.zero > 0 -> Int.max_int
 
 (** Create a DWARF variable from it's linksem counterpart *)
-let of_linksem (elf : Elf.File.t) (lvar : linksem_t) : t =
+let of_linksem (elf : Elf.File.t) (env : Ctype.env) (lvar : linksem_t) : t =
   let name = lvar.svfp_name in
   let param = match lvar.svfp_kind with SVPK_var -> false | SVPK_param -> true in
-  let ctype = Ctype.of_linksem lvar.svfp_type in
+  let ctype = Ctype.of_linksem ~env lvar.svfp_type in
   let locs =
     lvar.svfp_locations |> Option.value ~default:[]
     |> List.map (fun (a, b, l) -> ((Z.to_int a, clamp_z b), Loc.of_linksem elf l))
@@ -30,12 +30,12 @@ let of_linksem (elf : Elf.File.t) (lvar : linksem_t) : t =
   { name; param; ctype; locs }
 
 (** Pretty print a variable *)
-let pp_raw v =
+let pp_raw ?env v =
   let kind = if v.param then "param" else "var" in
   PP.(
     record kind
       [
         ("name", string v.name);
-        ("ctype", Ctype.pp v.ctype);
+        ("ctype", Ctype.pp ?env v.ctype);
         ("locs", list (pair (pair ptr ptr) Loc.pp) v.locs);
       ])

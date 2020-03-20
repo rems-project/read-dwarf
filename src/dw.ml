@@ -15,6 +15,7 @@ type t = {
   ldwarf_sdt : Dwarf.sdt_dwarf;
   funcs : Func.t list;
   vars : Var.t list;
+  tenv : Ctype.env;
 }
 
 (** Error on Dwarf parsing *)
@@ -41,17 +42,24 @@ let of_elf (elf : Elf.File.t) =
   let ldwarf_sdt : Dwarf.sdt_dwarf =
     Dwarf.mk_sdt_dwarf ldwarf (Dwarf.subprogram_line_extents ldwarf)
   in
+  let tenv = Ctype.make_env () in
   let process_cu (funcs, vars) (cu : Dwarf.sdt_compilation_unit) =
-    let nfuncs = List.rev_map (Func.of_linksem elf) cu.scu_subroutines in
-    let nvars = List.rev_map (Var.of_linksem elf) cu.scu_vars in
+    let nfuncs = List.rev_map (Func.of_linksem elf tenv) cu.scu_subroutines in
+    let nvars = List.rev_map (Var.of_linksem elf tenv) cu.scu_vars in
     (List.rev_append nfuncs funcs, List.rev_append nvars vars)
   in
   let (funcs, vars) = List.fold_left process_cu ([], []) ldwarf_sdt.sd_compilation_units in
-  { elf; ldwarf; ldwarf_sdt; funcs; vars }
+  { elf; ldwarf; ldwarf_sdt; funcs; vars; tenv }
 
 (** Get Dwarf information from an Elf file by name. Use {!ElfFile.of_file} *)
 let of_file (filename : string) = filename |> Elf.File.of_file |> of_elf
 
 (** Pretty print dwarf data as an ocaml structure *)
 let pp_raw d =
-  PP.(record "dw" [("funcs", list Func.pp_raw d.funcs); ("vars", list Var.pp_raw d.vars)])
+  PP.(
+    record "dw"
+      [
+        ("funcs", list (Func.pp_raw ~env:d.tenv) d.funcs);
+        ("vars", list (Var.pp_raw ~env:d.tenv) d.vars);
+        ("types", Ctype.pp_env d.tenv);
+      ])

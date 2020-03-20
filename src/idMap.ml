@@ -57,7 +57,7 @@ let map_to_list f m =
   done;
   List.rev !res
 
-let pp ?(name = "trimap") ~keys ~vals m =
+let pp ?(name = "") ~keys ~vals m =
   PP.(
     mapping name
     @@ map_to_list
