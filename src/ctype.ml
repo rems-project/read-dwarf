@@ -159,7 +159,9 @@ let of_linksem ?(env = make_env ()) (ltyp : linksem_t) : t =
     | CT (CT_pointer (_, None)) -> voidstar
     | CT (CT_array (_, elem, l)) ->
         Array { elem = of_linksem' elem; dims = List.map Fun.(fst %> Option.map Z.to_int) l }
-    | CT (CT_aggregate (_, Atk_structure, name, size, decl, members)) -> (
+    | CT (CT_struct_union (_, Atk_structure, name, size, decl, mmembers)) -> (
+        (* TODO: take proper care of the None case *)
+        let members = match mmembers with Some members -> members | None -> [] in
         (* TODO This should be a separate function *)
         let name =
           match (name, typedef) with
@@ -180,7 +182,9 @@ let of_linksem ?(env = make_env ()) (ltyp : linksem_t) : t =
               warn "Struct %s had no size. Defaulting to 8" name;
               Struct (IdMap.add env.structs name { layout; name; size = 8 })
       )
-    | CT (CT_aggregate (_, Atk_union, name, size, decl, members)) ->
+    | CT (CT_struct_union (_, Atk_union, name, size, decl, mmembers)) ->
+        (* TODO: take proper care of the None case *)
+        let members = match mmembers with Some members -> members | None -> [] in
         let size =
           match size with
           | Some s -> Z.to_int s
@@ -189,7 +193,9 @@ let of_linksem ?(env = make_env ()) (ltyp : linksem_t) : t =
               8
         in
         Machine size
-    | CT (CT_enumeration (_, name, typ, size, decl, members)) ->
+    | CT (CT_enumeration (_, name, typ, size, decl, mmembers)) ->
+        (* TODO: take proper care of the None case *)
+        let members = match mmembers with Some members -> members | None -> [] in
         let name =
           match (name, typedef) with
           | (Some n, _) -> n
