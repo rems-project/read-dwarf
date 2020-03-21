@@ -1408,7 +1408,11 @@ type node_kind_cfg =
   | CFG_node_ret
   | CFG_node_eret
 
-type edge_kind_cfg = CFG_edge_flow | CFG_edge_branch_and_link_inline | CFG_edge_ret_inline | CFG_edge_correlate 
+type edge_kind_cfg =
+  | CFG_edge_flow
+  | CFG_edge_branch_and_link_inline
+  | CFG_edge_ret_inline
+  | CFG_edge_correlate
 
 type node_name = string (*graphviz node name*)
 
@@ -1430,14 +1434,17 @@ type graph_cfg = {
   (* "start" nodes - synthetic nodes, for elf symbols or other bl targets*)
   gc_nodes : node_cfg list;
   (* non-start interior nodes  - corresponding to particular interesting control-flow instructions *)
-  gc_edges : edge_cfg list; (* edges *)
-  gc_edges_exiting : edge_cfg list; (* edges leaving a subgraph*)
-  gc_subgraphs : (string(*subgraph name*) * string (*subgraph colour*) * graph_cfg) list;
-  }
+  gc_edges : edge_cfg list;
+  (* edges *)
+  gc_edges_exiting : edge_cfg list;
+  (* edges leaving a subgraph*)
+  gc_subgraphs : (string (*subgraph name*) * string (*subgraph colour*) * graph_cfg) list;
+}
 
 (* the gc_edges_exiting have to be kept separate because if they are within the subgraph in the generated .dot, graphviz pulls the target node *within* the subgraph, even if it isn't *)
-               
-let graph_cfg_empty () = { gc_start_nodes = []; gc_nodes = []; gc_edges = []; gc_edges_exiting=[];gc_subgraphs = [] }
+
+let graph_cfg_empty () =
+  { gc_start_nodes = []; gc_nodes = []; gc_edges = []; gc_edges_exiting = []; gc_subgraphs = [] }
 
 let graph_cfg_union g1 g2 =
   {
@@ -1632,49 +1639,50 @@ let html_escape s =
        (char_list_of_string s))
 
 let include_tooltips = true
+
 let mk_tooltip test an label k =
-  if include_tooltips then 
-  (* TODO: reduce the nasty code duplication between this and pp_instruction *)
-  let i = an.instructions.(k) in
-  let addr = i.i_addr in
-  let come_froms' =
-    List.filter (function cf -> cf.cf_target_kind <> T_plain_successor) an.come_froms.(k)
-  in
-  let lines =
-    [label]
-    @ List.map
-        (pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source false)
-        an.line_info.(k)
-    (* the address and (hex) instruction *)
-    @ [
-        pp_addr addr ^ ":  "
-        ^ pp_opcode_bytes test.arch i.i_opcode
-        (* the dissassembly from objdump *)
-        ^ "  "
-        ^ i.i_mnemonic ^ "\t" ^ i.i_operands
-        (* any indirect-branch control flow from this instruction *)
-        ^ begin
-            match i.i_control_flow with
-            | C_branch_register _ ->
-                " -> "
-                ^ String.concat ","
-                    (List.map
-                       (function
-                         | (tk, a', k', s) ->
-                             pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
-                       i.i_targets)
-                ^ " "
-            | _ -> ""
-          end
-        (* any control flow to this instruction *)
-        ^ pp_come_froms addr come_froms';
-      ]
-  in
-  html_escape (String.concat "\n" lines)
+  if include_tooltips then
+    (* TODO: reduce the nasty code duplication between this and pp_instruction *)
+    let i = an.instructions.(k) in
+    let addr = i.i_addr in
+    let come_froms' =
+      List.filter (function cf -> cf.cf_target_kind <> T_plain_successor) an.come_froms.(k)
+    in
+    let lines =
+      [label]
+      @ List.map
+          (pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source false)
+          an.line_info.(k)
+      (* the address and (hex) instruction *)
+      @ [
+          pp_addr addr ^ ":  "
+          ^ pp_opcode_bytes test.arch i.i_opcode
+          (* the dissassembly from objdump *)
+          ^ "  "
+          ^ i.i_mnemonic ^ "\t" ^ i.i_operands
+          (* any indirect-branch control flow from this instruction *)
+          ^ begin
+              match i.i_control_flow with
+              | C_branch_register _ ->
+                  " -> "
+                  ^ String.concat ","
+                      (List.map
+                         (function
+                           | (tk, a', k', s) ->
+                               pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
+                         i.i_targets)
+                  ^ " "
+              | _ -> ""
+            end
+          (* any control flow to this instruction *)
+          ^ pp_come_froms addr come_froms';
+        ]
+    in
+    html_escape (String.concat "\n" lines)
   else ""
-  
-let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start_indices : index list (*should be ELF symbol indices*))
-    : graph_cfg =
+
+let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
+    (start_indices : index list (*should be ELF symbol indices*)) : graph_cfg =
   let colour k =
     match an.line_info.(k) with
     | [elifi] ->
@@ -1722,12 +1730,17 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
     | C_branch_register _ -> true
   in
 
+  let pp_node_name_nesting nesting =
+    String.concat "_" (List.map (function k -> pp_addr an.instructions.(k).i_addr) nesting)
+  in
 
-  let pp_node_name_nesting nesting = String.concat "_" (List.map (function k -> pp_addr an.instructions.(k).i_addr) nesting) in
-  
   (* we make up an additional node for all ELF symbols and bl targets; all others are just the address *)
-  let node_name_start nesting addr = node_name_prefix ^ "start_" ^ pp_addr addr ^ "_" ^ pp_node_name_nesting nesting in
-  let node_name nesting addr = node_name_prefix ^ pp_addr addr ^"_"^ pp_node_name_nesting nesting in
+  let node_name_start nesting addr =
+    node_name_prefix ^ "start_" ^ pp_addr addr ^ "_" ^ pp_node_name_nesting nesting
+  in
+  let node_name nesting addr =
+    node_name_prefix ^ pp_addr addr ^ "_" ^ pp_node_name_nesting nesting
+  in
 
   (* need to track branch-visited edges because Hf loops back to a nop (abort.c) and a wfi (wait for interrupt)*)
   let rec next_non_start_node_name nesting visited k =
@@ -1741,7 +1754,8 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
     | C_branch (a, s) -> (
         match i.i_targets with
         | [(tk, addr', k', s)] ->
-            if List.mem k' visited then (node_name nesting addr', k') (* TODO: something more useful *)
+            if List.mem k' visited then (node_name nesting addr', k')
+              (* TODO: something more useful *)
             else next_non_start_node_name nesting (k' :: visited) k'
         | _ -> Warn.fatal "non-unique branch targets at %s" (pp_addr i.i_addr)
       )
@@ -1791,12 +1805,19 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
     in
     let (nn', k') = next_non_start_node_name nesting [] k in
     let edge = (node.nc_name, nn', CFG_edge_flow) in
-    ({ gc_start_nodes = [node]; gc_nodes = []; gc_edges = [edge]; gc_edges_exiting = []; gc_subgraphs=[] }, [k'])
+    ( {
+        gc_start_nodes = [node];
+        gc_nodes = [];
+        gc_edges = [edge];
+        gc_edges_exiting = [];
+        gc_subgraphs = [];
+      },
+      [k'] )
   in
 
   (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes  *)
-  let rec graphette_normal nesting return_target k : graph_cfg * index list * (* work_list_new *) index list
-      (* bl targets *) =
+  let rec graphette_normal nesting return_target k :
+      graph_cfg * index list * (* work_list_new *) index list (* bl targets *) =
     (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
     let i = an.instructions.(k) in
     match i.i_control_flow with
@@ -1811,11 +1832,31 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_ret ->
         let node = mk_node nesting k CFG_node_ret "ret" in
-        let edges_exiting = match return_target with Some nn' -> [(node.nc_name, nn',CFG_edge_ret_inline)] | None -> [] in 
-        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = []; gc_edges_exiting = edges_exiting; gc_subgraphs=[] }, [], [])
+        let edges_exiting =
+          match return_target with
+          | Some nn' -> [(node.nc_name, nn', CFG_edge_ret_inline)]
+          | None -> []
+        in
+        ( {
+            gc_start_nodes = [];
+            gc_nodes = [node];
+            gc_edges = [];
+            gc_edges_exiting = edges_exiting;
+            gc_subgraphs = [];
+          },
+          [],
+          [] )
     | C_eret ->
         let node = mk_node nesting k CFG_node_eret "eret" in
-        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = []; gc_edges_exiting = []; gc_subgraphs=[] }, [], [])
+        ( {
+            gc_start_nodes = [];
+            gc_nodes = [node];
+            gc_edges = [];
+            gc_edges_exiting = [];
+            gc_subgraphs = [];
+          },
+          [],
+          [] )
     | C_smc_hvc s ->
         let node = mk_node_simple nesting k CFG_node_smc_hvc "smc/hvc " in
         let (edges, work_list_new) =
@@ -1828,7 +1869,15 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
                  | _ -> None)
                i.i_targets)
         in
-        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges; gc_edges_exiting = []; gc_subgraphs=[] }, work_list_new, [])
+        ( {
+            gc_start_nodes = [];
+            gc_nodes = [node];
+            gc_edges = edges;
+            gc_edges_exiting = [];
+            gc_subgraphs = [];
+          },
+          work_list_new,
+          [] )
     | C_branch_cond (mnemonic, a, s) ->
         let node = mk_node_simple nesting k CFG_node_branch_cond "" in
         let (edges, work_list_new) =
@@ -1840,7 +1889,15 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
                      ((node.nc_name, nn', CFG_edge_flow), k''))
                i.i_targets)
         in
-        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges; gc_edges_exiting = []; gc_subgraphs=[] }, work_list_new, [])
+        ( {
+            gc_start_nodes = [];
+            gc_nodes = [node];
+            gc_edges = edges;
+            gc_edges_exiting = [];
+            gc_subgraphs = [];
+          },
+          work_list_new,
+          [] )
     | C_branch_register _ ->
         let node = mk_node_simple nesting k CFG_node_branch_register "" in
         let (edges, work_list_new) =
@@ -1853,54 +1910,87 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
                         ((node.nc_name, nn', CFG_edge_flow), k''))
                   i.i_targets))
         in
-        ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges; gc_edges_exiting = []; gc_subgraphs=[] }, work_list_new, [])
-    | C_branch_and_link (a, s) -> 
-       let k_call =
-         match List.filter_map
-           (function
-            | (T_branch_and_link_call, a', k', s') -> Some k'
-            | (T_branch_and_link_call_noreturn, a', k', s') -> Some k'
-            | _ -> None)
-           i.i_targets
-         with
-         | [k_call]->k_call
-         | _ -> Warn.fatal "non-unique k_call"
-       in
-       let nn_k_successor =
-         match
-           List.filter_map
-             (function (T_branch_and_link_successor, a', k', s') -> Some k' | _ -> None)
-             i.i_targets
-         with
-         | [k'] ->
-            let (nn', k'') = next_non_start_node_name nesting [] k' in
-            Some (nn',k'')
-         | _ ->
-            (* noreturn *)
-            None
-       in
-       let inline = inline_all in
-       let node = mk_node nesting k CFG_node_branch_and_link s in
-       if not(inline) || List.mem k nesting then
-         (* not inline: construct a new node for the bl. If not noreturn, add an edge to its successor and return that in the new worklist, otherwise stop at this node.  In either case, if recurse_flat, add the bl target to the bl_target_indices *)
-         match nn_k_successor with
-         | Some (nn',k'') -> 
-            let edges = [(node.nc_name, nn', CFG_edge_flow)] in
-            ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges; gc_edges_exiting = []; gc_subgraphs=[] }, [k''], (if recurse_flat then [k_call] else  []))
-         | None ->
-            ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = []; gc_edges_exiting = []; gc_subgraphs=[] }, [], (if recurse_flat then [k_call] else  []))
-       else
-         (* inline: construct a new node for the bl and a new subgraph for the inlined subroutine, and an edge between them (faking up the node name that mk_graph will use for its start node).  Pass the return_target' in to the subgraph construction, for it to add edges from the ret to the successor (if any) *)
-         let nesting' = k::nesting in
-         let (return_target',work_list_new) = match nn_k_successor with Some(nn',k'') -> (Some nn',[k'']) | None -> (None,[]) in 
-         let subgraph_name = "cluster_" ^ pp_node_name_nesting nesting' in 
-         let subgraph_colour = colour k_call in 
-         let subgraph = mk_graph nesting' return_target' [k_call] in
-         let nn'' = node_name_start nesting' an.instructions.(k_call).i_addr in 
-         let edges = [(node.nc_name, nn'', CFG_edge_branch_and_link_inline)] in
-         ({ gc_start_nodes = []; gc_nodes = [node]; gc_edges = edges; gc_edges_exiting = []; gc_subgraphs=[(subgraph_name,subgraph_colour,subgraph)] }, work_list_new, [])
-          
-          
+        ( {
+            gc_start_nodes = [];
+            gc_nodes = [node];
+            gc_edges = edges;
+            gc_edges_exiting = [];
+            gc_subgraphs = [];
+          },
+          work_list_new,
+          [] )
+    | C_branch_and_link (a, s) ->
+        let k_call =
+          match
+            List.filter_map
+              (function
+                | (T_branch_and_link_call, a', k', s') -> Some k'
+                | (T_branch_and_link_call_noreturn, a', k', s') -> Some k'
+                | _ -> None)
+              i.i_targets
+          with
+          | [k_call] -> k_call
+          | _ -> Warn.fatal "non-unique k_call"
+        in
+        let nn_k_successor =
+          match
+            List.filter_map
+              (function (T_branch_and_link_successor, a', k', s') -> Some k' | _ -> None)
+              i.i_targets
+          with
+          | [k'] ->
+              let (nn', k'') = next_non_start_node_name nesting [] k' in
+              Some (nn', k'')
+          | _ ->
+              (* noreturn *)
+              None
+        in
+        let inline = inline_all in
+        let node = mk_node nesting k CFG_node_branch_and_link s in
+        if (not inline) || List.mem k nesting then
+          (* not inline: construct a new node for the bl. If not noreturn, add an edge to its successor and return that in the new worklist, otherwise stop at this node.  In either case, if recurse_flat, add the bl target to the bl_target_indices *)
+          match nn_k_successor with
+          | Some (nn', k'') ->
+              let edges = [(node.nc_name, nn', CFG_edge_flow)] in
+              ( {
+                  gc_start_nodes = [];
+                  gc_nodes = [node];
+                  gc_edges = edges;
+                  gc_edges_exiting = [];
+                  gc_subgraphs = [];
+                },
+                [k''],
+                if recurse_flat then [k_call] else [] )
+          | None ->
+              ( {
+                  gc_start_nodes = [];
+                  gc_nodes = [node];
+                  gc_edges = [];
+                  gc_edges_exiting = [];
+                  gc_subgraphs = [];
+                },
+                [],
+                if recurse_flat then [k_call] else [] )
+        else
+          (* inline: construct a new node for the bl and a new subgraph for the inlined subroutine, and an edge between them (faking up the node name that mk_graph will use for its start node).  Pass the return_target' in to the subgraph construction, for it to add edges from the ret to the successor (if any) *)
+          let nesting' = k :: nesting in
+          let (return_target', work_list_new) =
+            match nn_k_successor with Some (nn', k'') -> (Some nn', [k'']) | None -> (None, [])
+          in
+          let subgraph_name = "cluster_" ^ pp_node_name_nesting nesting' in
+          let subgraph_colour = colour k_call in
+          let subgraph = mk_graph nesting' return_target' [k_call] in
+          let nn'' = node_name_start nesting' an.instructions.(k_call).i_addr in
+          let edges = [(node.nc_name, nn'', CFG_edge_branch_and_link_inline)] in
+          ( {
+              gc_start_nodes = [];
+              gc_nodes = [node];
+              gc_edges = edges;
+              gc_edges_exiting = [];
+              gc_subgraphs = [(subgraph_name, subgraph_colour, subgraph)];
+            },
+            work_list_new,
+            [] )
   (*
   (* glom together the bits of graph constructed starting from each instruction index *)
   let rec mk_graph g_acc n k =
@@ -1921,49 +2011,53 @@ let mk_cfg test an node_name_prefix (recurse_flat:bool) (inline_all:bool) (start
   and mk_graph' nesting return_target g_acc (visited : index list) (work_list : index list) =
     match work_list with
     | [] -> g_acc
-    | k :: work_list' -> (
-      if List.mem k visited then mk_graph' nesting return_target g_acc visited work_list'
-      else
-        begin
-        Printf.printf "mk_graph' working on %d %s %s\n" k (pp_addr an.instructions.(k).i_addr) (String.concat "," an.elf_symbols.(k)); flush stdout;
-        match (is_graphette_start k, is_graph_non_start_node k) with
+    | k :: work_list' ->
+        if List.mem k visited then mk_graph' nesting return_target g_acc visited work_list'
+        else begin
+          Printf.printf "mk_graph' working on %d %s %s\n" k
+            (pp_addr an.instructions.(k).i_addr)
+            (String.concat "," an.elf_symbols.(k));
+          flush stdout;
+          match (is_graphette_start k, is_graph_non_start_node k) with
           | (true, true) ->
-             (* graphette start, where the initial instruction is also a non-start node *)
-             let (g1, _) = graphette_start nesting return_target k in
-              let (g2, work_list_new, bl_target_indices) = graphette_normal nesting return_target k in
+              (* graphette start, where the initial instruction is also a non-start node *)
+              let (g1, _) = graphette_start nesting return_target k in
+              let (g2, work_list_new, bl_target_indices) =
+                graphette_normal nesting return_target k
+              in
               let g_acc' = graph_cfg_union g1 (graph_cfg_union g2 g_acc) in
               let visited' = k :: visited in
               let work_list' = work_list_new @ bl_target_indices @ work_list' in
               mk_graph' nesting return_target g_acc' visited' work_list'
           | (true, false) ->
-             (* graphette start, where the initial instruction is not also a non-start node *)       
-             let (g1, work_list_new) = graphette_start nesting return_target k in
-             let g_acc' = graph_cfg_union g1 g_acc in
-             let visited' = k :: visited in
-             let work_list' = work_list_new @ work_list' in
-             mk_graph' nesting return_target g_acc' visited' work_list'
+              (* graphette start, where the initial instruction is not also a non-start node *)
+              let (g1, work_list_new) = graphette_start nesting return_target k in
+              let g_acc' = graph_cfg_union g1 g_acc in
+              let visited' = k :: visited in
+              let work_list' = work_list_new @ work_list' in
+              mk_graph' nesting return_target g_acc' visited' work_list'
           | (false, true) ->
-             (* non-graphette-start, non-start node*)
-             let (g2, work_list_new, bl_target_indices) = graphette_normal nesting return_target k in
+              (* non-graphette-start, non-start node*)
+              let (g2, work_list_new, bl_target_indices) =
+                graphette_normal nesting return_target k
+              in
               let g_acc' = graph_cfg_union g2 g_acc in
               let visited' = k :: visited in
               let work_list' = work_list_new @ bl_target_indices @ work_list' in
               mk_graph' nesting return_target g_acc' visited' work_list'
           | (false, false) ->
-             (* non-graphette-start, and not a non-start node*)
-             Warn.nonfatal
+              (* non-graphette-start, and not a non-start node*)
+              Warn.nonfatal
                 "mk_graph' called on index %d at %s which is neither is_graphette_start nor \
                  is_graph_non_start_node - could be a self-loop"
                 k
                 (pp_addr an.instructions.(k).i_addr);
               mk_graph' nesting return_target g_acc visited work_list'
         end
-    )
-
   and mk_graph nesting return_target (work_list : index list) =
     mk_graph' nesting return_target (graph_cfg_empty ()) [] work_list
-
   in
+
   mk_graph [] None start_indices
 
 (* render graph to graphviz dot file *)
@@ -1981,10 +2075,9 @@ let pp_node_name nn = "\"" ^ nn ^ "\""
 
 let pp_edge graph_colour (nn, nn', cek) =
   match cek with
-  | CFG_edge_flow 
-  | CFG_edge_branch_and_link_inline 
-  | CFG_edge_ret_inline ->
-      pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep ^ "[color=\"" ^ graph_colour ^ "\"]" ^ ";\n"
+  | CFG_edge_flow | CFG_edge_branch_and_link_inline | CFG_edge_ret_inline ->
+      pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep ^ "[color=\"" ^ graph_colour ^ "\"]"
+      ^ ";\n"
   | CFG_edge_correlate ->
       pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep
       ^ "[constraint=\"false\";style=\"dashed\";color=\"lightgrey\"];\n"
@@ -2005,20 +2098,33 @@ let pp_cfg (g : graph_cfg) cfg_dot_file : unit =
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
 
-  let rec pp_cfg' graph_colour indent (g:graph_cfg) : unit = 
-    List.iter (function node -> Printf.fprintf c "%s%s\n" indent (pp_node node)) g.gc_start_nodes;
+  let rec pp_cfg' graph_colour indent (g : graph_cfg) : unit =
+    List.iter
+      (function node -> Printf.fprintf c "%s%s\n" indent (pp_node node))
+      g.gc_start_nodes;
     Printf.fprintf c "%s{ rank=min; %s }\n" indent
       (String.concat ""
          (List.map (function node -> pp_node_name node.nc_name ^ ";") g.gc_start_nodes));
     List.iter (function node -> Printf.fprintf c "%s%s\n" indent (pp_node node)) g.gc_nodes;
-    List.iter (function e -> Printf.fprintf c "%s%s\n" indent (pp_edge graph_colour e)) g.gc_edges;
-    List.iter (function (subgraph_name,subgraph_colour,g') -> Printf.fprintf c "%ssubgraph %s {\n%scolor=%s\n" indent subgraph_name indent subgraph_colour; pp_cfg' subgraph_colour ("  "^indent) g'; Printf.fprintf c "}\n";     List.iter (function e -> Printf.fprintf c "%s%s\n" indent (pp_edge subgraph_colour e)) g'.gc_edges_exiting;
-) g.gc_subgraphs;
-
+    List.iter
+      (function e -> Printf.fprintf c "%s%s\n" indent (pp_edge graph_colour e))
+      g.gc_edges;
+    List.iter
+      (function
+        | (subgraph_name, subgraph_colour, g') ->
+            Printf.fprintf c "%ssubgraph %s {\n%scolor=%s\n" indent subgraph_name indent
+              subgraph_colour;
+            pp_cfg' subgraph_colour ("  " ^ indent) g';
+            Printf.fprintf c "}\n";
+            List.iter
+              (function e -> Printf.fprintf c "%s%s\n" indent (pp_edge subgraph_colour e))
+              g'.gc_edges_exiting)
+      g.gc_subgraphs
   in
+
   pp_cfg' "black" "" g;
   Printf.fprintf c "}\n";
-  
+
   let _ = close_out c in
   ()
 
@@ -2071,8 +2177,9 @@ let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg 
     gc_start_nodes = nodes_reachable_start;
     gc_nodes = nodes_reachable_rest;
     gc_edges = edges_reachable;
-    gc_edges_exiting = []; (*HACK*)
-    gc_subgraphs = []; (* HACK*)
+    gc_edges_exiting = [];
+    (*HACK*)
+    gc_subgraphs = [] (* HACK*);
   }
 
 (*
@@ -2117,7 +2224,13 @@ let correlate_source_line test1 line_info1 g1 test2 line_info2 g2 : graph_cfg =
                  nodes_branch_cond_with2)
          nodes_branch_cond_with1)
   in
-  { gc_start_nodes = []; gc_nodes = []; gc_edges = edges; gc_edges_exiting = []; gc_subgraphs = [] }
+  {
+    gc_start_nodes = [];
+    gc_nodes = [];
+    gc_edges = edges;
+    gc_edges_exiting = [];
+    gc_subgraphs = [];
+  }
 
 (*****************************************************************************)
 (*        render control-flow branches in text output                        *)
