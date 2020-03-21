@@ -3116,14 +3116,12 @@ let pp_test_analysis test an =
     )
   ^ "* ************* struct/union/enum type definitions *****************\n"
   ^ (let d = test.dwarf_static.ds_dwarf in
-(*     let c = Dwarf.p_context_of_d d in
+
+     (*     let c = Dwarf.p_context_of_d d in
      Dwarf.pp_all_aggregate_types c d*)
      (*     Dwarf.pp_all_struct_union_enum_types' d)*)
-
      let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
-     String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps)
-    )
-  
+     String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps))
   (*  ^ "\n* ************* branch targets *****************\n"*)
   (*  ^ pp_branch_targets instructions*)
   ^ "\n* ************* call graph *****************\n"
