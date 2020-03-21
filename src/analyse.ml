@@ -1939,7 +1939,7 @@ let pp_edge (nn, nn', cek) =
   | CFG_edge_flow -> pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep ^ ";\n"
   | CFG_edge_correlate ->
       pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep
-      ^ "[constraint=\"false\";style=\"dashed\"];\n"
+      ^ "[constraint=\"false\";style=\"dashed\";color=\"lightgrey\"];\n"
 
 let pp_cfg (g : graph_cfg) cfg_dot_file : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
@@ -3114,10 +3114,16 @@ let pp_test_analysis test an =
   ^ ( pp_instruction_init ();
       String.concat "" (Array.to_list (Array.mapi (pp_instruction test an) an.instructions))
     )
-  ^ "* ************* aggregate type definitions *****************\n"
+  ^ "* ************* struct/union/enum type definitions *****************\n"
   ^ (let d = test.dwarf_static.ds_dwarf in
-     let c = Dwarf.p_context_of_d d in
-     Dwarf.pp_all_aggregate_types c d)
+(*     let c = Dwarf.p_context_of_d d in
+     Dwarf.pp_all_aggregate_types c d*)
+     (*     Dwarf.pp_all_struct_union_enum_types' d)*)
+
+     let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
+     String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps)
+    )
+  
   (*  ^ "\n* ************* branch targets *****************\n"*)
   (*  ^ pp_branch_targets instructions*)
   ^ "\n* ************* call graph *****************\n"

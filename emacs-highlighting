@@ -1,4 +1,4 @@
-* emacs colour highlighting and outline-mode configuration -*-outline-*-
+* emacs colour highlighting and outline-mode configuration -*-outline-*-  C-c C-{t,a,d,e}
 
 % add the following four lines to .emacs to turn on colour highlighting
 %
