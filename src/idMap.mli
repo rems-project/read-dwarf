@@ -41,6 +41,9 @@ val adds : ('a, 'b) t -> 'a -> 'b -> unit
 (** Convert a key in an identifier. Throws if the key is not bound *)
 val to_ident : ('a, 'b) t -> 'a -> int
 
+(** Convert a key in an identifier. None if the key is not bound *)
+val to_ident_opt : ('a, 'b) t -> 'a -> int option
+
 (** Convert an identifier to its corresponding key. Throws if the id is not bound *)
 val of_ident : ('a, 'b) t -> int -> 'a
 
@@ -55,8 +58,11 @@ val mem_id : ('a, 'b) t -> int -> bool
 (*****************************************************************************)
 (** {1 Accessors } *)
 
-(** Get a value by key *)
+(** Get a value by key. Throws if the key is not bound *)
 val getk : ('a, 'b) t -> 'a -> 'b
+
+(** Get a value by key. None if the key is not bound *)
+val getk_opt : ('a, 'b) t -> 'a -> 'b option
 
 (** Get a value by id *)
 val geti : ('a, 'b) t -> int -> 'b

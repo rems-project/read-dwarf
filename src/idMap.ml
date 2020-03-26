@@ -19,6 +19,8 @@ let adds m key value = add m key value |> ignore
 
 let to_ident m key = Hashtbl.find m.ids key
 
+let to_ident_opt m key = Hashtbl.find_opt m.ids key
+
 let of_ident m id = Vector.get m.keys id
 
 let mem m key = Hashtbl.mem m.ids key
@@ -29,9 +31,9 @@ let geti m i = Vector.get m.values i
 
 let unsafe_geti m i = Vector.unsafe_get m.values i
 
-let getk m key =
-  let id = to_ident m key in
-  Vector.unsafe_get m.values id
+let getk m key = to_ident m key |> Vector.unsafe_get m.values
+
+let getk_opt m key = to_ident_opt m key |> Option.map (Vector.unsafe_get m.values)
 
 let seti m i v = Vector.set m.values i v
 

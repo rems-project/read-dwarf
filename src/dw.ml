@@ -8,6 +8,10 @@
 module Var = DwVar
 module Func = DwFunc
 
+open Logs.Logger (struct
+  let str = "Dw"
+end)
+
 (** The type that represent a elf-dwarf binary whose information has been fully interpreted *)
 type t = {
   elf : Elf.File.t;
@@ -34,15 +38,22 @@ let dwarferror fmt = Printf.ksprintf (fun s -> raise (DwarfError s)) fmt
     May raise an {!DwarfError} if a problem occurs.
 *)
 let of_elf (elf : Elf.File.t) =
+  info "Extarcting dwarf of %s" elf.filename;
   let ldwarf =
     match Dwarf.extract_dwarf elf.linksem with
     | Some d -> d
     | None -> dwarferror "Linksem extract_dwarf failed"
   in
+  info "Processed base DWARF";
   let ldwarf_sdt : Dwarf.sdt_dwarf =
     Dwarf.mk_sdt_dwarf ldwarf (Dwarf.subprogram_line_extents ldwarf)
   in
-  let tenv = Ctype.make_env () in
+  info "Processed sdt DWARF";
+  debug "Linksem DWARF type environement %t" (fun o ->
+      output_string o @@ Dwarf.pp_all_struct_union_enum_types' ldwarf);
+  let ltenv = Dwarf.struct_union_enum_types ldwarf in
+  let tenv = Ctype.env_of_linksem ltenv in
+  info "Processed type environement";
   let process_cu (funcs, vars) (cu : Dwarf.sdt_compilation_unit) =
     let nfuncs = List.rev_map (Func.of_linksem elf tenv) cu.scu_subroutines in
     let nvars = List.rev_map (Var.of_linksem elf tenv) cu.scu_vars in

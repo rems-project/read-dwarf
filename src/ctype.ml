@@ -2,8 +2,6 @@
 
 *)
 
-module SMap = Map.Make (String)
-
 open Logs.Logger (struct
   let str = "Ctype"
 end)
@@ -68,31 +66,74 @@ and fragment =
 (** The type of an offset in a fragment *)
 and offset = Const of int  (** Constant offset *) | Somewhere
 
+(** The type of C types in Linksem *)
+type linksem_t = Dwarf.c_type
+
 (** A field in a structure *)
 type field = { fname : string option; offset : int; typ : t; size : int }
 
+type linksem_field = linksem_t Dwarf.struct_union_member
+
 (** A range map over field to represent a structure layout  *)
-module FieldMap = RngMap.Make (struct
+module FieldMap : RngMap.S with type obj = field = RngMap.Make (struct
   type t = field
 
   let len f = f.size
 end)
 
-(** The type of a C structure *)
-type struc = { layout : FieldMap.t; name : string; size : int }
+(** The type of a C structure.
+
+    A structure can be complete or incomplete but due to some internal hackery this is a
+    need for a subtle difference with C: Even incomplete structure have a size,
+    they just don't have any field.
+
+    A incomplete struct can and will often be complete later as the interpretation
+    of DWARF information advances.
+
+    The name field is the linking name of the struct.
+*)
+type struc = { layout : FieldMap.t; name : string; size : int; complete : bool }
+
+(** Build an incomplete struct with a linking name and a size *)
+let incomplete_struct name size = { layout = FieldMap.empty; name; size; complete = false }
 
 (** The type of a C enumeration *)
 type enum = { name : string; labels : (int, string option) Hashtbl.t }
 
-(** The type environment that contain mapping from name and id to the layout
-    of structs and enums *)
-type env = { structs : struc named_env; enums : enum named_env }
+(** The identifier for a linksem_cupdie. See {!ids_of_cupdie} *)
+type cupdie_id = int * int
 
-(** Makes an empty environement *)
-let make_env () = { structs = IdMap.make (); enums = IdMap.make () }
+(** The type environment that contain mapping from linking name and a generated id
 
-(** The type of C types in Linksem *)
-type linksem_t = Dwarf.c_type
+    to the actual content of structs and enumerations.
+
+    Linking names can be:
+      - A plain name for a struct/enum declared with a tag.
+      - [typedef.name] for an unnamed struct declared in a typedef
+      - [outer.member] for unnamed struct used as the type of a [member]
+        of a struct with linking name [outer].
+
+    As an unnamed struct can be declared in the linksem environement but
+    used with the typedef only after the initial environement setup of
+    {!env_of_linksem}, the original linksem type must be kept alive in
+    [lenv]
+*)
+type env = {
+  structs : struc named_env;
+  enums : enum named_env;
+  lenv : (cupdie_id, linksem_t) Hashtbl.t;
+}
+
+(** The type of environement linksem gives us.
+
+    Only structs, enums and unions can appear. A type can appear multiple times
+    and also be forward-declared with missing data like size.
+    {!env_of_linksem} hopefully deals with all those problems
+*)
+type linksem_env = linksem_t list
+
+(** Makes an empty environement from and indexed linksem environement *)
+let make_env lenv = { structs = IdMap.make (); enums = IdMap.make (); lenv }
 
 (** The size of pointer. This will be configurable later *)
 let ptr_size = 8
@@ -113,138 +154,286 @@ let voidstar = Ptr { fragment = Unknown; offset = Somewhere }
 
     This section give implementation of sizeof function.
 
-    TODO: Do alignof too.
+    Dynamic array have size 0
+    until we are able to deal with C99 last member dynamic arrays.
 *)
 
-let sizeof_unqualified ~env = function
+(** Give the size of an {!unqualified} type. Need the environement. *)
+let rec sizeof_unqualified ~env = function
   | Machine i -> i
   | Cint { size; _ } -> size
   | Cbool -> 1
   | Ptr _ -> ptr_size
   | Struct i -> (IdMap.geti env.structs i).size
   | Enum i -> enum_size
-  | Array _ -> failwith "sizof array"
+  | Array { elem; dims } ->
+      let num =
+        List.fold_left
+          Opt.(
+            fun o x ->
+              let+ o = o and+ x = x in
+              o * x)
+          (Some 1) dims
+      in
+      let num = Option.value ~default:0 num in
+      num * sizeof ~env elem
 
-let sizeof t = sizeof_unqualified t.unqualified
-
-let sizeof_fieldmap fm = failwith "unimplemented"
+(** Give the size of an type. Need the environement. *)
+and sizeof ~env t = sizeof_unqualified ~env t.unqualified
 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Linksem DWARF to internal Ctype conversion } *)
+(** {1 Linksem DWARF to internal Ctype conversion }
 
-(** TODO: Move that in the appropriate place *)
+    This section contain the whole hierarchy of function used to convert
+    type from DWARF representation to the internal type system.
+
+    The top-level interface for types is {!of_linksem} and
+    the top-level interface for environement is {!env_of_linksem}
+
+*)
+
+(** This type is a conversion context.
+    It role is to contain all the thing that all the function in this section
+    will need to convert type.*)
+type conversion_context = { env : env; potential_link_name : string option }
+
+(** Get the id of a linksem [cupdie] *)
+let ids_of_cupdie ((cu, p, die) : Dwarf.cupdie) : cupdie_id =
+  (Z.to_int cu.cu_header.cuh_offset, Z.to_int die.die_offset)
+
+(** Pretty print the dwarf decl type
+
+    TODO: Move that in the appropriate place *)
 let pp_decl (d : Dwarf.decl) =
   PP.dprintf "File %s, line %d"
     (Option.value d.decl_file ~default:"?")
     (d.decl_line |> Option.map Z.to_int |> Option.value ~default:0)
 
-let base_type_of_linksem name encoding size =
+(** This exception is raised when the type we are trying to reach
+    must came from another translation unit or later in the current one.
+
+    The information is incomplete at this moment to create is.
+
+    Normally this exception should only happen during the initial
+    {!env_of_linksem}. If it happens elsewhere, either the code used
+    an anonymous struct that do not have C++-like linkage or the
+    compiler did not do it's job.
+*)
+exception LinkError
+
+let expect_some_link = Opt.value_fun ~default:(fun _ -> raise LinkError)
+
+(** Convert a base type with a name and encoding and maybe a size to its
+    inner representation
+
+    Only integers, chars and bools supported. No floating points
+*)
+let base_type_of_linksem ?size ~encoding name =
   let encoding = Z.to_int encoding in
   if encoding = vDW_ATE_boolean then Cbool
   else if encoding = vDW_ATE_signed || encoding = vDW_ATE_unsigned then
-    match size with
-    | Some s ->
-        Cint { name; signed = encoding = vDW_ATE_signed; size = Z.to_int s; ischar = false }
-    | None -> Raise.fail "In Ctype.base_of_linksem: integer type %s do not have a size" name
+    let size =
+      Opt.value_fail size "In Ctype.base_type_of_linksem: integer type %s do not have a size" name
+    in
+    Cint { name; signed = encoding = vDW_ATE_signed; size = Z.to_int size; ischar = false }
   else if encoding = vDW_ATE_signed_char || encoding = vDW_ATE_unsigned_char then
     Cint { name; signed = encoding = vDW_ATE_signed_char; size = 1; ischar = true }
   else Raise.fail "In Ctype.base_of_linksem: encoding %x unknown" encoding
 
-let of_linksem ?(env = make_env ()) (ltyp : linksem_t) : t =
-  let rec ol_without_qualifiers ?typedef : linksem_t -> unqualified = function
-    | CT (CT_base (cupdie, name, encoding, size)) -> base_type_of_linksem name encoding size
-    | CT (CT_pointer (_, Some t)) -> ptr @@ of_linksem' t
-    | CT (CT_pointer (_, None)) -> voidstar
-    | CT (CT_array (_, elem, l)) ->
-        Array { elem = of_linksem' elem; dims = List.map Fun.(fst %> Option.map Z.to_int) l }
-    | CT (CT_struct_union (_, Atk_structure, name, size, decl, mmembers)) -> (
-        (* TODO: take proper care of the None case *)
-        let members = match mmembers with Some members -> members | None -> [] in
-        (* TODO This should be a separate function *)
-        let name =
-          match (name, typedef) with
-          | (Some n, _) -> n
-          | (_, Some t) -> t
-          | _ -> Raise.fail "%t Structure without name or typedef" PP.(tos pp_decl decl)
-        in
-        let layout = field_map_of_linksem members in
-        if IdMap.mem env.structs name then
-          let id = IdMap.to_ident env.structs name in
-          let olayout = (IdMap.geti env.structs id).layout in
-          if true (* olayout = layout *) then Struct id
-          else Raise.fail "Trying to add struct %s with a different layout that previously" name
-        else
-          match Option.map Z.to_int size with
-          | Some size -> Struct (IdMap.add env.structs name { layout; name; size })
-          | None ->
-              warn "Struct %s had no size. Defaulting to 8" name;
-              Struct (IdMap.add env.structs name { layout; name; size = 8 })
-      )
-    | CT (CT_struct_union (_, Atk_union, name, size, decl, mmembers)) ->
-        (* TODO: take proper care of the None case *)
-        let members = match mmembers with Some members -> members | None -> [] in
-        let size =
-          match size with
-          | Some s -> Z.to_int s
-          | None ->
-              warn "%t: Sizeless union defaulting to 8 for now" PP.(top pp_decl decl);
-              8
-        in
-        Machine size
-    | CT (CT_enumeration (_, name, typ, size, decl, mmembers)) ->
-        (* TODO: take proper care of the None case *)
-        let members = match mmembers with Some members -> members | None -> [] in
-        let name =
-          match (name, typedef) with
-          | (Some n, _) -> n
-          | (_, Some t) -> t
-          | _ -> Raise.fail "%t: Enumeration without name or typedef" PP.(tos pp_decl decl)
-        in
-        let size =
-          match size with
-          | Some s -> Z.to_int s
-          | None ->
-              warn "Sizeless enumeration %s, defaulting to 4 for now" name;
-              4
-        in
-        let members = enum_of_linksem members in
-        if IdMap.mem env.enums name then
-          let id = IdMap.to_ident env.enums name in
-          let omembers = (IdMap.geti env.structs id).layout in
-          if true (* omembers = members *) then Enum id
-          else Raise.fail "Trying to add struct %s with a different layout that previously" name
-        else Enum (IdMap.add env.enums name { name; labels = members })
-    | _ -> Raise.fail "Converting undupported type"
-  and enum_of_linksem members =
-    let res = Hashtbl.create 5 in
-    List.iter (fun (_, name, value) -> Hashtbl.add res (Z.to_int value) name) members;
-    res
-  and field_of_linksem (_, fname, ltyp, offset) : field =
-    let typ = of_linksem' ltyp in
-    let size = sizeof ~env typ in
-    let offset = Z.to_int offset in
-    { fname; offset; typ; size }
-  and field_map_of_linksem l : FieldMap.t =
-    List.fold_left
-      (fun m f ->
-        let f = field_of_linksem f in
-        FieldMap.add m f.offset f)
-      FieldMap.empty l
-  and of_linksem' ?typedef ?(const = false) ?(volatile = false) ?(restrict = false) :
-      linksem_t -> t = function
-    | CT (CT_const (_, Some t)) -> of_linksem' ~const:true ~volatile ~restrict t
-    | CT (CT_const (_, None)) ->
-        { unqualified = Machine 0; const = true; volatile; restrict; constexpr = false }
-    | CT (CT_volatile (_, t)) -> of_linksem' ~const ~volatile:true ~restrict t
-    | CT (CT_restrict (_, t)) -> of_linksem' ~const ~volatile ~restrict:true t
-    | CT (CT_typedef (_, name, t, _)) -> of_linksem' ~typedef:name ~const ~volatile ~restrict t
-    | t ->
-        let unqualified = ol_without_qualifiers ?typedef t in
-        { unqualified; const; volatile; restrict; constexpr = false }
+let rec field_of_linksem ~cc ((_, fname, ltyp, offset) : linksem_field) : field =
+  let newpln =
+    Opt.(
+      let+ pln = cc.potential_link_name and+ fname = fname in
+      String.concat "." [pln; fname])
   in
-  of_linksem' ltyp
+  debug "Processing field %t" PP.(top (opt string) fname);
+  let cc = { cc with potential_link_name = newpln } in
+  let typ = of_linksem_cc ~cc ltyp in
+  debug "Processing sizeof field %t" PP.(top (opt string) fname);
+  let size = sizeof ~env:cc.env typ in
+  debug "Processed field %t" PP.(top (opt string) fname);
+  let offset = Z.to_int offset in
+  { fname; offset; typ; size }
+
+and field_map_of_linksem ~cc l : FieldMap.t =
+  List.fold_left
+    (fun m f ->
+      let f = field_of_linksem ~cc f in
+      FieldMap.add m f.offset f)
+    FieldMap.empty l
+
+and struc_of_linksem ~cc name size members : struc =
+  let layout = field_map_of_linksem ~cc members in
+  { name; size; layout; complete = true }
+
+(** Build a struct from it's cupdie and name.
+    If [force_complete] is true and the struct is incomplete. It will try
+    to complete is using [cupdie] and throw {!LinkError} if it fails.
+*)
+and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : unqualified =
+  let open Dwarf in
+  (* If the struct has no name we fallback on the potential name. If the
+     the fallback fails, we throw a link error *)
+  let name = Opt.(expect_some_link (mname ||| cc.potential_link_name)) in
+  debug "Processing struct %s" name;
+  match IdMap.to_ident_opt cc.env.structs name with
+  | Some i when not force_complete -> Struct i
+  | Some i -> (
+      if
+        (* If force_complete and struct is defined, check if it is complete *)
+        (IdMap.geti cc.env.structs i).complete
+      then Struct i
+      else
+        (* Incomplete struct: try to complete it *)
+        match Hashtbl.find cc.env.lenv (ids_of_cupdie cupdie) with
+        | CT (CT_struct_union (_, Atk_structure, _, msize, _, Some members)) ->
+            let lsize = expect_some_link msize in
+            let size = Z.to_int lsize in
+            let cc = { cc with potential_link_name = Some name } in
+            let struc : struc = struc_of_linksem ~cc name size members in
+            IdMap.seti cc.env.structs i struc;
+            Struct i
+        | _ ->
+            Raise.fail "%t: DWARF type environement corrupted: struct %s is not a struct"
+              PP.(tos pp_decl decl)
+              name
+    )
+  | None -> (
+      (* If the struct is not defined, try to define it *)
+      match Hashtbl.find cc.env.lenv (ids_of_cupdie cupdie) with
+      | CT (CT_struct_union (_, Atk_structure, _, msize, _, Some members)) ->
+          let lsize = expect_some_link msize in
+          let size = Z.to_int lsize in
+          let id = IdMap.add cc.env.structs name @@ incomplete_struct name size in
+          let cc = { cc with potential_link_name = Some name } in
+          let struc : struc = struc_of_linksem ~cc name size members in
+          IdMap.seti cc.env.structs id struc;
+          Struct id
+      | _ ->
+          Raise.fail "%t: DWARF type environement corrupted: struct %s is not a struct"
+            PP.(tos pp_decl decl)
+            name
+    )
+
+and enum_of_linksem ~cc name llabels : enum =
+  let labels = Hashtbl.create 5 in
+  List.iter (fun (_, name, value) -> Hashtbl.add labels (Z.to_int value) name) llabels;
+  { name; labels }
+
+and enum_type_of_linksem ~cc ~cupdie ~mname ~decl : unqualified =
+  let open Dwarf in
+  (* If the enum has no name we fallback on the potential name *)
+  let name = Opt.(expect_some_link (mname ||| cc.potential_link_name)) in
+  match IdMap.to_ident_opt cc.env.enums name with
+  | Some i -> Enum i
+  | None -> (
+      match Hashtbl.find cc.env.lenv (ids_of_cupdie cupdie) with
+      | CT (CT_enumeration (_, _, _, _, _, Some labels)) ->
+          let enum : enum = enum_of_linksem ~cc name labels in
+          Enum (IdMap.add cc.env.enums name enum)
+      | _ ->
+          Raise.fail "%t: DWARF type environement corrupted: enum %s is not a enum"
+            PP.(tos pp_decl decl)
+            name
+    )
+
+(** Convert an unqualified type. Union are just [Machine n] where n is their size *)
+and unqualified_of_linksem ?(force_complete = false) ~cc : linksem_t -> unqualified = function
+  | CT (CT_base (cupdie, name, encoding, size)) -> base_type_of_linksem ~encoding ?size name
+  | CT (CT_pointer (_, Some t)) -> ptr @@ of_linksem_cc ~cc t
+  | CT (CT_pointer (_, None)) -> voidstar
+  | CT (CT_array (_, elem, l)) ->
+      Array { elem = of_linksem_cc ~cc elem; dims = List.map Fun.(fst %> Option.map Z.to_int) l }
+  | CT (CT_struct_union (cupdie, Atk_structure, mname, _, decl, _)) ->
+      struct_type_of_linksem ~force_complete ~cc ~cupdie ~mname ~decl
+  | CT (CT_struct_union (_, Atk_union, name, size, decl, _)) ->
+      let size =
+        match size with
+        | Some s -> Z.to_int s
+        | None ->
+            warn "%t: Sizeless union defaulting to 8 for now" PP.(top pp_decl decl);
+            8
+      in
+      Machine size
+  | CT (CT_enumeration (cupdie, mname, _, _, decl, _)) ->
+      enum_type_of_linksem ~cc ~cupdie ~mname ~decl
+  | _ -> Raise.inv_arg "Converting qualified type in unqualified"
+
+(** The main [of_linksem] that take a full conversion_context and qualifiers.
+
+    The user friendly version is {!of_linksem}
+
+    See {!struct_type_of_linksem} for the explanation of [force_complete].
+
+    All the qualifier passed as parameter are added to the resulting type.
+*)
+and of_linksem_cc ?(force_complete = false) ~cc ?(const = false) ?(volatile = false)
+    ?(restrict = false) : linksem_t -> t = function
+  | CT (CT_const (_, Some t)) -> of_linksem_cc ~cc ~const:true ~volatile ~restrict t
+  | CT (CT_const (_, None)) ->
+      { unqualified = Machine 0; const = true; volatile; restrict; constexpr = false }
+  | CT (CT_volatile (_, t)) -> of_linksem_cc ~cc ~const ~volatile:true ~restrict t
+  | CT (CT_restrict (_, t)) -> of_linksem_cc ~cc ~const ~volatile ~restrict:true t
+  | CT (CT_typedef (_, name, t, _)) ->
+      let cc = { cc with potential_link_name = Some ("typedef." ^ name) } in
+      of_linksem_cc ~cc ~const ~volatile ~restrict t
+  | t ->
+      let unqualified = unqualified_of_linksem ~force_complete ~cc t in
+      { unqualified; const; volatile; restrict; constexpr = false }
+
+(** The user friendly interface that convert a type using the environment. This useful
+    when there is no additional linking information to pass on *)
+let of_linksem ~env (ltyp : linksem_t) : t =
+  let cc = { env; potential_link_name = None } in
+  of_linksem_cc ~cc ltyp
+
+(** The main environment conversion function.
+
+    This the function that deal with all the type linking process,
+    forward declaration an all that stuff.
+
+    First it create the indexed linksem environment (member lenv of {!env}),
+
+    Then it register all named structs as incomplete in the environment
+    (to deal with self recursion, only named structs can self-recurse).
+
+    Finally it run {!of_linksem_cc} on all the type with [force_complete] on.
+    During this phase it ignore all {!LinkError} that arise. It assumes that
+    if some thing was incomplete at that point, it will be completed later.
+
+    Then it can return the freshly built environment.
+*)
+let env_of_linksem (lenv : linksem_env) : env =
+  let open Dwarf in
+  (* First phase: index them by the cupdie number id *)
+  let llenv = Hashtbl.create 10 in
+  List.iter
+    (function
+      | CT (CT_struct_union (cupdie, _, _, _, _, _)) as ct ->
+          Hashtbl.add llenv (ids_of_cupdie cupdie) ct
+      | CT (CT_enumeration (cupdie, _, _, _, _, _)) as ct ->
+          Hashtbl.add llenv (ids_of_cupdie cupdie) ct
+      | _ -> ())
+    lenv;
+  (* Second phase: Predeclare all named struct as incomplete *)
+  let env = make_env llenv in
+  List.iter
+    (function
+      | CT (CT_struct_union (cupdie, Atk_structure, mname, msize, _, _)) as ct ->
+          Opt.(
+            let+! name = mname and+ size = msize in
+            if not @@ IdMap.mem env.structs name then
+              IdMap.add env.structs name @@ incomplete_struct name (Z.to_int size) |> ignore)
+      | _ -> ())
+    lenv;
+  (* Third phase: Add all the type to the result environement *)
+  let cc : conversion_context = { env; potential_link_name = None } in
+  List.iter
+    (fun lt -> try of_linksem_cc ~force_complete:true ~cc lt |> ignore with LinkError -> ())
+    lenv;
+  cc.env
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -255,8 +444,8 @@ open PP
 
 let pp_signed signed = if signed then !^"s" else !^"u"
 
-(** Pretty print a type. If an environement is provided, struct will be printed with a name,
-    otherwise they will just have a number *)
+(** Pretty print a type. If an environement is provided, structs and enums
+    will be printed with a name, otherwise they will just have a number *)
 let rec pp ?env typ =
   let const = if typ.const then !^"const " else empty in
   let volatile = if typ.volatile then !^"volatile " else empty in
@@ -302,20 +491,21 @@ and pp_arr ?env elem dims =
 
 and pp_arr_dim dim = PP.(lbracket ^^ Option.fold ~none:empty ~some:int dim ^^ rbracket)
 
-let pp_field { fname; offset; typ; size } =
+let pp_field ?env { fname; offset; typ; size } =
   let name = Option.value fname ~default:"_" in
-  infix 2 1 $ !^name $ colon $ pp typ
+  infix 2 1 $ colon $ !^name $ pp ?env typ
 
-let pp_struct { layout; name; size } =
-  let fields = FieldMap.bindings layout |> List.map (Pair.map PP.int pp_field) in
-  PP.(mapping name (fields @ [(PP.ptr size, !^"end")]))
+let pp_struct ?env { layout; name; size; complete } =
+  let fields = FieldMap.bindings layout |> List.map (Pair.map PP.ptr @@ pp_field ?env) in
+  PP.(mapping (if complete then name else name ^ "?") (fields @ [(PP.ptr size, !^"end")]))
 
 let pp_enums { name; labels } = PP.(hashtbl ptr (opt string) labels)
 
+(** Print the whole environement (not the linksem indexed environement) *)
 let pp_env env =
   PP.(
     record "env"
       [
-        ("structs", IdMap.pp ~keys:string ~vals:pp_struct env.structs);
+        ("structs", IdMap.pp ~keys:string ~vals:(pp_struct ~env) env.structs);
         ("enums", IdMap.pp ~keys:string ~vals:pp_enums env.enums);
       ])

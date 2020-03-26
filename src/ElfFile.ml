@@ -28,6 +28,7 @@ let pp_machine mach = mach |> machine_to_string |> PP.string
 
 (** The type containing all the information about an ELF file *)
 type t = {
+  filename : string;
   symbols : SymTbl.t;
   segments : Segment.t list;
   entry : int;
@@ -79,4 +80,4 @@ let of_file (filename : string) =
   let machine = machine_of_linksem machine in
   let segments = List.map Segment.of_linksem segments in
   let symbols = SymTbl.of_linksem segments symbol_map in
-  { symbols; segments; entry; machine; linksem = elf_file }
+  { filename; symbols; segments; entry; machine; linksem = elf_file }
