@@ -893,15 +893,15 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
   in
 
   (* pull out .rodata section from ELF *)
-  let ((c, rodata_addr, bs) as rodata : Dwarf.p_context * Nat_big_num.num * char list) =
+  let ((c, rodata_addr, bs) as rodata : Dwarf.p_context * Nat_big_num.num * BytesSeq.t) =
     Dwarf.extract_section_body test.elf_file ".rodata" false
   in
   (* chop into bytes *)
-  let rodata_bytes : char array = Array.of_list bs in
+  let rodata_bytes : char array = BytesSeq.to_array bs in
 
   (* chop into 4-byte words - as needed for branch offset tables,
      though not for all other things in .rodata *)
-  let rodata_words : (natural * natural) list = Dwarf.words_of_byte_list rodata_addr bs [] in
+  let rodata_words : (natural * natural) list = Dwarf.words_of_byte_sequence rodata_addr bs [] in
 
   let read_rodata_b addr =
     Elf_types_native_uint.natural_of_byte

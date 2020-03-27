@@ -24,6 +24,8 @@ let blit (bs : t) (srcoff : int) (dst : bytes) (dstoff : int) (len : int) =
   if srcoff < 0 || srcoff + len > bs.len then Raise.inv_arg "BytesSeq.blit : out of bounds "
   else Bytes.blit bs.bytes (bs.start + srcoff) dst dstoff len
 
+let unsafe_get bs i = Bytes.unsafe_get bs.bytes (i + bs.start)
+
 (** Convert a string to a BytesSeq.t as raw data *)
 let of_string s =
   (* This is safe because a BytesSeq is immutable *)
@@ -46,6 +48,12 @@ let _ =
       let bs = of_hex "2a615B7c" in
       to_string bs = "*a[|")
 
+(** Convert to a char array *)
+let to_array bs = Array.init (length bs) (fun i -> unsafe_get bs i)
+
+(** Convert from a char array *)
+let of_array arr = of_bytes (Bytes.init (Array.length arr) (fun i -> Array.unsafe_get arr i))
+
 (*****************************************************************************)
 (*         Getters                                                           *)
 (*****************************************************************************)
@@ -66,7 +74,7 @@ let gen_get size getter bs i =
   if 0 <= i && i <= bs.len - size then getter bs.bytes (bs.start + i)
   else Raise.inv_arg "ByteSeq: invalid access of length %d at %d but size is %d" size i bs.len
 
-let get bs i = gen_get 1 Bytes.get bs i
+let get bs i = gen_get 1 Bytes.unsafe_get bs i
 
 let get16le bs i = gen_get 2 Bytes.get_int16_le bs i
 
@@ -141,7 +149,7 @@ let gen_iter step getter f bs =
     index := !index + step
   done
 
-let iter f bs = gen_iter 1 Bytes.get f bs
+let iter f bs = gen_iter 1 Bytes.unsafe_get f bs
 
 let iter16le f bs = gen_iter 2 Bytes.get_int16_le f bs
 
