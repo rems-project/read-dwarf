@@ -27,29 +27,20 @@
 
 ## Linksem
 
- - Learn which test to run
- - Remove useless conversions in the Uint32 to Natural thing : Locally but not pushed
- - Fix the my_concat inefficiency : Locally but not pushed
- - See what could be moved to nat instead of natural
- - Current profiling state of dwarf\_extract\_static (with local patches)
-   - Runtime on O0 hafnium only decreased from 4.8 to 4.3
-   - About 60% of the time is spent in string copying, allocating and garbage collection
-   - About 25% of the time is spent in big integers manipulation
-   - A significant part of the gc work may be due to bigints and not to strings, I don't know yet.
-   - About 5% of the time is spend directly in mydrop (and not in it's callees)
-   - The rest may be useful computations.
-
-     commenting out bits of harness_string_of_elf:
-     time make -B hafnium-O0/hafnium.linksem-info-test
-     24.19 s  for extract_dwarf, pp_fi,ld,li,is, pp_dwarf, mk_sdt, and pp_sdt
-     19.6  s  for extract_dwarf, pp_fi,ld,li,is, pp_dwarf, mk_sdt, and pp_sdt  *
-     15.28 s  for extract_dwarf,                 pp_dwarf, mk_sdt, and pp_sdt
-     12.35 s  for extract_dwarf,                           mk_sdt, and pp_sdt
-     12.20 s  for extract_dwarf,                           mk_sdt,
-      8.97 s  for extract_dwarf,
-      0.20 s  for
-
-     * with the body of analyse_type_top replaced by a constant
+ - Performance after 27/03/2020 patch:
+   - All non printing operation are generally way less than 1s. Possible improvements:
+     - Use nats and not natural for DWARF offsets (and keeps natural for actual 64 bits addresses)
+     Actual profiling (dump-dwarf use PPrint and not linksem pretty printers):
+     - dump-dwarf in O0 : 0.3s
+     - dump-dwarf in O2 : 0.7s
+   - Printing operation are still slow because of string allocation.
+     The profiling indicate the runs are heavily GC-bound
+     - linksem-info on O0: 0.7s
+     - linksem-info on O2: 4s
+     - rd on O0: 1.5s
+     - rd on O2: 1.6s
+     We should use ropes like ocaml-ropes (Need to decide if Lem depends on that,
+     linksem depends on that or we reimplement them in lem or linksem)
 
 # Required Plumbing
 
@@ -72,7 +63,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Implement the C types from the notes and do the DWARF to internal type conversion
  - Build the ABI concept into the code, and add room for all Arch-dependent things
  - Do a start of the AArch64 ABI encoding sufficient to run a function.
  - Do a system to drive isla through a loop less-function, including respecting the ABI.
@@ -98,15 +88,12 @@
 ## Ctype stack
 
  - Design the type system: LONG
- - Code OCaml structure to represent type system
- - Convert dwarf linksem type into type from the type system inside the Data structure
  - LONG: Do Ctype propagation with fallback
    - if propagation fails, fallback on dwarf information: Requires location indexing system
 
 ## Control flow stack
 
-- Build a trace tree from a set of normal traces
-- Add isla support to set the pc before running an instruction
+- Build a trace tree from a set of normal traces: Not sure this is required now.
 
 # Done list
 
@@ -121,3 +108,5 @@
  - Add logging system with backtraces on fatal errors.
  - Add a caching system to store computed trace on disk
  - Add a preprocessing system to shorten the trace output by isla
+ - Implement the C types from the notes and do the DWARF to internal type conversion
+ - Improve Linksem performance
