@@ -31,6 +31,8 @@ let commands = if Tests.enable_tests then Tests.command :: pcommands else pcomma
 
 let _ = Printexc.record_backtrace true
 
+let _ = assert ("aarch64" = Arch.module_name)
+
 (** main *)
 
 let _ = Term.exit @@ Term.eval_choice Default.command commands

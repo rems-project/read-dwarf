@@ -1,0 +1,5 @@
+(rule
+ (mode fallback)
+ (target config.ml)
+ (action
+  (copy# default_config.ml config.ml)))

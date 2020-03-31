@@ -12,10 +12,11 @@
 
 (rule
  (target smtIntro.ml)
+ (deps intro.smt2)
  (action
-  (with-stdout-to
-   smtIntro.ml
-   (progn
-    (run echo "let intro = \"")
-    (cat intro.smt2)
-    (run echo "\"")))))
+  (write-file smtIntro.ml "let intro = \"%{read:intro.smt2}\"\n")))
+
+(rule
+ (target config.ml)
+ (action
+  (copy# ../config.ml config.ml)))

@@ -7,3 +7,4 @@ tiny_test/ARMv8-*
 tiny_test/native-*
 test_asm/build
 .rdcache
+config.ml

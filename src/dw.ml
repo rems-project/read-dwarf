@@ -38,6 +38,8 @@ let dwarferror fmt = Printf.ksprintf (fun s -> raise (DwarfError s)) fmt
     May raise an {!DwarfError} if a problem occurs.
 *)
 let of_elf (elf : Elf.File.t) =
+  info "Loading architecture %s for %s" (ElfFile.machine_to_string elf.machine) elf.filename;
+  ElfFile.load_arch elf;
   info "Extarcting dwarf of %s" elf.filename;
   let ldwarf =
     match Dwarf.extract_dwarf elf.linksem with

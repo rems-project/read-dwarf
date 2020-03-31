@@ -19,9 +19,19 @@ Finally you need `cmdliner`, `pprint`, `res` and `ocamlgraph` from opam:
 
 `opam install cmdliner pprint res ocamlgraph`
 
+## Configuration
+
+There is no configure script. To edit the compile time configuration, 
+copy `default_config.ml` into `config.ml` and edit the variables you wish
+to change from the default. If `config.ml` is not found, the build system
+will use `default_config.ml` instead.
+
+In particular you can change the supported architecture for the build by editing 
+the `module Arch` variable to point to the module you want in `src/archs`.
+
 ## Building
 
-`make` is good. `read-dwarf` symlink will then be created.
+A simple `make` works. `read-dwarf` symlink will then be created.
 
 ## Auto-formatting
 
@@ -30,6 +40,7 @@ For example one could do:
 
 `opam pin ocamlformat 0.12` and `opam install ocamlformat`.
 
+Then you can use `make format` to format your code.
 Please always format before committing.
 Ask everyone if you want to change ocamlformat options or bump the version.
 
@@ -55,10 +66,14 @@ You can run `make test` for self testing.
    - `.merlin`: Auto generated merlin file, do not commit.
    - `intro.smt2`: Common SMT definition used when calling a SMT solver.
      This is embedded in the binary.
+   - `archs`: All the architecture specific code. Chose one in `config.ml`
+ - `default_config.ml`: Default configuration
+ - `config.ml`: Current configuration (may be omitted to use `default_config.ml`
  - `dune-project`: Global dune configuration
+ - `dune`: Some other dune configuration for the `config.ml` file
  - `notes`: Various notes and thought about the project development.
  - `TODO.md`: The current TODO list.
- - `hafnium\*`: Each folder is a specific hafnium build to test on.
+ - `hafnium-O?/*`: Each folder is a specific hafnium build to test on.
    The binaries are frozen and should not be changed.
  - `compare-O0-O2`: Folder for graphs comparing `O0` and `O2` hafnium builds.
  - `test_asm`: Simple assembly test to test `run-bb` subcommand.

@@ -6,23 +6,6 @@ open Logs.Logger (struct
   let str = "Loc"
 end)
 
-(** Type of a mapping from dwarf numbered registers to actual registers from {!Reg} *)
-type arch_map = Reg.path array
-
-(** This hardcoded for now, but should be set in a different manner later,
-    like from a configuration file of based on architecture detection in ELF file
-
-    Note thing like SP_EL2 require to know that the ELF would be run in EL2 mode,
-    so ELF detection only is not sufficient.
-*)
-let aarch64_map : arch_map =
-  let res = Array.make 32 Reg.empty_path in
-  for i = 0 to 30 do
-    res.(i) <- [Reg.add (Printf.sprintf "R%d" i) (Reg.Plain (Isla.Ty_BitVec 64))]
-  done;
-  res.(31) <- [Reg.add "SP_EL2" (Reg.Plain (Isla.Ty_BitVec 64))];
-  res
-
 (** The type of a dwarf location stack operation *)
 type dwop = Dwarf.operation
 
@@ -53,7 +36,7 @@ let vDW_OP_breg0 : int = Z.to_int Dwarf.vDW_OP_breg0
     Very naive for now : If the list has a single element that we can translate directly, we do,
     otherwise, we dump it into the Dwarf constructor
 *)
-let of_linksem ?(amap = aarch64_map) (elf : Elf.File.t) : linksem_t -> t =
+let of_linksem ?(amap = Arch.dwarf_reg_map ()) (elf : Elf.File.t) : linksem_t -> t =
   let int_of_oav : Dwarf.operation_argument_value -> int = function
     | OAV_natural n -> Z.to_int n
     | OAV_integer i -> Z.to_int i

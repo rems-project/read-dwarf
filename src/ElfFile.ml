@@ -2,26 +2,19 @@
 
 module SymTbl = ElfSymTable
 
-type machine = X86 | X86_64 | PPC | PPC64 | ARM | AARCH64 | RISCV | Other of int
+type machine = Supp of Arch.Type.t | Other of int
 
 let machine_of_linksem lmachine =
-  if lmachine = Elf_header.elf_ma_386 then X86
-  else if lmachine = Elf_header.elf_ma_x86_64 then X86_64
-  else if lmachine = Elf_header.elf_ma_arm then ARM
-  else if lmachine = Elf_header.elf_ma_aarch64 then AARCH64
-  else if lmachine = Elf_header.elf_ma_ppc then PPC
-  else if lmachine = Elf_header.elf_ma_ppc64 then PPC64
-  else if lmachine = Elf_header.elf_ma_riscv then RISCV
+  if lmachine = Elf_header.elf_ma_386 then Supp X86
+  else if lmachine = Elf_header.elf_ma_x86_64 then Supp X86_64
+  else if lmachine = Elf_header.elf_ma_arm then Supp ARM
+  else if lmachine = Elf_header.elf_ma_aarch64 then Supp AARCH64
+  else if lmachine = Elf_header.elf_ma_ppc then Supp PPC
+  else if lmachine = Elf_header.elf_ma_ppc64 then Supp PPC64
   else Other (Z.to_int lmachine)
 
 let machine_to_string = function
-  | X86 -> "X86"
-  | X86_64 -> "X86_64"
-  | PPC -> "PPC"
-  | PPC64 -> "PPC64"
-  | ARM -> "ARM"
-  | AARCH64 -> "AARCH64"
-  | RISCV -> "RISCV"
+  | Supp a -> Arch.Type.to_string a
   | Other i -> Printf.sprintf "Other(%d)" i
 
 let pp_machine mach = mach |> machine_to_string |> PP.string
@@ -81,3 +74,8 @@ let of_file (filename : string) =
   let segments = List.map Segment.of_linksem segments in
   let symbols = SymTbl.of_linksem segments symbol_map in
   { filename; symbols; segments; entry; machine; linksem = elf_file }
+
+let load_arch (elf : t) =
+  match elf.machine with
+  | Supp at -> Arch.ensure_loaded at
+  | Other i -> Raise.fail "The ELF architecture %i is not supported by this program" i
