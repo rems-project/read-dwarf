@@ -194,6 +194,15 @@ let rec find_map f = function
       match f x with Some _ as result -> result | None -> find_map f l
     )
 
+
+let concat_map f l =
+  let rec concat_map' f acc = function
+    | [] -> List.rev acc
+    | x :: l ->
+       let xs = f x in
+       concat_map' f (List.rev_append xs acc) l
+  in concat_map' f [] l
+            
 (*****************************************************************************)
 (*        pp symbol map                                                      *)
 (*****************************************************************************)
@@ -1398,6 +1407,13 @@ let pp_come_froms (addr : addr) (cfs : come_from list) : string =
 
 *)
 
+(* nesting, obtained either from the O0 call stack or from the O2 inlining data *)    
+type nesting = {
+    n_indices: index list;
+    n_current: Dwarf.sdt_subroutine option;
+    n_stack: (string(*sdt_subroutine_name*) * int (*call-site line*) * int (*call-site column*)) list;
+  }
+    
 type node_kind_cfg =
   | CFG_node_start (* elf symbol or other bl target *)
   | CFG_node_branch_cond
@@ -1439,7 +1455,7 @@ type graph_cfg = {
   gc_edges_exiting : edge_cfg list;
   (* edges leaving a subgraph*)
   gc_subgraphs : (string (*subgraph name*) * string (*subgraph colour*) * graph_cfg) list;
-}
+  }
 
 (* the gc_edges_exiting have to be kept separate because if they are within the subgraph in the generated .dot, graphviz pulls the target node *within* the subgraph, even if it isn't *)
 
@@ -1531,7 +1547,7 @@ let colours_svg =
     (*"lightgoldenrodyellow";*)
     (*"lightgray";*)
     "lightgreen";
-    "lightgrey";
+    (*    "lightgrey";*)
     "lightpink";
     "lightsalmon";
     "lightseagreen";
@@ -1681,16 +1697,16 @@ let mk_tooltip test an label k =
     html_escape (String.concat "\n" lines)
   else ""
 
-let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
+let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool) 
     (start_indices : index list (*should be ELF symbol indices*)) : graph_cfg =
   let colour k =
-    match an.line_info.(k) with
-    | [elifi] ->
-        let subprogram_name = mk_subprogram_name test.dwarf_static elifi in
-        let colour =
-          List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
-        in
-        colour
+    let subprogram_names = List.sort_uniq compare (List.map (function elifi -> mk_subprogram_name test.dwarf_static elifi) an.line_info.(k)) in 
+    match subprogram_names with
+    | [subprogram_name] ->
+       let colour =
+         List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
+       in
+       colour
     | _ -> "black"
   in
 
@@ -2014,11 +2030,12 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
     | k :: work_list' ->
         if List.mem k visited then mk_graph' nesting return_target g_acc visited work_list'
         else begin
-          Printf.printf "mk_graph' working on %d %s %s\n" k
+(*          Printf.printf "mk_graph' working on %d %s %s\n" k
             (pp_addr an.instructions.(k).i_addr)
             (String.concat "," an.elf_symbols.(k));
           flush stdout;
-          match (is_graphette_start k, is_graph_non_start_node k) with
+ *)
+            match (is_graphette_start k, is_graph_non_start_node k) with
           | (true, true) ->
               (* graphette start, where the initial instruction is also a non-start node *)
               let (g1, _) = graphette_start nesting return_target k in
@@ -2082,7 +2099,7 @@ let pp_edge graph_colour (nn, nn', cek) =
       pp_node_name nn ^ " -> " ^ pp_node_name nn' ^ nodesep
       ^ "[constraint=\"false\";style=\"dashed\";color=\"lightgrey\"];\n"
 
-let pp_cfg (g : graph_cfg) cfg_dot_file : unit =
+let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
   (*    let margin = "[margin=\"0.11,0.055\"]" in  (*graphviz default*) *)
   let pp_node node =
     let shape =
@@ -2098,13 +2115,19 @@ let pp_cfg (g : graph_cfg) cfg_dot_file : unit =
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
 
+
   let rec pp_cfg' graph_colour indent (g : graph_cfg) : unit =
+    (* edges should really carry their colour, as nodes do, without this hackish passing of graph_colour *)
     List.iter
       (function node -> Printf.fprintf c "%s%s\n" indent (pp_node node))
       g.gc_start_nodes;
-    Printf.fprintf c "%s{ rank=min; %s }\n" indent
-      (String.concat ""
-         (List.map (function node -> pp_node_name node.nc_name ^ ";") g.gc_start_nodes));
+    (* fixing rank=min for the start nodes is useful for whole-Hafnium plots, but not for compare *)
+    (if rankmin then
+      Printf.fprintf c "%s{ rank=min; %s }\n" indent
+        (String.concat ""
+           (List.map (function node -> pp_node_name node.nc_name ^ ";") g.gc_start_nodes))
+     else
+       ());
     List.iter (function node -> Printf.fprintf c "%s%s\n" indent (pp_node node)) g.gc_nodes;
     List.iter
       (function e -> Printf.fprintf c "%s%s\n" indent (pp_edge graph_colour e))
@@ -2189,6 +2212,8 @@ http://ocamlgraph.lri.fr/doc/Fixpoint.html
 
 (* same-source-line edges *)
 
+let rec graph_nodes g = g.gc_nodes @ concat_map graph_nodes (List.map (function (_,_,g') -> g') g.gc_subgraphs)
+  
 let correlate_source_line test1 line_info1 g1 test2 line_info2 g2 : graph_cfg =
   let is_branch_cond = function
     | node -> (
@@ -2199,8 +2224,8 @@ let correlate_source_line test1 line_info1 g1 test2 line_info2 g2 : graph_cfg =
         | _ -> false
       )
   in
-  let nodes_branch_cond1 = List.filter is_branch_cond g1.gc_nodes in
-  let nodes_branch_cond2 = List.filter is_branch_cond g2.gc_nodes in
+  let nodes_branch_cond1 = List.filter is_branch_cond (graph_nodes g1) in
+  let nodes_branch_cond2 = List.filter is_branch_cond (graph_nodes g2) in
   let with_source_lines test line_info = function
     | node -> (node.nc_name, dwarf_source_file_line_numbers_by_index test line_info node.nc_index)
   in
@@ -3354,7 +3379,7 @@ let process_file () : unit =
           in
           let graph = mk_cfg test an "" false false start_indices in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
-          pp_cfg graph cfg_dot_file
+          pp_cfg graph cfg_dot_file true
       | None -> ()
       );
 
@@ -3423,7 +3448,7 @@ let process_file () : unit =
           let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
           let cfg_dot_file_base = cfg_dot_file_root ^ "_base.dot" in
           let cfg_dot_file_layout = cfg_dot_file_root ^ "_layout.dot" in
-          pp_cfg graph cfg_dot_file_base;
+          pp_cfg graph cfg_dot_file_base false;
           let status =
             Unix.system ("dot -Txdot " ^ cfg_dot_file_base ^ " > " ^ cfg_dot_file_layout)
           in
