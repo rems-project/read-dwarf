@@ -204,6 +204,53 @@ let concat_map f l =
   concat_map' f [] l
 
 (*****************************************************************************)
+(*        find_sdt - should go someplace else, really *)
+(*****************************************************************************)
+
+let rec find_sdt_subroutine_subroutine (p : Dwarf.sdt_subroutine -> bool)
+    (ss : Dwarf.sdt_subroutine) : Dwarf.sdt_subroutine list =
+  let sss1 =
+    concat_map (find_sdt_subroutine_subroutine p) ss.ss_subroutines
+    @ concat_map (find_sdt_subroutine_lexical_block p) ss.ss_lexical_blocks
+  in
+  if p ss then ss :: sss1 else sss1
+
+and find_sdt_subroutine_lexical_block (p : Dwarf.sdt_subroutine -> bool)
+    (lb : Dwarf.sdt_lexical_block) : Dwarf.sdt_subroutine list =
+  let sss1 =
+    concat_map (find_sdt_subroutine_subroutine p) lb.slb_subroutines
+    @ concat_map (find_sdt_subroutine_lexical_block p) lb.slb_lexical_blocks
+  in
+  sss1
+
+and find_sdt_subroutine_compilation_unit (p : Dwarf.sdt_subroutine -> bool)
+    (cu : Dwarf.sdt_compilation_unit) : Dwarf.sdt_subroutine list =
+  concat_map (find_sdt_subroutine_subroutine p) cu.scu_subroutines
+
+and find_sdt_subroutine_dwarf (p : Dwarf.sdt_subroutine -> bool) (d : Dwarf.sdt_dwarf) :
+    Dwarf.sdt_subroutine list =
+  concat_map (find_sdt_subroutine_compilation_unit p) d.sd_compilation_units
+
+(* find a top-level sdt subroutine by name *)
+
+let find_sdt_subroutine_by_name (sdt_d : Dwarf.sdt_dwarf) (s : string) :
+    Dwarf.sdt_subroutine option =
+  let p (ss : Dwarf.sdt_subroutine) = match ss.ss_name with None -> false | Some s' -> s' = s in
+  match find_sdt_subroutine_dwarf p sdt_d with
+  | [] -> None
+  | [ss] -> Some ss
+  | _ -> Warn.fatal "find_sdt_subroutine_by_name found multiple matching subroutines"
+
+let find_sdt_subroutine_by_entry_address (sdt_d : Dwarf.sdt_dwarf) addr :
+    Dwarf.sdt_subroutine list =
+  let p (ss : Dwarf.sdt_subroutine) =
+    match ss.ss_entry_address with None -> false | Some addr' -> addr' = addr
+  in
+  match find_sdt_subroutine_dwarf p sdt_d with
+  | [] -> Warn.fatal "find_sdt_subroutine_by_entry_address found no matching subroutines"
+  | sss -> sss
+
+(*****************************************************************************)
 (*        pp symbol map                                                      *)
 (*****************************************************************************)
 
@@ -1407,12 +1454,15 @@ let pp_come_froms (addr : addr) (cfs : come_from list) : string =
 
 *)
 
-(* nesting, obtained either from the O0 call stack or from the O2 inlining data *)
+(* nesting info *)
 type nesting = {
   n_indices : index list;
+  (* the list of O0 call sites we are in, used to make node names, when recursing over O0; empty when generating an O2 graph *)
   n_current : Dwarf.sdt_subroutine option;
+  (* the O2 subroutine that we are morally "within", when recursing over O0; None otherwise, eg when generating an O2 graph *)
   n_stack :
     (string (*sdt_subroutine_name*) * int (*call-site line*) * int) (*call-site column*) list;
+      (* the data which should be comparable between inlined-O0 and O2 *)
 }
 
 type node_kind_cfg =
@@ -1457,6 +1507,8 @@ type graph_cfg = {
   (* edges leaving a subgraph*)
   gc_subgraphs : (string (*subgraph name*) * string (*subgraph colour*) * graph_cfg) list;
 }
+
+let nesting_empty = { n_indices = []; n_current = None; n_stack = [] }
 
 (* the gc_edges_exiting have to be kept separate because if they are within the subgraph in the generated .dot, graphviz pulls the target node *within* the subgraph, even if it isn't *)
 
@@ -1698,8 +1750,10 @@ let mk_tooltip test an label k =
     html_escape (String.concat "\n" lines)
   else ""
 
+(* make a control-flow graph, starting from start_indices (which should be ELF symbol indices).  If recurse_flat, then recurse (not inlining) on all bl targets  (this option is no longer used).  If inline_all, then recurse (inlining) through all bl targets. Add node_name_prefix to all node names, so that graphs can be unioned. *)
+
 let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
-    (start_indices : index list (*should be ELF symbol indices*)) : graph_cfg =
+    (start_indices : (index * Dwarf.sdt_subroutine option) list) : graph_cfg =
   let colour k =
     let subprogram_names =
       List.sort_uniq compare
@@ -1753,7 +1807,8 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
   in
 
   let pp_node_name_nesting nesting =
-    String.concat "_" (List.map (function k -> pp_addr an.instructions.(k).i_addr) nesting)
+    String.concat "_"
+      (List.map (function k -> pp_addr an.instructions.(k).i_addr) nesting.n_indices)
   in
 
   (* we make up an additional node for all ELF symbols and bl targets; all others are just the address *)
@@ -1806,7 +1861,8 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
   let k_max = Array.length an.instructions in
 
   (* make the little piece of graph from a start node at k to its first non-start node *)
-  let graphette_start nesting return_target k : graph_cfg * index list (* work_list_new *) =
+  let graphette_start nesting return_target (k, sso) :
+      graph_cfg * (index * Dwarf.sdt_subroutine option) list (* work_list_new *) =
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
     let (s, nn) =
@@ -1834,12 +1890,15 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
         gc_edges_exiting = [];
         gc_subgraphs = [];
       },
-      [k'] )
+      [(k', sso)] )
   in
 
-  (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes  *)
-  let rec graphette_normal nesting return_target k :
-      graph_cfg * index list * (* work_list_new *) index list (* bl targets *) =
+  (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes. Recurse (via mk_graph) at bl instructions that are inlined  *)
+  let rec graphette_normal nesting return_target (k, sso) :
+      graph_cfg
+      * (index * Dwarf.sdt_subroutine option) list
+      * (* work_list_new *)
+      (index * Dwarf.sdt_subroutine option) list (* bl targets *) =
     (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
     let i = an.instructions.(k) in
     match i.i_control_flow with
@@ -1887,7 +1946,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                (function
                  | (T_smc_hvc_successor, a', k', s') ->
                      let (nn', k'') = next_non_start_node_name nesting [] k' in
-                     Some ((node.nc_name, nn', CFG_edge_flow), k'')
+                     Some ((node.nc_name, nn', CFG_edge_flow), (k'', sso))
                  | _ -> None)
                i.i_targets)
         in
@@ -1908,7 +1967,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                (function
                  | (tk, addr', k', s') ->
                      let (nn', k'') = next_non_start_node_name nesting [] k' in
-                     ((node.nc_name, nn', CFG_edge_flow), k''))
+                     ((node.nc_name, nn', CFG_edge_flow), (k'', sso)))
                i.i_targets)
         in
         ( {
@@ -1929,7 +1988,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                   (function
                     | (tk, addr', k', s') ->
                         let (nn', k'') = next_non_start_node_name nesting [] k' in
-                        ((node.nc_name, nn', CFG_edge_flow), k''))
+                        ((node.nc_name, nn', CFG_edge_flow), (k'', sso)))
                   i.i_targets))
         in
         ( {
@@ -1967,9 +2026,63 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
               (* noreturn *)
               None
         in
-        let inline = inline_all in
+
+        let new_ss_O2_ambient_option =
+          match sso with
+          | None -> None
+          | Some ss_O2_ambient -> (
+              (* find the bl target subprogram name in the O0 *)
+              let ss_target_name =
+                let names =
+                  List.sort_uniq compare
+                    (List.filter_map
+                       (function (ss : Dwarf.sdt_subroutine) -> ss.ss_name)
+                       (find_sdt_subroutine_by_entry_address an.sdt (an.address_of_index k_call)))
+                in
+                match names with
+                | [name] -> name
+                | _ -> Warn.fatal "multiple ss_target names: %s\n" (String.concat ", " names)
+              in
+
+              (* find all the source lines associated with this instruction in the O0 *)
+              let source_lines =
+                List.sort_uniq compare
+                  (List.map
+                     (function
+                       | elifi ->
+                           let lnh = elifi.elifi_entry.elie_lnh in
+                           let lnr = elifi.elifi_entry.elie_lnr in
+                           let ((comp_dir, dir, file) as ufe) =
+                             Dwarf.unpack_file_entry lnh lnr.lnr_file
+                           in
+                           (ufe, Nat_big_num.to_int lnr.lnr_line))
+                     an.line_info.(k))
+              in
+
+              (* find all the O2 inlined subroutines (possibly inside lexical blocks) of ss_O2_ambient that have the same name as the O0 target, and the same call site (unpacked_file_entry * line) as one of the O0 source lines *)
+              let is_corresponding_O2_subroutine (ss' : Dwarf.sdt_subroutine) =
+                ss'.ss_name = Some ss_target_name
+                &&
+                match ss'.ss_call_site with
+                | None -> false
+                | Some (ufe, line, subprogram_name) -> List.mem (ufe, line) source_lines
+              in
+
+              match
+                find_sdt_subroutine_subroutine is_corresponding_O2_subroutine ss_O2_ambient
+              with
+              | [ss] -> Some ss
+              | [] -> None
+              | _ -> Warn.fatal "multiple ss_O2_ambient'"
+            )
+        in
+
+        let sso_call = new_ss_O2_ambient_option in
+
+        let inline = (*inline_all*) new_ss_O2_ambient_option <> None in
+
         let node = mk_node nesting k CFG_node_branch_and_link s in
-        if (not inline) || List.mem k nesting then
+        if (not inline) || List.mem k nesting.n_indices then
           (* not inline: construct a new node for the bl. If not noreturn, add an edge to its successor and return that in the new worklist, otherwise stop at this node.  In either case, if recurse_flat, add the bl target to the bl_target_indices *)
           match nn_k_successor with
           | Some (nn', k'') ->
@@ -1981,8 +2094,8 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                   gc_edges_exiting = [];
                   gc_subgraphs = [];
                 },
-                [k''],
-                if recurse_flat then [k_call] else [] )
+                [(k'', sso)],
+                if recurse_flat then [(k_call, sso_call)] else [] )
           | None ->
               ( {
                   gc_start_nodes = [];
@@ -1992,16 +2105,38 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                   gc_subgraphs = [];
                 },
                 [],
-                if recurse_flat then [k_call] else [] )
+                if recurse_flat then [(k_call, sso_call)] else [] )
         else
           (* inline: construct a new node for the bl and a new subgraph for the inlined subroutine, and an edge between them (faking up the node name that mk_graph will use for its start node).  Pass the return_target' in to the subgraph construction, for it to add edges from the ret to the successor (if any) *)
-          let nesting' = k :: nesting in
+          let nesting' =
+            {
+              n_indices = k :: nesting.n_indices;
+              n_current = sso_call;
+              n_stack =
+                ( match nesting.n_current with
+                | None -> Warn.fatal "no ss_call"
+                | Some ss_call ->
+                    ( ( match ss_call.ss_name with
+                      | None -> Warn.fatal "no name"
+                      | Some name -> name
+                      ),
+                      ( match ss_call.ss_call_site with
+                      | None -> Warn.fatal "no call site"
+                      | Some (ufe, line, subprogram_name) -> line
+                      ),
+                      0 )
+                    :: nesting.n_stack
+                );
+            }
+          in
           let (return_target', work_list_new) =
-            match nn_k_successor with Some (nn', k'') -> (Some nn', [k'']) | None -> (None, [])
+            match nn_k_successor with
+            | Some (nn', k'') -> (Some nn', [(k'', sso)])
+            | None -> (None, [])
           in
           let subgraph_name = "cluster_" ^ pp_node_name_nesting nesting' in
           let subgraph_colour = colour k_call in
-          let subgraph = mk_graph nesting' return_target' [k_call] in
+          let subgraph = mk_graph nesting' return_target' [(k_call, sso_call)] in
           let nn'' = node_name_start nesting' an.instructions.(k_call).i_addr in
           let edges = [(node.nc_name, nn'', CFG_edge_branch_and_link_inline)] in
           ( {
@@ -2013,27 +2148,14 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
             },
             work_list_new,
             [] )
-  (*
-  (* glom together the bits of graph constructed starting from each instruction index *)
-  let rec mk_graph g_acc n k =
-    if k >= n then g_acc
-    else
-      let g_acc' =
-        if is_graphette_start k then graph_cfg_union (graphette_start k) g_acc else g_acc
-      in
-      let g_acc'' =
-        if is_graph_non_start_node k then graph_cfg_union (graphette_normal k) g_acc' else g_acc'
-      in
-      mk_graph g_acc'' n (k + 1)
-  in
-  let (graph : graph_cfg) = mk_graph (graph_cfg_empty ()) k_max 0 in
-
-  graph
-   *)
-  and mk_graph' nesting return_target g_acc (visited : index list) (work_list : index list) =
+  (* make pieces of graph, using graphette_start and/or graphette normal as appropriate, for each index in the work_list *)
+  and mk_graph' nesting return_target g_acc (visited : index list)
+      (work_list : (index * Dwarf.sdt_subroutine option) list) =
     match work_list with
     | [] -> g_acc
-    | k :: work_list' -> (
+    | (k, sso) :: work_list' -> (
+        let nesting = { nesting with n_current = sso } in
+        (* TODO: probably the worklist needs to have a nesting, not just an sso, and then the nesting isn't passed recursively? *)
         if List.mem k visited then mk_graph' nesting return_target g_acc visited work_list'
         else
           (*          Printf.printf "mk_graph' working on %d %s %s\n" k
@@ -2044,9 +2166,9 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
           match (is_graphette_start k, is_graph_non_start_node k) with
           | (true, true) ->
               (* graphette start, where the initial instruction is also a non-start node *)
-              let (g1, _) = graphette_start nesting return_target k in
+              let (g1, _) = graphette_start nesting return_target (k, sso) in
               let (g2, work_list_new, bl_target_indices) =
-                graphette_normal nesting return_target k
+                graphette_normal nesting return_target (k, sso)
               in
               let g_acc' = graph_cfg_union g1 (graph_cfg_union g2 g_acc) in
               let visited' = k :: visited in
@@ -2054,7 +2176,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
               mk_graph' nesting return_target g_acc' visited' work_list'
           | (true, false) ->
               (* graphette start, where the initial instruction is not also a non-start node *)
-              let (g1, work_list_new) = graphette_start nesting return_target k in
+              let (g1, work_list_new) = graphette_start nesting return_target (k, sso) in
               let g_acc' = graph_cfg_union g1 g_acc in
               let visited' = k :: visited in
               let work_list' = work_list_new @ work_list' in
@@ -2062,7 +2184,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
           | (false, true) ->
               (* non-graphette-start, non-start node*)
               let (g2, work_list_new, bl_target_indices) =
-                graphette_normal nesting return_target k
+                graphette_normal nesting return_target (k, sso)
               in
               let g_acc' = graph_cfg_union g2 g_acc in
               let visited' = k :: visited in
@@ -2077,11 +2199,11 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                 (pp_addr an.instructions.(k).i_addr);
               mk_graph' nesting return_target g_acc visited work_list'
       )
-  and mk_graph nesting return_target (work_list : index list) =
+  and mk_graph nesting return_target (work_list : (index * Dwarf.sdt_subroutine option) list) =
     mk_graph' nesting return_target (graph_cfg_empty ()) [] work_list
   in
 
-  mk_graph [] None start_indices
+  mk_graph nesting_empty None start_indices
 
 (* render graph to graphviz dot file *)
 
@@ -2700,6 +2822,8 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
 (*****************************************************************************)
 (* extracting and pretty-printing variable info from linksem simple die tree view, adapted from dwarf.lem  *)
 (*****************************************************************************)
+
+(* pp *)
 
 let indent_level (indent : bool) (level : int) : string =
   if indent then String.make (level * 3) ' ' else " "
@@ -3380,7 +3504,9 @@ let process_file () : unit =
       ( match !Globals.cfg_dot_file with
       | Some cfg_dot_file ->
           let start_indices =
-            array_indices_such_that (function ss -> ss <> []) an.elf_symbols
+            List.map
+              (function k -> (k, None))
+              (array_indices_such_that (function ss -> ss <> []) an.elf_symbols)
           in
           let graph = mk_cfg test an "" false false start_indices in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
@@ -3391,7 +3517,7 @@ let process_file () : unit =
       (* output annotated objdump *)
       let c = match filename_out_file_option with Some f -> open_out f | None -> stdout in
 
-      (* copy emacs syntax highlighting blob to output. sometime de-hard-code the filename*)
+      (* copy emacs syntax highlighting blob to output. todo: sometime de-hard-code the filename*)
       begin
         match read_file_lines "emacs-highlighting" with
         | MyFail _ -> ()
@@ -3409,33 +3535,47 @@ let process_file () : unit =
 
           let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables2 in
 
-          let parse_source_node_list test an (so : string option) : index list =
+          let parse_source_node_list test an (ano2 : analysis option) (so : string option) :
+              (index * Dwarf.sdt_subroutine option) list =
             match so with
             | None -> []
             | Some s ->
                 List.map
                   (function
-                    | s' ->
-                        an.index_of_address
-                          ( match address_of_elf_symbol test s' with
-                          | Some addr -> addr
-                          | None -> Warn.fatal "address_of_elf_symbol failed on \"%s\"\n" s'
-                          ))
+                    | s' -> (
+                        match address_of_elf_symbol test s' with
+                        | Some addr -> (
+                            let k = an.index_of_address addr in
+                            match ano2 with
+                            | None -> (k, None)
+                            | Some an2 -> (
+                                match find_sdt_subroutine_by_name an2.sdt s' with
+                                | Some ss -> (k, Some ss)
+                                | None ->
+                                    Warn.fatal
+                                      "no corresponding ano2 sdt subroutine found for %s\n" s'
+                              )
+                          )
+                        | None -> Warn.fatal "address_of_elf_symbol failed on \"%s\"\n" s'
+                      ))
                   (String.split_on_char ' ' s)
           in
 
           let all_elf_symbol_indices an =
-            array_indices_such_that (function ss -> ss <> []) an.elf_symbols
+            List.map
+              (function k -> (k, None))
+              (array_indices_such_that (function ss -> ss <> []) an.elf_symbols)
           in
 
+          (* if/when we want to run comparison without specifiying the start symbols, we'll need to add the sdt_subroutine data to the above for the to-be-inlined O0 case *)
           let start_indices =
-            match parse_source_node_list test an !Globals.cfg_source_nodes with
+            match parse_source_node_list test an (Some an2) !Globals.cfg_source_nodes with
             | [] -> all_elf_symbol_indices an
             | cfg_source_node_list0 -> cfg_source_node_list0
           in
 
           let start_indices2 =
-            match parse_source_node_list test2 an2 !Globals.cfg_source_nodes2 with
+            match parse_source_node_list test2 an2 None !Globals.cfg_source_nodes2 with
             | [] -> all_elf_symbol_indices an2
             | cfg_source_node_list2 -> cfg_source_node_list2
           in
