@@ -194,15 +194,15 @@ let rec find_map f = function
       match f x with Some _ as result -> result | None -> find_map f l
     )
 
-
 let concat_map f l =
   let rec concat_map' f acc = function
     | [] -> List.rev acc
     | x :: l ->
-       let xs = f x in
-       concat_map' f (List.rev_append xs acc) l
-  in concat_map' f [] l
-            
+        let xs = f x in
+        concat_map' f (List.rev_append xs acc) l
+  in
+  concat_map' f [] l
+
 (*****************************************************************************)
 (*        pp symbol map                                                      *)
 (*****************************************************************************)
@@ -1407,13 +1407,14 @@ let pp_come_froms (addr : addr) (cfs : come_from list) : string =
 
 *)
 
-(* nesting, obtained either from the O0 call stack or from the O2 inlining data *)    
+(* nesting, obtained either from the O0 call stack or from the O2 inlining data *)
 type nesting = {
-    n_indices: index list;
-    n_current: Dwarf.sdt_subroutine option;
-    n_stack: (string(*sdt_subroutine_name*) * int (*call-site line*) * int (*call-site column*)) list;
-  }
-    
+  n_indices : index list;
+  n_current : Dwarf.sdt_subroutine option;
+  n_stack :
+    (string (*sdt_subroutine_name*) * int (*call-site line*) * int) (*call-site column*) list;
+}
+
 type node_kind_cfg =
   | CFG_node_start (* elf symbol or other bl target *)
   | CFG_node_branch_cond
@@ -1455,7 +1456,7 @@ type graph_cfg = {
   gc_edges_exiting : edge_cfg list;
   (* edges leaving a subgraph*)
   gc_subgraphs : (string (*subgraph name*) * string (*subgraph colour*) * graph_cfg) list;
-  }
+}
 
 (* the gc_edges_exiting have to be kept separate because if they are within the subgraph in the generated .dot, graphviz pulls the target node *within* the subgraph, even if it isn't *)
 
@@ -1697,16 +1698,21 @@ let mk_tooltip test an label k =
     html_escape (String.concat "\n" lines)
   else ""
 
-let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool) 
+let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
     (start_indices : index list (*should be ELF symbol indices*)) : graph_cfg =
   let colour k =
-    let subprogram_names = List.sort_uniq compare (List.map (function elifi -> mk_subprogram_name test.dwarf_static elifi) an.line_info.(k)) in 
+    let subprogram_names =
+      List.sort_uniq compare
+        (List.map
+           (function elifi -> mk_subprogram_name test.dwarf_static elifi)
+           an.line_info.(k))
+    in
     match subprogram_names with
     | [subprogram_name] ->
-       let colour =
-         List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
-       in
-       colour
+        let colour =
+          List.nth colours (Hashtbl.hash subprogram_name land 65535 * List.length colours / 65536)
+        in
+        colour
     | _ -> "black"
   in
 
@@ -2027,15 +2033,15 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
   and mk_graph' nesting return_target g_acc (visited : index list) (work_list : index list) =
     match work_list with
     | [] -> g_acc
-    | k :: work_list' ->
+    | k :: work_list' -> (
         if List.mem k visited then mk_graph' nesting return_target g_acc visited work_list'
-        else begin
-(*          Printf.printf "mk_graph' working on %d %s %s\n" k
+        else
+          (*          Printf.printf "mk_graph' working on %d %s %s\n" k
             (pp_addr an.instructions.(k).i_addr)
             (String.concat "," an.elf_symbols.(k));
           flush stdout;
  *)
-            match (is_graphette_start k, is_graph_non_start_node k) with
+          match (is_graphette_start k, is_graph_non_start_node k) with
           | (true, true) ->
               (* graphette start, where the initial instruction is also a non-start node *)
               let (g1, _) = graphette_start nesting return_target k in
@@ -2070,7 +2076,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                 k
                 (pp_addr an.instructions.(k).i_addr);
               mk_graph' nesting return_target g_acc visited work_list'
-        end
+      )
   and mk_graph nesting return_target (work_list : index list) =
     mk_graph' nesting return_target (graph_cfg_empty ()) [] work_list
   in
@@ -2115,19 +2121,17 @@ let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
 
-
   let rec pp_cfg' graph_colour indent (g : graph_cfg) : unit =
     (* edges should really carry their colour, as nodes do, without this hackish passing of graph_colour *)
     List.iter
       (function node -> Printf.fprintf c "%s%s\n" indent (pp_node node))
       g.gc_start_nodes;
     (* fixing rank=min for the start nodes is useful for whole-Hafnium plots, but not for compare *)
-    (if rankmin then
+    if rankmin then
       Printf.fprintf c "%s{ rank=min; %s }\n" indent
         (String.concat ""
            (List.map (function node -> pp_node_name node.nc_name ^ ";") g.gc_start_nodes))
-     else
-       ());
+    else ();
     List.iter (function node -> Printf.fprintf c "%s%s\n" indent (pp_node node)) g.gc_nodes;
     List.iter
       (function e -> Printf.fprintf c "%s%s\n" indent (pp_edge graph_colour e))
@@ -2212,8 +2216,9 @@ http://ocamlgraph.lri.fr/doc/Fixpoint.html
 
 (* same-source-line edges *)
 
-let rec graph_nodes g = g.gc_nodes @ concat_map graph_nodes (List.map (function (_,_,g') -> g') g.gc_subgraphs)
-  
+let rec graph_nodes g =
+  g.gc_nodes @ concat_map graph_nodes (List.map (function (_, _, g') -> g') g.gc_subgraphs)
+
 let correlate_source_line test1 line_info1 g1 test2 line_info2 g2 : graph_cfg =
   let is_branch_cond = function
     | node -> (
