@@ -153,7 +153,12 @@ type analysis = {
   come_froms : come_from list array;
   sdt : Dwarf.sdt_dwarf;
   ranged_vars_at_instructions : ranged_vars_at_instructions;
-  inlining : (string (*ppd_labels*) * string) (*new inlining*) array;
+  inlining :
+    ( string (*ppd_labels*)
+    * string (*new inlining*)
+    * (int (*label*) * Dwarf.inlined_subroutine_data_by_range_entry) list
+    )
+    array;
   pp_inlining_label_prefix : string -> string;
   rendered_control_flow : string array;
   rendered_control_flow_inbetweens : string array;
@@ -1461,7 +1466,8 @@ type nesting = {
   n_current : Dwarf.sdt_subroutine option;
   (* the O2 subroutine that we are morally "within", when recursing over O0; None otherwise, eg when generating an O2 graph *)
   n_stack :
-    (string (*sdt_subroutine_name*) * int (*call-site line*) * int) (*call-site column*) list;
+    (string (*sdt_subroutine_name*) * int) (*call-site line*)
+                                           (* * int (*call-site column*)*) list;
       (* the data which should be comparable between inlined-O0 and O2 *)
 }
 
@@ -1481,19 +1487,23 @@ type edge_kind_cfg =
   | CFG_edge_ret_inline
   | CFG_edge_correlate
 
-type node_name = string (*graphviz node name*)
-
 type node_cfg = {
-  nc_name : node_name;
+  nc_name : string;
   nc_kind : node_kind_cfg;
   nc_label : string;
   nc_addr : addr;
   nc_index : index;
+  nc_source_lines : (string (*subprogram name*) * int) (*line number*) list;
+  nc_nesting : nesting;
+  nc_stack :
+    (string (*sdt_subroutine_name*) * int) (*call-site line*)
+                                           (* * int (*call-site column*) *)
+    list;
   nc_colour : string;
-  nc_tooltip : string;
+  nc_ppd_instruction : string list;
 }
 
-type edge_cfg = node_name * node_name * edge_kind_cfg
+type edge_cfg = string * string * edge_kind_cfg
 
 (* graphs and graph fragments (in which the edges may mention other nodes) *)
 type graph_cfg = {
@@ -1508,9 +1518,70 @@ type graph_cfg = {
   gc_subgraphs : (string (*subgraph name*) * string (*subgraph colour*) * graph_cfg) list;
 }
 
-let nesting_empty = { n_indices = []; n_current = None; n_stack = [] }
-
 (* the gc_edges_exiting have to be kept separate because if they are within the subgraph in the generated .dot, graphviz pulls the target node *within* the subgraph, even if it isn't *)
+
+let nesting_init (sso : Dwarf.sdt_subroutine option) =
+  { n_indices = []; n_current = sso; n_stack = [] }
+
+let cupdie_id
+    (((cu : Dwarf.compilation_unit), (parents : Dwarf.die list), (die : Dwarf.die)) :
+      Dwarf.cupdie) =
+  ( cu.cu_header.cuh_offset,
+    List.map (function (die : Dwarf.die) -> die.die_offset) parents,
+    die.die_offset )
+
+let inlining_stack_at_index (an : analysis) k =
+  let (_, _, xs) = an.inlining.(k) in
+  let ys : Dwarf.inlined_subroutine_data_by_range_entry list = List.map snd xs in
+  let iss : Dwarf.inlined_subroutine list =
+    List.map (function ((n1, n2), (m, n), is) -> is) ys
+  in
+  (* the set of current inlining stacks, parent-first in each *)
+  let ssss : Dwarf.sdt_subroutine list list =
+    List.map
+      (function
+        | (is : Dwarf.inlined_subroutine) ->
+            List.rev (is.is_inlined_subroutine_sdt :: is.is_inlined_subroutine_sdt_parents))
+      iss
+  in
+  (* is sss2 an additional inlining from sss1? *)
+  let rec prefix (sss1 : Dwarf.sdt_subroutine list) (sss2 : Dwarf.sdt_subroutine list) =
+    match (sss1, sss2) with
+    | ([], _) -> true
+    | (ss1 :: sss1', ss2 :: sss2') ->
+        if cupdie_id ss1.ss_cupdie = cupdie_id ss2.ss_cupdie then prefix sss1' sss2' else false
+    | _ -> false
+  in
+  (* find all the maximal inlinings - those that are not prefixes of any others *)
+  let rec maximal' acc ssss =
+    match ssss with
+    | [] -> acc
+    | sss :: ssss' ->
+        if List.exists (function sss' -> prefix sss sss') (acc @ ssss') then maximal' acc ssss'
+        else maximal' (sss :: acc) ssss'
+  in
+  let maximal = maximal' [] ssss in
+  match maximal with
+  | [] -> []
+  | [sss] -> (
+      let nls : (string * int) list =
+        List.map
+          (function
+            | (ss : Dwarf.sdt_subroutine) -> (
+                ( (match ss.ss_name with None -> "no-name" | Some name -> name),
+                  match ss.ss_call_site with
+                  | Some (ufe, line, subprogram_name) -> line
+                  | None -> -3
+                  (*Warn.fatal "no call site"*) )
+              ))
+          (List.rev sss)
+      in
+      let rec shift line nls =
+        match nls with [] -> [] | (name', line') :: nls' -> (name', line) :: shift line' nls'
+      in
+      match nls with [] -> [] | (name, line) :: nls' -> shift line nls'
+    )
+  | _ -> Warn.fatal "inlining_stack_at_index found non-prefix-related inlinings"
 
 let graph_cfg_empty () =
   { gc_start_nodes = []; gc_nodes = []; gc_edges = []; gc_edges_exiting = []; gc_subgraphs = [] }
@@ -1709,7 +1780,7 @@ let html_escape s =
 
 let include_tooltips = true
 
-let mk_tooltip test an label k =
+let mk_ppd_instruction test an label k nesting =
   if include_tooltips then
     (* TODO: reduce the nasty code duplication between this and pp_instruction *)
     let i = an.instructions.(k) in
@@ -1747,13 +1818,29 @@ let mk_tooltip test an label k =
           ^ pp_come_froms addr come_froms';
         ]
     in
-    html_escape (String.concat "\n" lines)
-  else ""
+    lines
+  else []
+
+let pp_node_inlining n =
+  let pp_source_line (subprogram_name, line) = subprogram_name ^ ":" ^ string_of_int line in
+  let pp_source_lines sls =
+    match sls with
+    | [(subprogram_name, line)] -> pp_source_line (subprogram_name, line)
+    | [] -> "no-source-lines"
+    | _ -> "[" ^ String.concat ", " (List.map pp_source_line sls) ^ "]"
+  in
+  let pp_stack stack =
+    String.concat " "
+      (List.map (function (name, line (*,col*)) -> pp_source_line (name, line)) stack)
+  in
+  (*        [(match nesting.n_current with None -> "no-current" | Some ss -> match ss.ss_name with None ->"no-name" | Some name -> name ) ^ " " ^ pp_stack nesting.n_stack]*)
+  ["nesting: " ^ pp_source_lines n.nc_source_lines ^ " " ^ pp_stack n.nc_nesting.n_stack]
+  @ ["nc_stack: " ^ pp_source_lines n.nc_source_lines ^ " " ^ pp_stack n.nc_stack]
 
 (* make a control-flow graph, starting from start_indices (which should be ELF symbol indices).  If recurse_flat, then recurse (not inlining) on all bl targets  (this option is no longer used).  If inline_all, then recurse (inlining) through all bl targets. Add node_name_prefix to all node names, so that graphs can be unioned. *)
 
 let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
-    (start_indices : (index * Dwarf.sdt_subroutine option) list) : graph_cfg =
+    (start_indices : (index * nesting) list) : graph_cfg =
   let colour k =
     let subprogram_names =
       List.sort_uniq compare
@@ -1847,8 +1934,11 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
       nc_label = label;
       nc_addr = i.i_addr;
       nc_index = k;
+      nc_source_lines = dwarf_source_file_line_numbers_by_index test an.line_info k;
+      nc_nesting = nesting;
+      nc_stack = inlining_stack_at_index an k;
       nc_colour = colour k;
-      nc_tooltip = mk_tooltip test an label k;
+      nc_ppd_instruction = mk_ppd_instruction test an label k nesting;
     }
   in
 
@@ -1861,8 +1951,8 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
   let k_max = Array.length an.instructions in
 
   (* make the little piece of graph from a start node at k to its first non-start node *)
-  let graphette_start nesting return_target (k, sso) :
-      graph_cfg * (index * Dwarf.sdt_subroutine option) list (* work_list_new *) =
+  let graphette_start return_target (k, nesting) : graph_cfg * (index * nesting) list
+      (* work_list_new *) =
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
     let (s, nn) =
@@ -1877,8 +1967,11 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
         nc_label = node_name_prefix ^ s;
         nc_addr = i.i_addr;
         nc_index = k;
+        nc_source_lines = dwarf_source_file_line_numbers_by_index test an.line_info k;
+        nc_nesting = nesting;
+        nc_stack = inlining_stack_at_index an k;
         nc_colour = colour k;
-        nc_tooltip = mk_tooltip test an s k;
+        nc_ppd_instruction = mk_ppd_instruction test an s k nesting;
       }
     in
     let (nn', k') = next_non_start_node_name nesting [] k in
@@ -1890,15 +1983,13 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
         gc_edges_exiting = [];
         gc_subgraphs = [];
       },
-      [(k', sso)] )
+      [(k', nesting)] )
   in
 
   (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes. Recurse (via mk_graph) at bl instructions that are inlined  *)
-  let rec graphette_normal nesting return_target (k, sso) :
-      graph_cfg
-      * (index * Dwarf.sdt_subroutine option) list
-      * (* work_list_new *)
-      (index * Dwarf.sdt_subroutine option) list (* bl targets *) =
+  let rec graphette_normal return_target (k, nesting) :
+      graph_cfg * (index * nesting) list * (* work_list_new *)
+      (index * nesting) list (* bl targets *) =
     (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
     let i = an.instructions.(k) in
     match i.i_control_flow with
@@ -1946,7 +2037,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                (function
                  | (T_smc_hvc_successor, a', k', s') ->
                      let (nn', k'') = next_non_start_node_name nesting [] k' in
-                     Some ((node.nc_name, nn', CFG_edge_flow), (k'', sso))
+                     Some ((node.nc_name, nn', CFG_edge_flow), (k'', nesting))
                  | _ -> None)
                i.i_targets)
         in
@@ -1967,7 +2058,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                (function
                  | (tk, addr', k', s') ->
                      let (nn', k'') = next_non_start_node_name nesting [] k' in
-                     ((node.nc_name, nn', CFG_edge_flow), (k'', sso)))
+                     ((node.nc_name, nn', CFG_edge_flow), (k'', nesting)))
                i.i_targets)
         in
         ( {
@@ -1988,7 +2079,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                   (function
                     | (tk, addr', k', s') ->
                         let (nn', k'') = next_non_start_node_name nesting [] k' in
-                        ((node.nc_name, nn', CFG_edge_flow), (k'', sso)))
+                        ((node.nc_name, nn', CFG_edge_flow), (k'', nesting)))
                   i.i_targets))
         in
         ( {
@@ -2028,7 +2119,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
         in
 
         let new_ss_O2_ambient_option =
-          match sso with
+          match nesting.n_current with
           | None -> None
           | Some ss_O2_ambient -> (
               (* find the bl target subprogram name in the O0 *)
@@ -2077,13 +2168,13 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
             )
         in
 
-        let sso_call = new_ss_O2_ambient_option in
-
         let inline = (*inline_all*) new_ss_O2_ambient_option <> None in
 
         let node = mk_node nesting k CFG_node_branch_and_link s in
         if (not inline) || List.mem k nesting.n_indices then
           (* not inline: construct a new node for the bl. If not noreturn, add an edge to its successor and return that in the new worklist, otherwise stop at this node.  In either case, if recurse_flat, add the bl target to the bl_target_indices *)
+          let nesting_call = nesting in
+
           match nn_k_successor with
           | Some (nn', k'') ->
               let edges = [(node.nc_name, nn', CFG_edge_flow)] in
@@ -2094,8 +2185,8 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                   gc_edges_exiting = [];
                   gc_subgraphs = [];
                 },
-                [(k'', sso)],
-                if recurse_flat then [(k_call, sso_call)] else [] )
+                [(k'', nesting)],
+                if recurse_flat then [(k_call, nesting_call)] else [] )
           | None ->
               ( {
                   gc_start_nodes = [];
@@ -2105,39 +2196,47 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                   gc_subgraphs = [];
                 },
                 [],
-                if recurse_flat then [(k_call, sso_call)] else [] )
+                if recurse_flat then [(k_call, nesting_call)] else [] )
         else
           (* inline: construct a new node for the bl and a new subgraph for the inlined subroutine, and an edge between them (faking up the node name that mk_graph will use for its start node).  Pass the return_target' in to the subgraph construction, for it to add edges from the ret to the successor (if any) *)
-          let nesting' =
+          let nesting_call =
             {
               n_indices = k :: nesting.n_indices;
-              n_current = sso_call;
+              n_current = new_ss_O2_ambient_option;
               n_stack =
                 ( match nesting.n_current with
                 | None -> Warn.fatal "no ss_call"
-                | Some ss_call ->
-                    ( ( match ss_call.ss_name with
+                | Some ss_current ->
+                    ( ( match ss_current.ss_name with
                       | None -> Warn.fatal "no name"
                       | Some name -> name
                       ),
-                      ( match ss_call.ss_call_site with
-                      | None -> Warn.fatal "no call site"
-                      | Some (ufe, line, subprogram_name) -> line
-                      ),
-                      0 )
+                      match new_ss_O2_ambient_option with
+                      | None ->
+                          Warn.fatal "no call site for\n%s"
+                            (Dwarf.pp_sdt_subroutine (Nat_big_num.of_int 0) ss_current)
+                      | Some new_ss_O2_ambient -> (
+                          match new_ss_O2_ambient.ss_call_site with
+                          | None ->
+                              Warn.fatal "no call site2 for\n%s"
+                                (Dwarf.pp_sdt_subroutine (Nat_big_num.of_int 0) ss_current)
+                          | Some (ufe, line, subprogram_name) -> line
+                        )
+                      (*,
+                      0*) )
                     :: nesting.n_stack
                 );
             }
           in
           let (return_target', work_list_new) =
             match nn_k_successor with
-            | Some (nn', k'') -> (Some nn', [(k'', sso)])
+            | Some (nn', k'') -> (Some nn', [(k'', nesting)])
             | None -> (None, [])
           in
-          let subgraph_name = "cluster_" ^ pp_node_name_nesting nesting' in
+          let subgraph_name = "cluster_" ^ pp_node_name_nesting nesting_call in
           let subgraph_colour = colour k_call in
-          let subgraph = mk_graph nesting' return_target' [(k_call, sso_call)] in
-          let nn'' = node_name_start nesting' an.instructions.(k_call).i_addr in
+          let subgraph = mk_graph return_target' [(k_call, nesting_call)] in
+          let nn'' = node_name_start nesting_call an.instructions.(k_call).i_addr in
           let edges = [(node.nc_name, nn'', CFG_edge_branch_and_link_inline)] in
           ( {
               gc_start_nodes = [];
@@ -2149,14 +2248,11 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
             work_list_new,
             [] )
   (* make pieces of graph, using graphette_start and/or graphette normal as appropriate, for each index in the work_list *)
-  and mk_graph' nesting return_target g_acc (visited : index list)
-      (work_list : (index * Dwarf.sdt_subroutine option) list) =
+  and mk_graph' return_target g_acc (visited : index list) (work_list : (index * nesting) list) =
     match work_list with
     | [] -> g_acc
-    | (k, sso) :: work_list' -> (
-        let nesting = { nesting with n_current = sso } in
-        (* TODO: probably the worklist needs to have a nesting, not just an sso, and then the nesting isn't passed recursively? *)
-        if List.mem k visited then mk_graph' nesting return_target g_acc visited work_list'
+    | (k, nesting) :: work_list' -> (
+        if List.mem k visited then mk_graph' return_target g_acc visited work_list'
         else
           (*          Printf.printf "mk_graph' working on %d %s %s\n" k
             (pp_addr an.instructions.(k).i_addr)
@@ -2166,30 +2262,30 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
           match (is_graphette_start k, is_graph_non_start_node k) with
           | (true, true) ->
               (* graphette start, where the initial instruction is also a non-start node *)
-              let (g1, _) = graphette_start nesting return_target (k, sso) in
+              let (g1, _) = graphette_start return_target (k, nesting) in
               let (g2, work_list_new, bl_target_indices) =
-                graphette_normal nesting return_target (k, sso)
+                graphette_normal return_target (k, nesting)
               in
               let g_acc' = graph_cfg_union g1 (graph_cfg_union g2 g_acc) in
               let visited' = k :: visited in
               let work_list' = work_list_new @ bl_target_indices @ work_list' in
-              mk_graph' nesting return_target g_acc' visited' work_list'
+              mk_graph' return_target g_acc' visited' work_list'
           | (true, false) ->
               (* graphette start, where the initial instruction is not also a non-start node *)
-              let (g1, work_list_new) = graphette_start nesting return_target (k, sso) in
+              let (g1, work_list_new) = graphette_start return_target (k, nesting) in
               let g_acc' = graph_cfg_union g1 g_acc in
               let visited' = k :: visited in
               let work_list' = work_list_new @ work_list' in
-              mk_graph' nesting return_target g_acc' visited' work_list'
+              mk_graph' return_target g_acc' visited' work_list'
           | (false, true) ->
               (* non-graphette-start, non-start node*)
               let (g2, work_list_new, bl_target_indices) =
-                graphette_normal nesting return_target (k, sso)
+                graphette_normal return_target (k, nesting)
               in
               let g_acc' = graph_cfg_union g2 g_acc in
               let visited' = k :: visited in
               let work_list' = work_list_new @ bl_target_indices @ work_list' in
-              mk_graph' nesting return_target g_acc' visited' work_list'
+              mk_graph' return_target g_acc' visited' work_list'
           | (false, false) ->
               (* non-graphette-start, and not a non-start node*)
               Warn.nonfatal
@@ -2197,13 +2293,13 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
                  is_graph_non_start_node - could be a self-loop"
                 k
                 (pp_addr an.instructions.(k).i_addr);
-              mk_graph' nesting return_target g_acc visited work_list'
+              mk_graph' return_target g_acc visited work_list'
       )
-  and mk_graph nesting return_target (work_list : (index * Dwarf.sdt_subroutine option) list) =
-    mk_graph' nesting return_target (graph_cfg_empty ()) [] work_list
+  and mk_graph return_target (work_list : (index * nesting) list) =
+    mk_graph' return_target (graph_cfg_empty ()) [] work_list
   in
 
-  mk_graph nesting_empty None start_indices
+  mk_graph None start_indices
 
 (* render graph to graphviz dot file *)
 
@@ -2236,7 +2332,9 @@ let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
       | _ -> ""
     in
     Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name node.nc_name)
-      node.nc_label node.nc_tooltip margin shape (pp_colour node.nc_colour)
+      node.nc_label
+      (html_escape (String.concat "\n" (node.nc_ppd_instruction @ pp_node_inlining node)))
+      margin shape (pp_colour node.nc_colour)
   in
 
   let c = open_out cfg_dot_file in
@@ -2281,7 +2379,7 @@ let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
 
 let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg =
   let nodes_all : node_cfg list = g.gc_start_nodes @ g.gc_nodes in
-  let edges_all : (node_name * node_name list) list =
+  let edges_all : (string * string list) list =
     List.map
       (function
         | node ->
@@ -2292,8 +2390,8 @@ let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg 
       nodes_all
   in
 
-  let rec stupid_reachability (through_bl : bool) (acc_reachable : node_name list)
-      (todo : node_name list) : node_name list =
+  let rec stupid_reachability (through_bl : bool) (acc_reachable : string list)
+      (todo : string list) : string list =
     match todo with
     | [] -> acc_reachable
     | nn :: todo' ->
@@ -2341,7 +2439,7 @@ http://ocamlgraph.lri.fr/doc/Fixpoint.html
 let rec graph_nodes g =
   g.gc_nodes @ concat_map graph_nodes (List.map (function (_, _, g') -> g') g.gc_subgraphs)
 
-let correlate_source_line test1 line_info1 g1 test2 line_info2 g2 : graph_cfg =
+let correlate_source_line g1 g2 : graph_cfg =
   let is_branch_cond = function
     | node -> (
         match node.nc_kind with
@@ -2353,28 +2451,23 @@ let correlate_source_line test1 line_info1 g1 test2 line_info2 g2 : graph_cfg =
   in
   let nodes_branch_cond1 = List.filter is_branch_cond (graph_nodes g1) in
   let nodes_branch_cond2 = List.filter is_branch_cond (graph_nodes g2) in
-  let with_source_lines test line_info = function
-    | node -> (node.nc_name, dwarf_source_file_line_numbers_by_index test line_info node.nc_index)
-  in
-  let nodes_branch_cond_with1 =
-    List.map (with_source_lines test1 line_info1) nodes_branch_cond1
-  in
-  let nodes_branch_cond_with2 =
-    List.map (with_source_lines test2 line_info2) nodes_branch_cond2
-  in
+
   let intersects xs ys = List.exists (function x -> List.mem x ys) xs in
   let edges =
     List.concat
       (List.map
          (function
-           | (nn1, lines1) ->
+           | n1 ->
                List.filter_map
                  (function
-                   | (nn2, lines2) ->
-                       if intersects lines1 lines2 then Some (nn1, nn2, CFG_edge_correlate)
+                   | n2 ->
+                       if
+                         intersects n1.nc_source_lines n2.nc_source_lines
+                         && n1.nc_nesting.n_stack = n2.nc_stack
+                       then Some (n1.nc_name, n2.nc_name, CFG_edge_correlate)
                        else None)
-                 nodes_branch_cond_with2)
-         nodes_branch_cond_with1)
+                 nodes_branch_cond2)
+         nodes_branch_cond1)
   in
   {
     gc_start_nodes = [];
@@ -3180,7 +3273,7 @@ let mk_inlining test sdt instructions =
              issr_starting_here)
       in
 
-      let acc' = (ppd_labels, ppd_new_inlining) :: acc in
+      let acc' = (ppd_labels, ppd_new_inlining, issr_current') :: acc in
 
       f issr_current' issr_rest' label_last' max_labels' (k + 1) acc'
   in
@@ -3284,7 +3377,7 @@ let pp_instruction test an k i =
   in
 
   (* the inlining for this instruction *)
-  let (ppd_labels, ppd_new_inlining) = an.inlining.(k) in
+  let (ppd_labels, ppd_new_inlining, _) = an.inlining.(k) in
 
   (* the elf symbols at this address, if any (and reset the last_var_info if any) *)
   let elf_symbols = an.elf_symbols.(k) in
@@ -3505,7 +3598,7 @@ let process_file () : unit =
       | Some cfg_dot_file ->
           let start_indices =
             List.map
-              (function k -> (k, None))
+              (function k -> (k, nesting_init None))
               (array_indices_such_that (function ss -> ss <> []) an.elf_symbols)
           in
           let graph = mk_cfg test an "" false false start_indices in
@@ -3536,7 +3629,7 @@ let process_file () : unit =
           let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables2 in
 
           let parse_source_node_list test an (ano2 : analysis option) (so : string option) :
-              (index * Dwarf.sdt_subroutine option) list =
+              (index * nesting) list =
             match so with
             | None -> []
             | Some s ->
@@ -3547,10 +3640,10 @@ let process_file () : unit =
                         | Some addr -> (
                             let k = an.index_of_address addr in
                             match ano2 with
-                            | None -> (k, None)
+                            | None -> (k, nesting_init None)
                             | Some an2 -> (
                                 match find_sdt_subroutine_by_name an2.sdt s' with
-                                | Some ss -> (k, Some ss)
+                                | Some ss -> (k, nesting_init (Some ss))
                                 | None ->
                                     Warn.fatal
                                       "no corresponding ano2 sdt subroutine found for %s\n" s'
@@ -3563,11 +3656,11 @@ let process_file () : unit =
 
           let all_elf_symbol_indices an =
             List.map
-              (function k -> (k, None))
+              (function k -> (k, nesting_init None))
               (array_indices_such_that (function ss -> ss <> []) an.elf_symbols)
           in
 
-          (* if/when we want to run comparison without specifiying the start symbols, we'll need to add the sdt_subroutine data to the above for the to-be-inlined O0 case *)
+          (* if/when we want to run comparison without specifying the start symbols, we'll need to add the sdt_subroutine data to the above for the to-be-inlined O0 case *)
           let start_indices =
             match parse_source_node_list test an (Some an2) !Globals.cfg_source_nodes with
             | [] -> all_elf_symbol_indices an
@@ -3586,9 +3679,7 @@ let process_file () : unit =
 
           let graph = graph_cfg_union graph0 graph2 in
 
-          let graph' =
-            correlate_source_line test an.line_info graph0 test2 an2.line_info graph2
-          in
+          let graph' = correlate_source_line graph0 graph2 in
 
           let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
           let cfg_dot_file_base = cfg_dot_file_root ^ "_base.dot" in
