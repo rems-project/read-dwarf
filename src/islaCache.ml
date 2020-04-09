@@ -204,7 +204,7 @@ let get_nop () : Isla.rtrc =
   | Some _ -> fatal "Corrupted cache, nop hasn't exactly one trace"
   | None ->
       ensure_started ();
-      let trcs = IslaServer.(TEXT_ASM nop |> request |> expect_parsed_traces) in
+      let trcs = IslaServer.request_bin_parsed @@ Arch.nop () in
       let trc = List.assoc true trcs in
       IC.add cache None [trc];
       trc

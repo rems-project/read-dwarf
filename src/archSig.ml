@@ -29,6 +29,20 @@ module Type = struct
     | AARCH64 -> 64
 end
 
+(** Describe the C API of a function *)
+type func_api = { args : Ctype.t list; ret : Ctype.t option }
+
+(** Describe the ABI of a function
+
+    This is a record because I expect to add many other fields later.
+*)
+type func_abi = {
+  init : State.t -> State.t;
+      (** Gives the initial state for verifying the function, from a given global
+          register state. Only global registers are kept. *)
+}
+
+(** The map of dwarf register: Which register number map to which ISA register *)
 type dwarf_reg_map = Reg.path array
 
 module type S = sig
@@ -49,5 +63,15 @@ module type S = sig
       Otherwise {!module_name} *)
   val loaded_name : string
 
+  (** Get the register map of the architecture *)
   val dwarf_reg_map : unit -> dwarf_reg_map
+
+  (** Tell if a register is local for the ABI *)
+  val is_local : Reg.path -> bool
+
+  (** Give the opcode of the nop instruction (For Sail/Isla initialisation *)
+  val nop : unit -> BytesSeq.t
+
+  (** Give the ABI of a function from it's C API *)
+  val get_abi : func_api -> func_abi
 end

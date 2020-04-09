@@ -1,5 +1,9 @@
 (** This module represent an ELF 64 file we do not deal with 32 bit for now *)
 
+open Logs.Logger (struct
+  let str = "ElfFile"
+end)
+
 module SymTbl = ElfSymTable
 
 type machine = Supp of Arch.Type.t | Other of int
@@ -45,6 +49,7 @@ let elferror fmt = Printf.ksprintf (fun s -> raise (ElfError s)) fmt
     May raise an {!ElfError}
 *)
 let of_file (filename : string) =
+  info "Loading ELF file %s" filename;
   let ( (elf_file : Elf_file.elf_file),
         (elf_epi : Sail_interface.executable_process_image),
         (symbol_map : Elf_file.global_symbol_init_info) ) =
@@ -71,8 +76,11 @@ let of_file (filename : string) =
   in
   let entry = Z.to_int entry in
   let machine = machine_of_linksem machine in
+  debug "Loading ELF segments of %s" filename;
   let segments = List.map Segment.of_linksem segments in
+  debug "Loading ELF symbols of %s" filename;
   let symbols = SymTbl.of_linksem segments symbol_map in
+  info "ELF file %s has been loaded" filename;
   { filename; symbols; segments; entry; machine; linksem = elf_file }
 
 let load_arch (elf : t) =

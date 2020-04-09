@@ -42,28 +42,37 @@ let reg_type = field_type index
 (*        Equality                                                           *)
 (*****************************************************************************)
 
-(** Check that s is included in s' *)
-let rec struct_weak_inc s s' =
-  let exception Nope in
+(** Just an internal exception for control-flow purposes *)
+exception Nope
+
+let rec struct_weak_inc_Nope s s' =
   let field name _ typ =
-    match (typ, IdMap.getk s' name) with
-    | (Plain i, Plain j) when i = j -> ()
-    | (Struct rs, Struct rs') -> if not @@ struct_weak_inc rs rs' then raise Nope
-    | _ -> raise Nope
+    let typ' = Opt.value_fun ~default:(fun _ -> raise Nope) @@ IdMap.getk_opt s' name in
+    type_weak_inc_Nope typ typ'
   in
+  IdMap.iter field s
+
+and type_weak_inc_Nope t t' =
+  match (t, t') with
+  | (Plain i, Plain j) when i = j -> ()
+  | (Struct rs, Struct rs') -> struct_weak_inc_Nope rs rs'
+  | _ -> raise Nope
+
+let struct_weak_inc s s' =
   try
-    IdMap.iter field s;
+    struct_weak_inc_Nope s s';
     true
   with Nope -> false
 
-(** Check that all field in s and s' match and have same types (Reg.t value may differ *)
+let type_weak_inc t t' =
+  try
+    type_weak_inc_Nope t t';
+    true
+  with Nope -> false
+
 let struct_weak_eq s s' = struct_weak_inc s s' && struct_weak_inc s' s
 
-let type_weak_eq t t' =
-  match (t, t') with
-  | (Plain n, Plain m) when n = m -> true
-  | (Struct rs, Struct rs') when struct_weak_eq rs rs' -> true
-  | _ -> false
+let type_weak_eq t t' = type_weak_inc t t' && type_weak_inc t' t
 
 (*****************************************************************************)
 (*        Adding                                                             *)
@@ -76,6 +85,23 @@ let adds_field = IdMap.adds
 let add name typ = add_field index name typ
 
 let adds name typ = adds_field index name typ
+
+let rec struct_merge_add rs rs' =
+  assert (struct_weak_inc rs rs');
+  IdMap.iter
+    (fun name _ typ ->
+      match IdMap.getk_opt rs name with
+      | Some typ0 -> type_merge_add typ0 typ
+      | None -> IdMap.adds rs name typ)
+    rs'
+
+and type_merge_add t t' =
+  assert (type_weak_inc t t');
+  if type_weak_eq t t' then ()
+  else
+    match (t, t') with
+    | (Struct rs, Struct rs') -> struct_merge_add rs rs'
+    | _ -> failwith "broken invariant"
 
 (*****************************************************************************)
 (*        Path manipulation                                                  *)
@@ -176,6 +202,11 @@ module Map = struct
     assert (is_plain @@ ArrayCell.get cell);
     ArrayCell.set cell (MPlain a)
 
+  (* TODO try not to use exceptions in normal control flow paths *)
+  let get_opt map path = try Some (get map path) with Failure _ -> None
+
+  let get_or ~value map path = match get_opt map path with Some a -> a | None -> value
+
   let rec map f m =
     let mapcell = function MPlain a -> MPlain (f a) | MStruct m -> MStruct (map f m) in
     Array.map mapcell m
@@ -201,6 +232,16 @@ module Map = struct
   let rec iter f m =
     let mapcell = function MPlain a -> f a | MStruct m -> iter f m in
     Array.iter mapcell m
+
+  let iteri f m =
+    let rec iteri_aux f path m =
+      let mapcell i = function
+        | MPlain a -> f (path @ [i]) a
+        | MStruct m -> iteri_aux f (path @ [i]) m
+      in
+      Array.iteri mapcell m
+    in
+    iteri_aux f [] m
 
   let copy_extend ~init m =
     let rec cecell (ty : typ) ?prev (root : path) =

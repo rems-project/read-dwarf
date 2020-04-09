@@ -15,6 +15,8 @@ val set : 'a t -> int -> 'a -> unit
 
 val unsafe_set : 'a t -> int -> 'a -> unit
 
+val copy : 'a t -> 'a t
+
 val map : ('a -> 'b) -> 'a t -> 'b t
 
 val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
@@ -56,3 +58,6 @@ val fill_all : 'a t -> 'a -> unit
 
 (** Vector pretty printer *)
 val pp : ('a -> PP.document) -> 'a t -> PP.document
+
+(** Vector pretty printer that also prints the index of each element using {!PP.mapping} *)
+val ppi : ('a -> PP.document) -> 'a t -> PP.document

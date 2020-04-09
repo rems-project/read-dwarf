@@ -15,3 +15,11 @@ let ensure_loaded (at : Type.t) =
         Raise.fail "ensure_loaded: required architecture is %s but loaded architecture is %s"
           (Type.to_string at) (Type.to_string at')
   | None -> init at
+
+let pp_api (api : func_api) =
+  let open PP in
+  record "api"
+    [
+      ("args", api.args |> List.mapi (fun i t -> (int i, Ctype.pp t)) |> mapping "");
+      ("ret", Option.fold ~none:!^"none" ~some:Ctype.pp api.ret);
+    ]

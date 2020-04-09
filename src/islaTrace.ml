@@ -89,7 +89,7 @@ let run_trc_mut_vc ?(vc = HashVector.empty ()) (state : state) (trc : State.trc)
         let string_path = IslaManip.string_of_accessor_list al in
         let valu = IslaManip.valu_get valu string_path in
         let path = Reg.path_of_string_list (name :: string_path) in
-        let e : State.exp = Reg.Map.get state.regs path in
+        let e : State.exp = (Reg.Map.get state.regs path).exp in
         write_to_valu l vc valu (vc_subst_full l vc e)
     | WriteReg (name, al, valu, l) ->
         debug "Writing Reg %s from %s" name PP.(sprintc $ pp_valu valu);
@@ -98,14 +98,14 @@ let run_trc_mut_vc ?(vc = HashVector.empty ()) (state : state) (trc : State.trc)
         let path = Reg.path_of_string_list (name :: string_path) in
         (* The new expression to put in the register *)
         let new_exp : State.exp = exp_of_valu l vc valu in
-        Reg.Map.set state.regs path new_exp
+        Reg.Map.set state.regs path { ctyp = None; exp = new_exp }
     | ReadMem (result, kind, addr, size, l) ->
         debug "Reading Mem";
         (* TODO stop ignoring kind *)
         let mb : State.Mem.block =
           { addr = exp_of_valu l vc addr; size = State.Mem.size_of_bytes size }
         in
-        write_to_valu l vc result (State.read mb state)
+        write_to_valu l vc result (State.read mb state).exp
     | WriteMem (success, kind, addr, data, size, l) ->
         debug "Writing Mem";
         (* TODO stop ignoring kind *)

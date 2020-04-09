@@ -54,6 +54,9 @@ let fatal doc =
 (** To printf *)
 let top pp obj o = fprint o (pp obj)
 
+(** To printf with indentation*)
+let topi pp obj o = fprint o (nest 4 @@ blank 4 ^^ pp obj)
+
 (** To sprintf *)
 let tos pp obj () = sprint (pp obj)
 
@@ -114,6 +117,14 @@ let qstring s = s |> string |> dquotes
 
 let erase _ = empty
 
+(** Prints a mapping with this style:
+
+    [name{
+        key -> value;
+        key -> value;
+        key -> value;
+    }]
+*)
 let mapping (name : string) (mappings : (document * document) list) : document =
   surround 2 0 (!^name ^^ !^"{")
     (List.map (fun (a, b) -> infix 2 1 !^"->" a b) mappings |> separate (semi ^^ space))

@@ -8,7 +8,7 @@ module Var = DwVar
     If this type stand on it's own, then it is inlined. If it is inside a {!t}
     then it's a top level function. There is no separate type for inline functions
     because they do not have any special data that a top level function may not have *)
-type func = { name : string; scope : scope }
+type func = { name : string; scope : scope; ret : Ctype.t option }
 
 (** Type of a dwarf scope that may contain recursively other data.
     The lists here have the semantic meaning of sets: the order is irrelevant. *)
@@ -21,16 +21,17 @@ type linksem_func = Dwarf.sdt_subroutine
 type linksem_scope = Dwarf.sdt_lexical_block
 
 (** Create and Dwarf function from it linksem counterpart *)
-let rec func_of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lfun : linksem_func) =
+let rec func_of_linksem (elf : Elf.File.t) (env : Ctype.env) (lfun : linksem_func) =
   let name = Option.value ~default:"" lfun.ss_name in
   let scope_of_linksem_func (lfun : linksem_func) =
-    let vars = List.rev_map (Var.of_linksem elf tenv) lfun.ss_vars in
-    let funcs = List.rev_map (func_of_linksem elf tenv) lfun.ss_subroutines in
-    let scopes = List.rev_map (scope_of_linksem elf tenv) lfun.ss_lexical_blocks in
+    let vars = List.rev_map (Var.of_linksem elf env) lfun.ss_vars in
+    let funcs = List.rev_map (func_of_linksem elf env) lfun.ss_subroutines in
+    let scopes = List.rev_map (scope_of_linksem elf env) lfun.ss_lexical_blocks in
     { vars; funcs; scopes }
   in
   let scope = scope_of_linksem_func lfun in
-  { name; scope }
+  let ret = Option.map (Ctype.of_linksem ~env) lfun.ss_type in
+  { name; scope; ret }
 
 (** Create and Dwarf scope from it linksem counterpart *)
 and scope_of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lsc : linksem_scope) =
@@ -39,17 +40,31 @@ and scope_of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lsc : linksem_scope)
   let scopes = List.rev_map (scope_of_linksem elf tenv) lsc.slb_lexical_blocks in
   { vars; funcs; scopes }
 
-let rec pp_raw_func ?env f : PP.document =
-  PP.(record "func" [("name", string f.name); ("scope", pp_raw_scope ?env f.scope)])
+(** Get the API of the function *)
+let func_get_api func : Arch.func_api =
+  let args =
+    List.filter_map (fun (v : Var.t) -> if v.param then Some v.ctype else None) func.scope.vars
+  in
+  let ret = func.ret in
+  { args; ret }
 
-and pp_raw_scope ?env s =
-  PP.(
-    record "scope"
-      [
-        ("vars", list (Var.pp_raw ?env) s.vars);
-        ("funcs", list (pp_raw_func ?env) s.funcs);
-        ("scopes", list (pp_raw_scope ?env) s.scopes);
-      ])
+let rec pp_raw_func f : PP.document =
+  let open PP in
+  record "func"
+    [
+      ("name", string f.name);
+      ("ret", Option.fold ~none:!^"none" ~some:Ctype.pp f.ret);
+      ("scope", pp_raw_scope f.scope);
+    ]
+
+and pp_raw_scope s =
+  let open PP in
+  record "scope"
+    [
+      ("vars", list Var.pp_raw s.vars);
+      ("funcs", list pp_raw_func s.funcs);
+      ("scopes", list pp_raw_scope s.scopes);
+    ]
 
 (** This the type of a top-level function. It may have an associated elf symbol
 
@@ -69,6 +84,8 @@ let of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lfun : linksem_t) =
   let sym = Elf.SymTbl.of_name_opt elf.symbols func.name in
   { sym; func }
 
+let get_api tf = func_get_api tf.func
+
 (** Pretty print a raw top level function *)
-and pp_raw ?env f =
-  PP.(record "tfunc" [("elf", opt Elf.Sym.pp_raw f.sym); ("func", pp_raw_func ?env f.func)])
+and pp_raw f =
+  PP.(record "tfunc" [("elf", opt Elf.Sym.pp_raw f.sym); ("func", pp_raw_func f.func)])

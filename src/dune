@@ -20,3 +20,16 @@
  (target config.ml)
  (action
   (copy# ../config.ml config.ml)))
+
+; HACK: configPre is config with all module configuration removed, which means it can
+; used in modules that are indirectly used by the config.
+; In particular configPre do not contain the Arch module and thus can be used in
+; modules in the archs folder
+
+(rule
+ (target configPre.ml)
+ (deps config.awk ../config.ml)
+ (action
+  (with-stdout-to
+   configPre.ml
+   (run awk -f config.awk ../config.ml))))

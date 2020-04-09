@@ -14,3 +14,6 @@ let arch_file = "aarch64.ir"
 
 (** The Architecture module. They are in src/archs. *)
 module Arch = AArch64
+
+(** Whether to enable backtraces or not *)
+let enable_backtrace = true

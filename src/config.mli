@@ -17,3 +17,6 @@ val arch_file : string
 
 (** The Architecture module. They are in src/archs. *)
 module Arch : ArchSig.S
+
+(** Whether to enable backtraces or not *)
+val enable_backtrace : bool

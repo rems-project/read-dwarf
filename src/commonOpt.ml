@@ -61,11 +61,11 @@ let verbose =
   Arg.(value & flag_all & info ["v"; "verbose"] ~doc)
 
 let infoopt : string list Term.t =
-  let doc = "Set an precise OCaml module in info logging mode" in
+  let doc = "Set a precise OCaml module in info-logging mode" in
   Arg.(value & opt_all string [] & info ["info"] ~doc ~docv:"MODULE")
 
 let debug =
-  let doc = "Set an precise OCaml module in debug logging mode" in
+  let doc = "Set a precise OCaml module in debug-logging mode" in
   Arg.(value & opt_all string [] & info ["debug"] ~doc ~docv:"MODULE")
 
 let process_logs_opts quiet verbose info debug =

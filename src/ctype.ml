@@ -28,12 +28,6 @@ let vDW_ATE_unsigned_char = "DW_ATE_unsigned_char" |> Dwarf.base_type_attribute_
 (*****************************************************************************)
 (** {1 Types } *)
 
-type enum_id = int
-
-type structure_id = int
-
-type fragment_id = int
-
 (** This is to represent a naming scope for structs *)
 type 'a named_env = (string, 'a) IdMap.t
 
@@ -43,9 +37,10 @@ type unqualified =
   | Cint of { name : string; signed : bool; size : int; ischar : bool }
   | Cbool
   | Ptr of { fragment : fragment; offset : offset }
-  | Struct of structure_id  (** See {!env} for what the id refers to *)
+  | Struct of { name : string; size : int; id : int }
+      (** See {!env} for what the id refers to. The int is the size *)
   | Array of { elem : t; dims : int option list }
-  | Enum of enum_id  (** See {!env} for what the id refers to *)
+  | Enum of { name : string; id : int }  (** See {!env} for what the id refers to *)
 
 (** The internal representation of generalized C types *)
 and t = {
@@ -61,7 +56,7 @@ and fragment =
   | Unknown  (** Unknown type, But without possibility of learning*)
   | Single of t  (** Single object: Only when accessing of a global variable *)
   | DynArray of t  (** Generic C pointer, may point to multiple element of that type *)
-  | FreeFragment of fragment_id  (** Writable fragment type for memory whose type is changing *)
+  | FreeFragment of int  (** Writable fragment type for memory whose type is changing *)
 
 (** The type of an offset in a fragment *)
 and offset = Const of int  (** Constant offset *) | Somewhere
@@ -94,14 +89,22 @@ end)
 *)
 type struc = { layout : FieldMap.t; name : string; size : int; complete : bool }
 
-(** Build an incomplete struct with a linking name and a size *)
-let incomplete_struct name size = { layout = FieldMap.empty; name; size; complete = false }
-
 (** The type of a C enumeration *)
 type enum = { name : string; labels : (int, string option) Hashtbl.t }
 
 (** The identifier for a linksem_cupdie. See {!ids_of_cupdie} *)
 type cupdie_id = int * int
+
+(** The type of environement linksem gives us.
+
+    Only structs, enums and unions can appear. A type can appear multiple times
+    and also be forward-declared with missing data like size.
+    {!env_of_linksem} hopefully deals with all those problems
+*)
+type linksem_env = linksem_t list
+
+(** An versiont of the linksem environement indexed by {!cupdie_id} *)
+type linksem_indexed_env = (cupdie_id, linksem_t) Hashtbl.t
 
 (** The type environment that contain mapping from linking name and a generated id
 
@@ -118,22 +121,7 @@ type cupdie_id = int * int
     {!env_of_linksem}, the original linksem type must be kept alive in
     [lenv]
 *)
-type env = {
-  structs : struc named_env;
-  enums : enum named_env;
-  lenv : (cupdie_id, linksem_t) Hashtbl.t;
-}
-
-(** The type of environement linksem gives us.
-
-    Only structs, enums and unions can appear. A type can appear multiple times
-    and also be forward-declared with missing data like size.
-    {!env_of_linksem} hopefully deals with all those problems
-*)
-type linksem_env = linksem_t list
-
-(** Makes an empty environement from and indexed linksem environement *)
-let make_env lenv = { structs = IdMap.make (); enums = IdMap.make (); lenv }
+type env = { structs : struc named_env; enums : enum named_env; lenv : linksem_indexed_env }
 
 (** The size of pointer. This will be configurable later *)
 let ptr_size = 8
@@ -141,11 +129,48 @@ let ptr_size = 8
 (** The size of enums. This will be configurable later *)
 let enum_size = 4
 
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Convenience manipulation } *)
+
+let is_struct = function Struct _ -> true | _ -> false
+
+let is_array = function Array _ -> true | _ -> false
+
+let is_scalar = function
+  | Machine _ -> true
+  | Cint _ -> true
+  | Cbool -> true
+  | Ptr _ -> true
+  | Enum _ -> true
+  | _ -> false
+
+let is_composite = function Struct _ -> true | Array _ -> true | _ -> false
+
 (** Make a simple pointer from a type *)
 let ptr t = Ptr { fragment = DynArray t; offset = Const 0 }
 
 (** A void* pointer *)
 let voidstar = Ptr { fragment = Unknown; offset = Somewhere }
+
+(** Create a qualified type without qualifier from an unqualified type *)
+let noqual unqualified =
+  { unqualified; const = false; volatile = false; restrict = false; constexpr = false }
+
+(** Create a machine type of that size without qualifiers *)
+let machine size = noqual (Machine size)
+
+(** Create a pointer to fragment with specified offset (0 by default) *)
+let of_frag ?(offset = 0) ?(restrict = false) fragment =
+  let unqualified = Ptr { fragment; offset = Const offset } in
+  { unqualified; const = false; volatile = false; restrict; constexpr = false }
+
+(** Build an incomplete struct with a linking name and a size *)
+let incomplete_struct name size = { layout = FieldMap.empty; name; size; complete = false }
+
+(** Makes an empty environement from and indexed linksem environement *)
+let make_env lenv = { structs = IdMap.make (); enums = IdMap.make (); lenv }
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -159,27 +184,22 @@ let voidstar = Ptr { fragment = Unknown; offset = Somewhere }
 *)
 
 (** Give the size of an {!unqualified} type. Need the environement. *)
-let rec sizeof_unqualified ~env = function
+let rec sizeof_unqualified = function
   | Machine i -> i
   | Cint { size; _ } -> size
   | Cbool -> 1
   | Ptr _ -> ptr_size
-  | Struct i -> (IdMap.geti env.structs i).size
+  | Struct { size; _ } -> size
   | Enum i -> enum_size
   | Array { elem; dims } ->
-      let num =
-        List.fold_left
-          Opt.(
-            fun o x ->
-              let+ o = o and+ x = x in
-              o * x)
-          (Some 1) dims
-      in
-      let num = Option.value ~default:0 num in
-      num * sizeof ~env elem
+      let num = dims |> List.map (Option.value ~default:0) |> List.fold_left ( * ) 0 in
+      num * sizeof elem
 
 (** Give the size of an type. Need the environement. *)
-and sizeof ~env t = sizeof_unqualified ~env t.unqualified
+and sizeof t = sizeof_unqualified t.unqualified
+
+(** For being used in {!RngMap.LenObject} *)
+let len = sizeof
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -252,7 +272,7 @@ let rec field_of_linksem ~cc ((_, fname, ltyp, offset) : linksem_field) : field 
   let cc = { cc with potential_link_name = newpln } in
   let typ = of_linksem_cc ~cc ltyp in
   debug "Processing sizeof field %t" PP.(top (opt string) fname);
-  let size = sizeof ~env:cc.env typ in
+  let size = sizeof typ in
   debug "Processed field %t" PP.(top (opt string) fname);
   let offset = Z.to_int offset in
   { fname; offset; typ; size }
@@ -279,12 +299,12 @@ and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : 
   let name = Opt.(expect_some_link (mname ||| cc.potential_link_name)) in
   debug "Processing struct %s" name;
   match IdMap.to_ident_opt cc.env.structs name with
-  | Some i when not force_complete -> Struct i
-  | Some i -> (
-      if
-        (* If force_complete and struct is defined, check if it is complete *)
-        (IdMap.geti cc.env.structs i).complete
-      then Struct i
+  | Some id when not force_complete ->
+      Struct { name; id; size = (IdMap.geti cc.env.structs id).size }
+  | Some id -> (
+      (* If force_complete and struct is defined, check if it is complete *)
+      let struc = IdMap.geti cc.env.structs id in
+      if struc.complete then Struct { name; id; size = struc.size }
       else
         (* Incomplete struct: try to complete it *)
         match Hashtbl.find cc.env.lenv (ids_of_cupdie cupdie) with
@@ -293,8 +313,8 @@ and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : 
             let size = Z.to_int lsize in
             let cc = { cc with potential_link_name = Some name } in
             let struc : struc = struc_of_linksem ~cc name size members in
-            IdMap.seti cc.env.structs i struc;
-            Struct i
+            IdMap.seti cc.env.structs id struc;
+            Struct { name; id; size }
         | _ ->
             Raise.fail "%t: DWARF type environement corrupted: struct %s is not a struct"
               PP.(tos pp_decl decl)
@@ -310,7 +330,7 @@ and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : 
           let cc = { cc with potential_link_name = Some name } in
           let struc : struc = struc_of_linksem ~cc name size members in
           IdMap.seti cc.env.structs id struc;
-          Struct id
+          Struct { name; id; size }
       | _ ->
           Raise.fail "%t: DWARF type environement corrupted: struct %s is not a struct"
             PP.(tos pp_decl decl)
@@ -327,12 +347,12 @@ and enum_type_of_linksem ~cc ~cupdie ~mname ~decl : unqualified =
   (* If the enum has no name we fallback on the potential name *)
   let name = Opt.(expect_some_link (mname ||| cc.potential_link_name)) in
   match IdMap.to_ident_opt cc.env.enums name with
-  | Some i -> Enum i
+  | Some id -> Enum { name; id }
   | None -> (
       match Hashtbl.find cc.env.lenv (ids_of_cupdie cupdie) with
       | CT (CT_enumeration (_, _, _, _, _, Some labels)) ->
           let enum : enum = enum_of_linksem ~cc name labels in
-          Enum (IdMap.add cc.env.enums name enum)
+          Enum { name; id = IdMap.add cc.env.enums name enum }
       | _ ->
           Raise.fail "%t: DWARF type environement corrupted: enum %s is not a enum"
             PP.(tos pp_decl decl)
@@ -408,7 +428,7 @@ let of_linksem ~env (ltyp : linksem_t) : t =
 let env_of_linksem (lenv : linksem_env) : env =
   let open Dwarf in
   (* First phase: index them by the cupdie number id *)
-  let llenv = Hashtbl.create 10 in
+  let llenv : linksem_indexed_env = Hashtbl.create 10 in
   List.iter
     (function
       | CT (CT_struct_union (cupdie, _, _, _, _, _)) as ct ->
@@ -446,38 +466,30 @@ let pp_signed signed = if signed then !^"s" else !^"u"
 
 (** Pretty print a type. If an environement is provided, structs and enums
     will be printed with a name, otherwise they will just have a number *)
-let rec pp ?env typ =
+let rec pp typ =
   let const = if typ.const then !^"const " else empty in
   let volatile = if typ.volatile then !^"volatile " else empty in
   let restrict = if typ.restrict then !^"restrict " else empty in
   let constexpr = if typ.constexpr then !^"constexpr " else empty in
-  const ^^ volatile ^^ restrict ^^ constexpr ^^ pp_unqualified ?env typ.unqualified
+  const ^^ volatile ^^ restrict ^^ constexpr ^^ pp_unqualified typ.unqualified
 
-and pp_unqualified ?env = function
+and pp_unqualified = function
   | Machine i -> dprintf "M%d" i
   | Cint { name; signed; size; ischar } ->
       !^name ^^ lparen ^^ pp_signed signed ^^ int (8 * size) ^^ rparen
   | Cbool -> !^"bool"
   | Ptr { fragment; offset } ->
-      surround 2 0 lbrace (pp_offset offset ^^ pp_fragment ?env fragment) rbrace
-  | Array { elem; dims } -> pp_arr ?env elem dims
-  | Struct i -> (
-      match env with
-      | Some env -> dprintf "Struct %s" (IdMap.of_ident env.structs i)
-      | None -> dprintf "Struct %d" i
-    )
-  | Enum i -> (
-      match env with
-      | Some env -> dprintf "Enum %s" (IdMap.of_ident env.enums i)
-      | None -> dprintf "Enum %d" i
-    )
+      surround 2 0 lbrace (pp_offset offset ^^ pp_fragment fragment) rbrace
+  | Array { elem; dims } -> pp_arr elem dims
+  | Struct { name; _ } -> dprintf "Struct %s" name
+  | Enum { name; _ } -> dprintf "Enum %s" name
 
-and pp_fragment ?env frag =
+and pp_fragment frag =
   group
   @@
   match frag with
-  | Single t -> pp ?env t
-  | DynArray t -> pp ?env t ^^ !^"[]"
+  | Single t -> pp t
+  | DynArray t -> pp t ^^ !^"[]"
   | Unknown -> !^"unknown"
   | FreeFragment i -> dprintf "frag %d" i
 
@@ -486,26 +498,26 @@ and pp_offset = function
   | Const off -> dprintf "at 0x%x in" off ^^ space
   | Somewhere -> !^"somewhere in" ^^ space
 
-and pp_arr ?env elem dims =
-  PP.(surround 2 0 lparen (pp ?env elem) rparen ^^ (List.map pp_arr_dim dims |> concat))
+and pp_arr elem dims =
+  PP.(surround 2 0 lparen (pp elem) rparen ^^ (List.map pp_arr_dim dims |> concat))
 
 and pp_arr_dim dim = PP.(lbracket ^^ Option.fold ~none:empty ~some:int dim ^^ rbracket)
 
 let pp_field ?env { fname; offset; typ; size } =
   let name = Option.value fname ~default:"_" in
-  infix 2 1 $ colon $ !^name $ pp ?env typ
+  infix 2 1 $ colon $ !^name $ pp typ
 
-let pp_struct ?env { layout; name; size; complete } =
-  let fields = FieldMap.bindings layout |> List.map (Pair.map PP.ptr @@ pp_field ?env) in
+let pp_struct { layout; name; size; complete } =
+  let fields = FieldMap.bindings layout |> List.map (Pair.map PP.ptr @@ pp_field) in
   PP.(mapping (if complete then name else name ^ "?") (fields @ [(PP.ptr size, !^"end")]))
 
-let pp_enums { name; labels } = PP.(hashtbl ptr (opt string) labels)
+let pp_enums { name; labels } = PP.(hashtbl ptr (Opt.fold ~none:underscore ~some:string) labels)
 
-(** Print the whole environement (not the linksem indexed environement) *)
+(** Print the whole environement (not the linksem indexed environment) *)
 let pp_env env =
   PP.(
     record "env"
       [
-        ("structs", IdMap.pp ~keys:string ~vals:(pp_struct ~env) env.structs);
+        ("structs", IdMap.pp ~keys:string ~vals:pp_struct env.structs);
         ("enums", IdMap.pp ~keys:string ~vals:pp_enums env.enums);
       ])

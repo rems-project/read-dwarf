@@ -8,8 +8,9 @@ open Logs.Logger (struct
 end)
 
 (*****************************************************************************)
-(*        Support types                                                      *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Support types } *)
 
 type 'a vector = 'a Vector.t
 
@@ -34,11 +35,9 @@ end
 type id = Id.t
 
 (*****************************************************************************)
-(*        State types                                                        *)
 (*****************************************************************************)
-
-(** Inner variable type *)
-type ivar = Register of Reg.path  (** sid:REG.FIELD.INNER *) | Extra of int  (** sid:f42 *)
+(*****************************************************************************)
+(** {1 State types } *)
 
 (** All the possible atomic access sizes *)
 type mem_size = B8 | B16 | B32 | B64 | B128
@@ -52,20 +51,23 @@ type mem_size = B8 | B16 | B32 | B64 | B128
 *)
 type t = {
   id : id;
-  mutable regs : exp Reg.Map.t;
-  extra_vars : (ty * exp) vector;
+  mutable regs : tval Reg.Map.t;
+  read_vars : (ty * tval) vector;
       (** Include extra variable that are not direct representation of registers or memory *)
   mutable asserts : exp list;
   mem : mem;
-      (* We'll need to add C infered types later *)
-      (* elf_file : file option; optionally elf file so that
+  (* We'll need to add C infered types later *)
+  (* elf_file : file option; optionally elf file so that
      state manipulation dependent on elf things would still work without having to pass
      the elf file around *)
+  fenv : Fragment.env;
 }
+
+and tval = { ctyp : Ctype.t option; exp : exp }
 
 and exp = (svar, annot) Isla.exp
 
-and svar = { state : t; var : ivar }
+and svar = Register of t * Reg.path | ReadVar of t * int | Arg of int | RetArg
 
 and mem_block = { addr : exp; size : mem_size }
 
@@ -86,8 +88,9 @@ type event = (svar, annot) Isla.event
 type trc = (svar, annot) Isla.trc
 
 (*****************************************************************************)
-(*        State to id management                                             *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 State to id management } *)
 
 (** Global map of states to associate them with identifiers *)
 let id2state : (id, t) WeakMap.t = WeakMap.create 10
@@ -100,28 +103,38 @@ let of_id (id : id) = WeakMap.get id2state id
 let to_id (st : t) = st.id
 
 (*****************************************************************************)
-(*        State variable management                                          *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 State variable management } *)
+
 module Var = struct
+  type state = t
+
   type t = svar
 
-  let to_string { state; var } =
-    (state |> to_id |> Id.to_string)
-    ^ ":"
-    ^ match var with Register l -> Reg.path_to_string l | Extra i -> "f" ^ string_of_int i
+  let to_string = function
+    | Register (state, path) ->
+        Printf.sprintf "%s:%s" (state |> to_id |> Id.to_string) (Reg.path_to_string path)
+    | ReadVar (state, num) -> Printf.sprintf "%s:r%i" (state |> to_id |> Id.to_string) num
+    | Arg num -> Printf.sprintf "arg%i" num
+    | RetArg -> "retarg"
 
-  let of_string s =
+  let of_string s : t =
+    let fail () = Raise.inv_arg "Invalid state variable: %s" s in
     match String.split_on_char ':' s with
-    | [state; var] ->
-        {
-          state = state |> Id.of_string |> of_id;
-          var =
-            ( match var.[0] with
-            | 'f' -> Extra (int_of_string @@ String.sub var 1 (String.length var - 1))
-            | _ -> Register (Reg.path_of_string var)
-            );
-        }
-    | _ -> Raise.inv_arg "Invalid state variable: %s" s
+    | [state; var] -> (
+        let state : state = state |> Id.of_string |> of_id in
+        match var.[0] with
+        | 'r' -> ReadVar (state, int_of_string @@ String.sub var 1 (String.length var - 1))
+        | _ -> Register (state, Reg.path_of_string var)
+      )
+    | [var] -> (
+        match var.[0] with
+        | 'a' -> Arg (Scanf.sscanf var "arg%d" Fun.id)
+        | 'r' -> if var != "retarg" then fail () else RetArg
+        | _ -> fail ()
+      )
+    | _ -> fail ()
 
   let to_exp (v : t) : exp = Isla.Var (Isla.State v, dummy_annot)
 
@@ -131,8 +144,11 @@ end
 let pp_sexp exp = Isla_lang.PP.pp_exp Var.pp exp
 
 (*****************************************************************************)
-(*        State memory management                                            *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 State memory management } *)
+
+(** This module helps managing the memory part of the state. *)
 module Mem = struct
   type size = mem_size
 
@@ -219,8 +235,9 @@ module Mem = struct
 end
 
 (*****************************************************************************)
-(*        State management                                                   *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 State management } *)
 
 (** Lock the state. Once a state is locked it should not be mutated anymore *)
 let lock state = Mem.lock state.mem state
@@ -230,6 +247,8 @@ let unsafe_unlock state = Mem.unlock state.mem
 
 let is_locked state =
   match state.mem.trace with Lock s :: _ when s.id = state.id -> true | _ -> false
+
+let make_reg_cell state ?ctyp p = { exp = Var.to_exp (Register (state, p)); ctyp }
 
 (** Makes a fresh state with all variable fresh and new
 
@@ -243,21 +262,22 @@ let make () =
     {
       id;
       regs = Reg.Map.dummy ();
-      extra_vars = Vector.empty ();
+      read_vars = Vector.empty ();
       asserts = [];
       mem = Mem.empty ();
+      fenv = Fragment.Env.make ();
     }
   in
   (* Warning: here I'm creating a cyclic reference. Please be aware of that *)
-  state.regs <- (Reg.Map.init (fun p -> Var.to_exp { state; var = Register p }) : exp Reg.Map.t);
+  state.regs <- Reg.Map.init @@ make_reg_cell state;
   next_id := id + 1;
   WeakMap.add id2state id state;
   state
 
 (** Make a state using the argument passed *)
-let make_of regs extra_vars asserts mem =
+let make_of regs read_vars asserts mem fenv =
   let id = !next_id in
-  let state = { id; regs; extra_vars; asserts; mem } in
+  let state = { id; regs; read_vars; asserts; mem; fenv } in
   next_id := id + 1;
   WeakMap.add id2state id state;
   state
@@ -275,9 +295,10 @@ let copy state =
     {
       id;
       regs = Reg.Map.copy state.regs;
-      extra_vars = Vector.empty ();
+      read_vars = Vector.empty ();
       asserts = state.asserts;
       mem = Mem.copy state.mem;
+      fenv = Fragment.Env.copy state.fenv;
     }
   in
   next_id := id + 1;
@@ -288,8 +309,7 @@ let copy state =
 *)
 let extend_mut state =
   assert (not @@ is_locked state);
-  state.regs <-
-    Reg.Map.copy_extend ~init:(fun p -> Var.to_exp { state; var = Register p }) state.regs
+  state.regs <- Reg.Map.copy_extend ~init:(make_reg_cell state) state.regs
 
 (** Do a deep copy of all the mutable part of the state,
     so it can be mutated without retro-action.
@@ -302,22 +322,21 @@ let copy_extend state =
     {
       id;
       regs = Reg.Map.dummy ();
-      extra_vars = Vector.empty ();
+      read_vars = Vector.empty ();
       asserts = state.asserts;
       mem = Mem.copy state.mem;
+      fenv = Fragment.Env.copy state.fenv;
     }
   in
-  nstate.regs <-
-    Reg.Map.copy_extend
-      ~init:(fun p -> Var.to_exp { state = nstate; var = Register p })
-      state.regs;
+  nstate.regs <- Reg.Map.copy_extend ~init:(make_reg_cell state) state.regs;
   next_id := id + 1;
   WeakMap.add id2state id nstate;
   nstate
 
 (*****************************************************************************)
-(*        State convenience manipulation                                     *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 State convenience manipulation } *)
 
 (** Add an assertion to a state *)
 let push_assert (s : t) (e : exp) =
@@ -327,8 +346,9 @@ let push_assert (s : t) (e : exp) =
 (** Map a function on all the expressions of a state by mutating *)
 let map_mut_exp (f : exp -> exp) s : unit =
   assert (not @@ is_locked s);
-  Reg.Map.map_mut f s.regs;
-  Vector.map_mut (fun (t, e) -> (t, f e)) s.extra_vars;
+  let tval_map tv = { tv with exp = f tv.exp } in
+  Reg.Map.map_mut tval_map s.regs;
+  Vector.map_mut (Pair.map Fun.id tval_map) s.read_vars;
   s.asserts <- List.map f s.asserts;
   Mem.map_mut_exp f s.mem
 
@@ -339,8 +359,9 @@ let map_exp (f : exp -> exp) s : t =
 
 (** Iterates a function on all the expressions of a state *)
 let iter_exp (f : exp -> unit) s =
-  Reg.Map.iter f s.regs;
-  Vector.iter (fun (_, e) -> f e) s.extra_vars;
+  let tval_iter tv = f tv.exp in
+  Reg.Map.iter tval_iter s.regs;
+  Vector.iter (Pair.iter ignore tval_iter) s.read_vars;
   List.iter f s.asserts;
   Mem.iter_exp f s.mem
 
@@ -348,17 +369,19 @@ let iter_exp (f : exp -> unit) s =
 let iter_var (f : var -> unit) s = iter_exp (IslaManip.exp_iter_var f) s
 
 (** Return the type of a state variable *)
-let svar_type { state; var } =
+let svar_type var =
   match var with
-  | Register p -> p |> Reg.path_type |> Reg.assert_plain
-  | Extra i -> Vector.get state.extra_vars i |> fst
+  | Register (state, p) -> p |> Reg.path_type |> Reg.assert_plain
+  | ReadVar (state, i) -> Vector.get state.read_vars i |> fst
+  | Arg _ -> Isla.Ty_BitVec 64
+  | RetArg -> Isla.Ty_BitVec 64
 
 (** Create a new Extra symbolic variable by mutating the state *)
-let make_extra (ty : ty) (s : t) : svar =
+let make_extra (ty : ty) ?ctyp (s : t) : svar =
   assert (not @@ is_locked s);
-  let len = Vector.length s.extra_vars in
-  let svar = { state = s; var = Extra len } in
-  Vector.add_one s.extra_vars (ty, Var.to_exp svar);
+  let len = Vector.length s.read_vars in
+  let svar = ReadVar (s, len) in
+  Vector.add_one s.read_vars (ty, { ctyp; exp = Var.to_exp svar });
   svar
 
 (** Read the block designated by mb from the state and return an expression read.
@@ -371,33 +394,56 @@ let make_extra (ty : ty) (s : t) : svar =
 
     In practice for now it is always the first case
 *)
-let read (mb : Mem.block) (s : t) : exp =
+let read (mb : Mem.block) (s : t) : tval =
   assert (not @@ is_locked s);
   let ty = Mem.size_to_bv mb.size in
   let nvar = make_extra ty s in
   Mem.read s.mem mb nvar;
-  Var.to_exp nvar
+  { ctyp = None; exp = Var.to_exp nvar }
 
 (** Write the provided value in the block. Mutate the state.*)
 let write (mb : Mem.block) (value : exp) (s : t) : unit =
   assert (not @@ is_locked s);
   Mem.write s.mem mb value
 
+(** Reset the register in given path to a symbolic value *)
+let reset_reg (path : Reg.path) ?(ctyp : Ctype.t option) (s : t) : unit =
+  assert (not @@ is_locked s);
+  Reg.Map.set s.regs path @@ make_reg_cell s ?ctyp path
+
+(** Sets the content of register *)
+let set_reg (path : Reg.path) ?(ctyp : Ctype.t option) (exp : exp) (s : t) : unit =
+  assert (not @@ is_locked s);
+  Reg.Map.set s.regs path @@ { exp; ctyp }
+
+(** Sets the type of the register, leaves the value unchanged *)
+let set_reg_type (path : Reg.path) (ctyp : Ctype.t) (s : t) : unit =
+  assert (not @@ is_locked s);
+  let { exp; _ } = Reg.Map.get s.regs path in
+  let ntval = { exp; ctyp = Some ctyp } in
+  Reg.Map.set s.regs path ntval
+
 (*****************************************************************************)
-(*        Pretty printing                                                    *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Pretty printing } *)
 
 let pp_trc trc = Isla_lang.PP.pp_trc Var.pp trc
+
+let pp_tval { exp; ctyp } =
+  let open PP in
+  match ctyp with None -> pp_sexp exp | Some t -> infix 2 1 colon (pp_sexp exp) (Ctype.pp t)
 
 let pp s =
   PP.(
     record "state"
       [
         ("id", Id.pp s.id);
-        ("regs", Reg.Map.pp pp_sexp s.regs);
-        ("extra_vars", !^"todo");
+        ("regs", Reg.Map.pp pp_tval s.regs);
+        ("read_vars", Vector.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
         ( "asserts",
           s.asserts |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_sexp e) |> separate hardline
         );
         ("memory", Mem.pp s.mem);
+        ("fenv", Fragment.Env.pp s.fenv);
       ])

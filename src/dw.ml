@@ -17,8 +17,8 @@ type t = {
   elf : Elf.File.t;
   ldwarf : Dwarf.dwarf;
   ldwarf_sdt : Dwarf.sdt_dwarf;
-  funcs : Func.t list;
-  vars : Var.t list;
+  funcs : (string, Func.t) Hashtbl.t;
+  vars : (string, Var.t) Hashtbl.t;
   tenv : Ctype.env;
 }
 
@@ -62,17 +62,28 @@ let of_elf (elf : Elf.File.t) =
     (List.rev_append nfuncs funcs, List.rev_append nvars vars)
   in
   let (funcs, vars) = List.fold_left process_cu ([], []) ldwarf_sdt.sd_compilation_units in
+  let funcs =
+    funcs |> List.to_seq
+    |> Seq.map (fun (func : Func.t) -> (func.func.name, func))
+    |> Hashtbl.of_seq
+  in
+  let vars =
+    vars |> List.to_seq |> Seq.map (fun (var : Var.t) -> (var.name, var)) |> Hashtbl.of_seq
+  in
   { elf; ldwarf; ldwarf_sdt; funcs; vars; tenv }
 
 (** Get Dwarf information from an Elf file by name. Use {!ElfFile.of_file} *)
 let of_file (filename : string) = filename |> Elf.File.of_file |> of_elf
+
+(** Get a function by [name] *)
+let get_func_opt ~name dw = Hashtbl.find_opt dw.funcs name
 
 (** Pretty print dwarf data as an ocaml structure *)
 let pp_raw d =
   PP.(
     record "dw"
       [
-        ("funcs", list (Func.pp_raw ~env:d.tenv) d.funcs);
-        ("vars", list (Var.pp_raw ~env:d.tenv) d.vars);
+        ("funcs", hashtbl string Func.pp_raw d.funcs);
+        ("vars", hashtbl string Var.pp_raw d.vars);
         ("types", Ctype.pp_env d.tenv);
       ])

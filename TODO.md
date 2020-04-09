@@ -58,13 +58,8 @@
  - Start by handling that the exponential way and wait until it blows up
  - Don't deal with loops for now
 
-## Function calling API
- - Add a format to specify the calling convention
-
 # Current task stacks for Thibaut. This is the short term task list
 
- - Build the ABI concept into the code, and add room for all Arch-dependent things
- - Do a start of the AArch64 ABI encoding sufficient to run a function.
  - Do a system to drive isla through a loop less-function, including respecting the ABI.
  - Start implementing the basic type inference system: stage 1.
 
@@ -110,3 +105,5 @@
  - Add a preprocessing system to shorten the trace output by isla
  - Implement the C types from the notes and do the DWARF to internal type conversion
  - Improve Linksem performance
+ - Build the ABI concept into the code, and add room for all Arch-dependent things
+ - Do a start of the AArch64 ABI encoding sufficient to run a function.

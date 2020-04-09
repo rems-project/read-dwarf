@@ -43,7 +43,7 @@ let baselog_fatal ~code name lvl fmt =
     (fun o ->
       Printf.fprintf o "\n";
       flush o;
-      Printexc.print_raw_backtrace o stack;
+      if ConfigPre.enable_backtrace then Printexc.print_raw_backtrace o stack;
       flush o;
       exit code)
     out fmt
@@ -58,7 +58,7 @@ let baselogd_fatal ~code name lvl doc =
   let out = channel lvl in
   PP.fprintln out $ prefix 2 1 (brackets !^name ^^ pp_level lvl ^^ !^" Fatal:") doc;
   flush out;
-  Printexc.print_raw_backtrace out stack;
+  if ConfigPre.enable_backtrace then Printexc.print_raw_backtrace out stack;
   flush out;
   exit code
 

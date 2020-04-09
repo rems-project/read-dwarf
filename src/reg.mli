@@ -66,8 +66,17 @@ val reg_type : t -> typ
     The same type means the same properties recursively on sub structures.
 *)
 
+(** Check that all element of the first struct are in the second with the same types *)
+val struct_weak_inc : reg_struct -> reg_struct -> bool
+
+(** Same as {!struct_weak_inc} but at register type level.
+    If both types are plain, then they must be equal.*)
+val type_weak_inc : typ -> typ -> bool
+
+(** Check that all field in s and s' match and have same types (ids may differ) *)
 val struct_weak_eq : reg_struct -> reg_struct -> bool
 
+(** Same as {!struct_weak_eq} but at register type level *)
 val type_weak_eq : typ -> typ -> bool
 
 (*****************************************************************************)
@@ -87,6 +96,14 @@ val add : string -> typ -> t
 
 (** Same as add but do not return the register *)
 val adds : string -> typ -> unit
+
+(** {!struct_weak_inc} must hold. Add all register of the
+    second struct to the first one in a imperative update.
+    Ids might differ *)
+val struct_merge_add : reg_struct -> reg_struct -> unit
+
+(** {!type_weak_inc} must hold. Same as {!struct_merge_add} but at register type level *)
+val type_merge_add : typ -> typ -> unit
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -137,7 +154,12 @@ val pp_path : path -> PP.document
 (** {1 Register indexed map } *)
 
 (** This sub module defines a register map that associate a value to all
-    architectural registers. This is a mutable data structure *)
+    architectural registers. This is a mutable data structure.
+
+    If this map is created and then some register are added, the map will be incomplete.
+    You can deal with this problem by extending it with {!copy_extend} or by
+    doing partial accesses with {!get_opt} or {!get_or}.
+*)
 module Map : sig
   (** The type of a map that bind one 'a to each register *)
   type 'a t
@@ -154,6 +176,12 @@ module Map : sig
   (** Set the value associated to a register *)
   val set : 'a t -> path -> 'a -> unit
 
+  (** Get the value associated to a register or [None] if path is not bound in the map*)
+  val get_opt : 'a t -> path -> 'a option
+
+  (** Get the value associated to a register or [value] if path is not bound in the map*)
+  val get_or : value:'a -> 'a t -> path -> 'a
+
   (** Map on the data structure, return a new instance *)
   val map : ('a -> 'b) -> 'a t -> 'b t
 
@@ -165,6 +193,9 @@ module Map : sig
 
   (** Run the function on each value stored in the map *)
   val iter : ('a -> unit) -> 'a t -> unit
+
+  (** Run the function on each value stored in the map. Also give the path as a parameter *)
+  val iteri : (path -> 'a -> unit) -> 'a t -> unit
 
   (** Do a copy of the map but add value for all register that have been added
       since the creation of the previous register map. Values are initialized using init *)

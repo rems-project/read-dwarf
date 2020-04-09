@@ -39,6 +39,8 @@ let run_code trcs typ (run : bool) simp (code : BytesSeq.t) : unit =
 let run_bb arch trcs typ run simp elfname sym len =
   let elf = Elf.File.of_file elfname in
   try
+    ElfFile.load_arch elf;
+    assert (Arch.initialized () <> None);
     let (sym, off) = Elf.SymTbl.sym_offset_of_string elf.symbols sym in
     let len = match len with Some i -> i | None -> sym.size - off in
     let code = Elf.Sym.sub sym off len in

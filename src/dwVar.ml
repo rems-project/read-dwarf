@@ -30,12 +30,12 @@ let of_linksem (elf : Elf.File.t) (env : Ctype.env) (lvar : linksem_t) : t =
   { name; param; ctype; locs }
 
 (** Pretty print a variable *)
-let pp_raw ?env v =
+let pp_raw v =
   let kind = if v.param then "param" else "var" in
   PP.(
     record kind
       [
         ("name", string v.name);
-        ("ctype", Ctype.pp ?env v.ctype);
+        ("ctype", Ctype.pp v.ctype);
         ("locs", list (pair (pair ptr ptr) Loc.pp) v.locs);
       ])

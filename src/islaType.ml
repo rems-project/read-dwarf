@@ -143,9 +143,12 @@ let type_trc ?(tc = HashVector.empty ()) (isla_trace : 'v ltrc) =
     | Smt (Assert exp, l) -> tassert l "Assertion type must be Bool" (type_expr tc exp = Ty_Bool)
     | ReadReg (name, _, v, l) | WriteReg (name, _, v, l) ->
         let tv = type_valu l tc v in
-        if Reg.mem_string name then
-          tassert l "Register structure cannot change"
-          @@ Reg.type_weak_eq tv (Reg.reg_type (Reg.of_string name))
+        if Reg.mem_string name then begin
+          let reg = Reg.of_string name in
+          let t0 = Reg.reg_type reg in
+          tassert l "Register structure cannot change" @@ Reg.type_weak_inc t0 tv;
+          if Reg.type_weak_inc tv t0 then () else Reg.type_merge_add t0 tv
+        end
         else Reg.adds name tv
     | _ -> ()
   in

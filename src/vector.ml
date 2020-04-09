@@ -18,6 +18,8 @@ let set = set
 
 let unsafe_set = unsafe_set
 
+let copy = copy
+
 let map = map
 
 let mapi = mapi
@@ -69,3 +71,5 @@ let fill_all vec elem =
   done
 
 let pp conv vec = PP.(!^"vec" ^^ (vec |> to_array |> array conv))
+
+let ppi conv vec = PP.(vec |> to_list |> List.mapi (fun i v -> (int i, conv v)) |> PP.mapping "")
