@@ -3673,6 +3673,8 @@ let process_file () : unit =
             | cfg_source_node_list2 -> cfg_source_node_list2
           in
 
+          let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
+                              
           let graph0 = mk_cfg test an "O0_" false true start_indices in
 
           let graph2 = mk_cfg test2 an2 "O2_" false false start_indices2 in
@@ -3681,7 +3683,14 @@ let process_file () : unit =
 
           let graph' = correlate_source_line graph0 graph2 in
 
-          let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
+(*          
+          let graph'' = graph_cfg_union graph graph' in
+          let cfg_dot_file_union = cfg_dot_file_root ^ "_union.dot" in
+          pp_cfg graph cfg_dot_file_union false;
+ *)
+
+          (* it'd be nice to layout nodes and base edges without the correlate edges and then to layout correlate edges only wrt node positions and glom them together.  But that seems impossible, as dot seems not to respect position attributes (only neato/fdp do). There also seems to be no dot edge attribute that would make the edge ignored for layout, or for that edge's layout to ignore the other edges.  So instead we do the following hackery *)
+          
           let cfg_dot_file_base = cfg_dot_file_root ^ "_base.dot" in
           let cfg_dot_file_layout = cfg_dot_file_root ^ "_layout.dot" in
           pp_cfg graph cfg_dot_file_base false;
@@ -3717,3 +3726,5 @@ let process_file () : unit =
       | None -> Warn.fatal "no dot file\n"
     )
   | _ -> Warn.fatal "missing files for elf2\n"
+
+                    (* dot emacs regexp that appears to match edges: [a-zA-Z0-9_]+ *->[^;]*;    *)
