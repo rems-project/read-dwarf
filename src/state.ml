@@ -53,10 +53,8 @@ type t = {
   id : id;
   mutable regs : tval Reg.Map.t;
   read_vars : (ty * tval) vector;
-      (** Include extra variable that are not direct representation of registers or memory *)
   mutable asserts : exp list;
   mem : mem;
-  (* We'll need to add C infered types later *)
   (* elf_file : file option; optionally elf file so that
      state manipulation dependent on elf things would still work without having to pass
      the elf file around *)

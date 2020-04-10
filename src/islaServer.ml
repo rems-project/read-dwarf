@@ -128,7 +128,10 @@ let string_request (req : string) : answer =
 (** Send a request and wait for answer *)
 let request (req : request) : answer = req |> string_of_request |> string_request
 
-(** Request the traces of a binary instruction and parse the result *)
+(** Request the traces of a binary instruction and parse the result.
+
+    This is the main entry point of this module.
+*)
 let request_bin_parsed (bin : BytesSeq.t) : (bool * Isla.rtrc) list =
   ASM bin |> request |> expect_parsed_traces
 
