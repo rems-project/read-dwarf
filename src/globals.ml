@@ -10,6 +10,8 @@ let branch_table_data_file2 = ref (None : string option)
 
 let objdump_d2 = ref (None : string option)
 
+let qemu_log = ref (None : string option)
+
 let comp_dir = ref (None : string option)
 
 let cfg_dot_file = ref (None : string option)

@@ -142,6 +142,7 @@ type evaluated_line_info_for_instruction = {
 
 type analysis = {
   index_of_address : addr -> int;
+  index_option_of_address : addr -> int option;
   address_of_index : int -> addr;
   instructions : instruction array;
   line_info : evaluated_line_info_for_instruction list array;
@@ -1287,7 +1288,7 @@ let parse_objdump_file arch filename_objdump_d : objdump_instruction array =
 (*****************************************************************************)
 
 let mk_instructions test filename_objdump_d filename_branch_table :
-    instruction array * (addr -> index) * (index -> addr) =
+    instruction array * (addr -> index) * (addr -> index option) * (index -> addr) =
   let objdump_instructions : objdump_instruction array =
     parse_objdump_file test.arch filename_objdump_d
   in
@@ -1297,7 +1298,7 @@ let mk_instructions test filename_objdump_d filename_branch_table :
     branch_table_target_addresses test filename_branch_table
   in
 
-  let index_of_address =
+  let (index_of_address, index_option_of_address) =
     let tbl = Hashtbl.create (Array.length objdump_instructions) in
     Array.iteri
       (function
@@ -1305,11 +1306,15 @@ let mk_instructions test filename_objdump_d filename_branch_table :
             function (addr, _, _, _) -> Hashtbl.add tbl addr k
           ))
       objdump_instructions;
-    function
-    | addr -> (
-        try Hashtbl.find tbl addr
-        with _ -> Warn.fatal "index_of_address didn't find %s\n" (pp_addr addr)
-      )
+    ( (function
+      | addr -> (
+          try Hashtbl.find tbl addr
+          with _ -> Warn.fatal "index_of_address didn't find %s\n" (pp_addr addr)
+        )),
+      function
+      | addr -> (
+          try Some (Hashtbl.find tbl addr) with _ -> None
+        ) )
   in
 
   let instructions =
@@ -1337,7 +1342,7 @@ let mk_instructions test filename_objdump_d filename_branch_table :
 
   let address_of_index k = instructions.(k).i_addr in
 
-  (instructions, index_of_address, address_of_index)
+  (instructions, index_of_address, index_option_of_address, address_of_index)
 
 (* pull out indirect branches *)
 let mk_indirect_branches instructions =
@@ -1445,6 +1450,38 @@ let pp_come_froms (addr : addr) (cfs : come_from list) : string =
 (*        pp control-flow graph                                              *)
 (*****************************************************************************)
 
+let read_qemu_log an filename_qemu_log : bool array =
+  let log_addresses : addr list =
+    match read_file_lines filename_qemu_log with
+    | MyFail s -> Warn.fatal "%s\ncouldn't read qemu log file: \"%s\"\n" s filename_qemu_log
+    | Ok lines ->
+        let parse_line (s : string) : natural option =
+          (*         Printf.printf "%s  " s;*)
+          match Scanf.sscanf s "0x%x:%s" (fun addr s -> addr) with
+          | addr ->
+              (*Printf.printf "PARSED %s\n" (pp_addr (Nat_big_num.of_int addr));*)
+              Some (Nat_big_num.of_int addr)
+          | exception _ -> (*Printf.printf "NOT\n";*) None
+        in
+        List.filter_map parse_line (Array.to_list lines)
+  in
+  let size = Array.length an.instructions in
+  let visited = Array.make size false in
+  List.iter
+    (function
+      | addr -> (
+          (*Printf.printf "%s" (pp_addr addr); *)
+          match an.index_option_of_address addr with
+          | Some k -> visited.(k) <- true
+          | None -> ()
+        ))
+    log_addresses;
+  visited
+
+(*****************************************************************************)
+(*        pp control-flow graph                                              *)
+(*****************************************************************************)
+
 (* pp to dot a CFG.  Make a node for each non-{C_plain, C_branch}
    instruction, and an extra "start" node for each ELF symbol or other
    bl target.
@@ -1501,6 +1538,7 @@ type node_cfg = {
     list;
   nc_colour : string;
   nc_ppd_instruction : string list;
+  nc_visited : bool;
 }
 
 type edge_cfg = string * string * edge_kind_cfg
@@ -1839,7 +1877,7 @@ let pp_node_inlining n =
 
 (* make a control-flow graph, starting from start_indices (which should be ELF symbol indices).  If recurse_flat, then recurse (not inlining) on all bl targets  (this option is no longer used).  If inline_all, then recurse (inlining) through all bl targets. Add node_name_prefix to all node names, so that graphs can be unioned. *)
 
-let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
+let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all : bool)
     (start_indices : (index * nesting) list) : graph_cfg =
   let colour k =
     let subprogram_names =
@@ -1856,6 +1894,8 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
         colour
     | _ -> "black"
   in
+
+  let is_visited k = match visitedo with None -> false | Some visited -> visited.(k) in
 
   (* the graphette start nodes are the instructions which are either
        - elf symbols, or
@@ -1939,6 +1979,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
       nc_stack = inlining_stack_at_index an k;
       nc_colour = colour k;
       nc_ppd_instruction = mk_ppd_instruction test an label k nesting;
+      nc_visited = is_visited k;
     }
   in
 
@@ -1972,6 +2013,7 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
         nc_stack = inlining_stack_at_index an k;
         nc_colour = colour k;
         nc_ppd_instruction = mk_ppd_instruction test an s k nesting;
+        nc_visited = is_visited k;
       }
     in
     let (nn', k') = next_non_start_node_name nesting [] k in
@@ -2303,9 +2345,13 @@ let mk_cfg test an node_name_prefix (recurse_flat : bool) (inline_all : bool)
 
 (* render graph to graphviz dot file *)
 
-let pp_colour colour =
-  "[color=\"" ^ colour ^ "\"]" (*^ "[fillcolor=\"" ^ colour ^ "\"]"*) ^ "[fontcolor=\""
-  ^ colour ^ "\"]"
+let pp_colour colour visited =
+  if not visited then
+    "[color=\"" ^ colour ^ "\"]" (*^ "[fillcolor=\"" ^ colour ^ "\"]"*) ^ "[fontcolor=\""
+    ^ colour ^ "\"]"
+  else
+    "[color=\"" ^ colour ^ "\"]" ^ "[style=\"filled\"][fillcolor=\"" ^ colour ^ "\"]"
+    ^ "[fontcolor=\"" ^ "black" ^ "\"]"
 
 let margin = "[margin=\"0.03,0.02\"]"
 
@@ -2334,7 +2380,8 @@ let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
     Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name node.nc_name)
       node.nc_label
       (html_escape (String.concat "\n" (node.nc_ppd_instruction @ pp_node_inlining node)))
-      margin shape (pp_colour node.nc_colour)
+      margin shape
+      (pp_colour node.nc_colour node.nc_visited)
   in
 
   let c = open_out cfg_dot_file in
@@ -3291,7 +3338,7 @@ let mk_inlining test sdt instructions =
 
 let mk_analysis test filename_objdump_d filename_branch_table =
   (* compute the basic control-flow data *)
-  let (instructions, index_of_address, address_of_index) =
+  let (instructions, index_of_address, index_option_of_address, address_of_index) =
     time "mk_instructions" (mk_instructions test filename_objdump_d) filename_branch_table
   in
 
@@ -3333,6 +3380,7 @@ let mk_analysis test filename_objdump_d filename_branch_table =
   let an =
     {
       index_of_address;
+      index_option_of_address;
       address_of_index;
       instructions;
       line_info;
@@ -3593,6 +3641,13 @@ let process_file () : unit =
 
   match (!Globals.elf2, !Globals.objdump_d2, !Globals.branch_table_data_file2) with
   | (None, _, _) -> (
+      (* read qemu log if present *)
+      let visitedo : bool array option =
+        match !Globals.qemu_log with
+        | None -> None
+        | Some qemu_filename -> Some (read_qemu_log an qemu_filename)
+      in
+
       (* output CFG dot file *)
       ( match !Globals.cfg_dot_file with
       | Some cfg_dot_file ->
@@ -3601,7 +3656,7 @@ let process_file () : unit =
               (function k -> (k, nesting_init None))
               (array_indices_such_that (function ss -> ss <> []) an.elf_symbols)
           in
-          let graph = mk_cfg test an "" false false start_indices in
+          let graph = mk_cfg test an visitedo "" false false start_indices in
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
           pp_cfg graph cfg_dot_file true
       | None -> ()
@@ -3675,9 +3730,9 @@ let process_file () : unit =
 
           let cfg_dot_file_root = String.sub cfg_dot_file 0 (String.length cfg_dot_file - 4) in
 
-          let graph0 = mk_cfg test an "O0_" false true start_indices in
+          let graph0 = mk_cfg test an None "O0_" false true start_indices in
 
-          let graph2 = mk_cfg test2 an2 "O2_" false false start_indices2 in
+          let graph2 = mk_cfg test2 an2 None "O2_" false false start_indices2 in
 
           let graph = graph_cfg_union graph0 graph2 in
 
