@@ -9,12 +9,15 @@
 (** The type representing a register. *)
 type t = private int
 
+(** The type of a plain register. This is isomorphic to {!ty}. Use {!IslaConv.ty} to convert *)
+type ty = Ast.no Ast.ty
+
 (** The type of a register
     (This is the machine type and has nothing to do with any C type inference)
 
     TODO: Support Sail vectors.
 *)
-type typ = Plain of Isla.ty | Struct of reg_struct
+type typ = Plain of ty | Struct of reg_struct
 
 (** The type of register structure, i.s a map from field to sub-registers.
     This type is mutable *)
@@ -25,7 +28,7 @@ val make_struct : unit -> reg_struct
 
 (** Assert that a type is plain and return the underlying type.
     Throw [Failure] if the type is not plain *)
-val assert_plain : typ -> Isla.ty
+val assert_plain : typ -> ty
 
 (** The global register index. Any top level register is a field of this structure *)
 val index : reg_struct

@@ -152,9 +152,6 @@ let statusi = status int
 
 let statush = status hex
 
-(* TODO Do a more careful inclusion *)
-include Isla_lang.PP
-
 let loc = Isla_lang.AST.pp_lpos
 
 let lrng = Isla_lang.AST.pp_lrng

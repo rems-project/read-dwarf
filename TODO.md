@@ -3,9 +3,6 @@
  - Find a name other than "read-dwarf"
  - Make all the test target in the Makefile work again ideally without requiring
    hafnium-verification-plan
- - Package this thing with opam and dune to check it works.
- - Package isla-lang properly (need to change ott package also to include menhir lib).
-   - Use dune for isla-lang
 
 ## Internal infrastructure
 
@@ -45,7 +42,7 @@
 # Required Plumbing
 
  - isla
-   - Move the initial state from isla to readDwarf
+   - Move the initial state from isla to readDwarf (Peter's qemu work)
 
 # Content
 
@@ -60,7 +57,13 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Do a system to drive isla through a loop less-function, including respecting the ABI.
+ - Handle the 52 bits real width pointer problem
+ - Handle rodata access: Design question, Put them in the trace ?
+ - Resolve memory read to obviously non-aliasing addresses directly
+ - Do a "run-block" command that start execution at any point and stop at breakpoints,
+   with Control-Flow support
+ - Do a "run-func" command that does the same as run-block but from the start
+   of function to the "ret", and that setup the state according to the ABI.
  - Start implementing the basic type inference system: stage 1.
 
 ## Memory stack
@@ -88,7 +91,12 @@
 
 ## Control flow stack
 
-- Build a trace tree from a set of normal traces: Not sure this is required now.
+ - "run-block" and "run-func" commands
+
+## Inlining and special instructions stack
+
+ - Think about how to handle fake calls and special instruction like "smc"
+ - Think about how to flag all "bl" about whether they are normal or special or alternatively create a fake instruction flow stream.
 
 # Done list
 
@@ -107,3 +115,6 @@
  - Improve Linksem performance
  - Build the ABI concept into the code, and add room for all Arch-dependent things
  - Do a start of the AArch64 ABI encoding sufficient to run a function.
+ - Package isla-lang with dune and opam
+ - Refactor the AST to no use isla-lang AST but our own.
+ - Package read-dwarf with opam and dune.

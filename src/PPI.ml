@@ -20,12 +20,6 @@ let rstruct = Reg.pp_rstruct
 
 let sid = State.Id.pp
 
-let svar = State.Var.pp
-
-let sexp = State.pp_sexp
-
-let state = State.pp
-
 let byteseq = BytesSeq.pp
 
 let byteseqc = BytesSeq.ppc

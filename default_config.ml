@@ -17,3 +17,6 @@ module Arch = AArch64
 
 (** Whether to enable backtraces or not *)
 let enable_backtrace = true
+
+(** Whether to enable internal unit test and the test test sub-command *)
+let enable_tests = true

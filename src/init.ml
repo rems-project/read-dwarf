@@ -4,10 +4,10 @@
 let init_state : State.t option ref = ref None
 
 (** This function load the initial state from an initial isla trace*)
-let load_init_trc (trc : State.trc) : unit =
+let load_init_trc (trc : Isla.rtrc) : unit =
   let _ = IslaType.type_trc trc in
   let state = State.make () in
-  IslaTrace.run_trc_mut state trc;
+  IslaRun.trc_mut state trc;
   State.lock state;
   init_state := Some state
 
@@ -24,4 +24,4 @@ let state () =
 (** Intialize this module by calling isla on {!nop} to get initial machine state *)
 let init () =
   IslaCache.get_nop () |> IslaManip.split_cycle |> fst |> IslaManip.remove_ignored
-  |> IslaManip.isla_trace_conv_svar |> load_init_trc
+  |> load_init_trc

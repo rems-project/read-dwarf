@@ -31,11 +31,6 @@ type simplify_context_element =
   | Defined of { exp : rexp; loc : lrng }
   | Processed of int
 
-let expect_free v l =
-  match v with
-  | Free i -> i
-  | _ -> Raise.inv_arg "Non-free variable in preprocessing at %t" PP.(tos pp_lrng l)
-
 let expect_processed = function
   | Processed i -> i
   | _ -> Raise.fail "Variables should be processed at this point"
@@ -53,7 +48,7 @@ let simplify_trc (Trace events : rtrc) =
     IslaManip.direct_event_iter_valu process_used_valu event
   in
   List.iter process_used events;
-  debug "The list of used vars is:\n%t" PPI.(fun o -> fprint o $ hvector erase used);
+  debug "The list of used vars is:\n%t" (PP.top (HashVector.pp PP.erase) used);
   (* Phase 2: Only keep variables that are actually used
      This is done lazily. On declaration of definition, variable are
      Stored in a lazy fashion in the context.
@@ -71,14 +66,15 @@ let simplify_trc (Trace events : rtrc) =
   in
   let res = ref [] in
   let push (d : revent) = res := d :: !res in
-  (* Commits the variable i i.e output its declaration/definition in the trace *)
+  (* Commits the variable i.e output its declaration/definition in the trace,
+     and return the new value *)
   let rec commit i =
     match HashVector.get simplify_context i with
     | Declared { ty; loc } ->
         debug "Commiting declared variable %d" i;
         let new_val = get_id () in
         HashVector.set simplify_context i (Processed new_val);
-        push @@ Smt (DeclareConst (Free new_val, ty), loc);
+        push @@ Smt (DeclareConst (new_val, ty), loc);
         new_val
     | Defined { exp; loc } ->
         debug "Commiting defined variable %d" i;
@@ -86,8 +82,8 @@ let simplify_trc (Trace events : rtrc) =
         HashVector.set simplify_context i (Processed new_val);
         debug "New id is %d" new_val;
         let new_exp = simplify_exp exp in
-        debug "New exp is %t" PP.(fun o -> fprint o $ pp_exp erase new_exp);
-        push @@ Smt (DefineConst (Free new_val, new_exp), loc);
+        debug "New exp is %t" PP.(fun o -> fprint o $ pp_exp new_exp);
+        push @@ Smt (DefineConst (new_val, new_exp), loc);
         new_val
     | Processed v -> v
   (* Simplify and expression, by inlining all not committed defined variable and
@@ -95,15 +91,14 @@ let simplify_trc (Trace events : rtrc) =
   *)
   and simplify_exp (e : rexp) : rexp =
     let simplify_var v loc : rexp =
-      let i = expect_free v loc in
-      match HashVector.get simplify_context i with
+      match HashVector.get simplify_context v with
       | Declared _ ->
-          debug "Simplifying declared variable %d" i;
-          let v = commit i in
-          Var (Free v, loc)
-      | Processed v -> Var (Free v, loc)
+          debug "Simplifying declared variable %d" v;
+          let new_v = commit v in
+          Var (new_v, loc)
+      | Processed new_v -> Var (new_v, loc)
       | Defined { exp; _ } ->
-          debug "Simplifying defined variable %d with exp %t" i PP.(top (pp_exp erase) exp);
+          debug "Simplifying defined variable %d with exp %t" v (PP.top pp_exp exp);
           simplify_exp exp
     in
     IslaManip.var_subst simplify_var e
@@ -114,21 +109,19 @@ let simplify_trc (Trace events : rtrc) =
   in
   let simplify_event = function
     | Smt (DeclareConst (v, ty), loc) ->
-        let i = expect_free v loc in
-        debug "Declaring v%d with type %t" i PP.(top pp_ty ty);
-        HashVector.set simplify_context i (Declared { ty; loc });
-        if HashVector.mem used i then commit i |> ignore
+        debug "Declaring v%d with type %t" v (PP.top pp_ty ty);
+        HashVector.set simplify_context v (Declared { ty; loc });
+        if HashVector.mem used v then commit v |> ignore
     | Smt (DefineConst (v, exp), loc) ->
-        let i = expect_free v loc in
-        debug "Defining v%d with value %t" i PP.(top (pp_exp erase) exp);
-        HashVector.set simplify_context i (Defined { exp; loc });
-        if HashVector.mem used i then commit i |> ignore
+        debug "Defining v%d with value %t" v (PP.top pp_exp exp);
+        HashVector.set simplify_context v (Defined { exp; loc });
+        if HashVector.mem used v then commit v |> ignore
     | Smt (Assert exp, loc) ->
         let nexp = simplify_exp exp in
-        debug "Asserting old %t new %t" PP.(top (pp_exp erase) exp) PP.(top (pp_exp erase) nexp);
+        debug "Asserting old %t new %t" (PP.top pp_exp exp) (PP.top pp_exp nexp);
         push @@ Smt (Assert nexp, loc)
     | event ->
-        debug "Handling event %t" PP.(top (pp_event erase) event);
+        debug "Handling event %t" (PP.top pp_event event);
         push @@ IslaManip.direct_event_map_valu simplify_valu event
   in
   List.iter simplify_event events;

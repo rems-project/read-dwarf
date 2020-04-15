@@ -93,7 +93,7 @@ let type_manyop l (m : manyop) ltl : ty =
 
 let rec type_valu loc (cont : type_context) : valu -> Reg.typ = function
   | Val_Symbolic var -> (
-      try Plain (HashVector.get cont var)
+      try Plain (IslaConv.ty @@ HashVector.get cont var)
       with Invalid_argument _ ->
         raise (TypeError (loc, Printf.sprintf "Variable v%d is used but never defined" var))
     )
@@ -114,9 +114,8 @@ let rec type_valu loc (cont : type_context) : valu -> Reg.typ = function
   | Val_Poison -> fatal "Hey I got poisoned! Bad sail !"
   | Val_String _ -> fatal "valu string not implemented"
 
-let rec ltype_expr (cont : type_context) : 'v lexp -> lty = function
-  | Var (Free var, l) -> (l, HashVector.get cont var)
-  | Var (_, _) -> fatal "Non free variable typing unimplemented"
+let rec ltype_expr (cont : type_context) : rexp -> lty = function
+  | Var (var, l) -> (l, HashVector.get cont var)
   | Bits (str, l) ->
       (l, Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2))
   | Bool (_, l) -> (l, Ty_Bool)
@@ -129,17 +128,15 @@ let rec ltype_expr (cont : type_context) : 'v lexp -> lty = function
       expect_bool "ite condition" @@ ltype_expr cont c;
       tassert l "If and else branches must have same type" (ti = te);
       (l, ti)
-  | Let (_, _, _, l) ->
-      raise (TypeError (l, "let is currently unsupported in typing, unfold them before typing"))
 
 and type_expr cont expr : ty = snd (ltype_expr cont expr)
 
 (** Add the new register found in the trace and returns the type context for free variables *)
-let type_trc ?(tc = HashVector.empty ()) (isla_trace : 'v ltrc) =
+let type_trc ?(tc = HashVector.empty ()) (isla_trace : rtrc) =
   let (Trace events) = isla_trace in
-  let process : 'v levent -> unit = function
-    | Smt (DeclareConst (Free var, typ), _) -> HashVector.add tc var typ
-    | Smt (DefineConst (Free var, exp), _) -> HashVector.add tc var @@ type_expr tc exp
+  let process : revent -> unit = function
+    | Smt (DeclareConst (var, typ), _) -> HashVector.add tc var typ
+    | Smt (DefineConst (var, exp), _) -> HashVector.add tc var @@ type_expr tc exp
     | Smt (Assert exp, l) -> tassert l "Assertion type must be Bool" (type_expr tc exp = Ty_Bool)
     | ReadReg (name, _, v, l) | WriteReg (name, _, v, l) ->
         let tv = type_valu l tc v in
@@ -155,4 +152,4 @@ let type_trc ?(tc = HashVector.empty ()) (isla_trace : 'v ltrc) =
   List.iter process events;
   tc
 
-let pp_tcontext = HashVector.pp PP.pp_ty
+let pp_tcontext = HashVector.pp Isla.pp_ty

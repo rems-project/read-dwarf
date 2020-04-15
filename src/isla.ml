@@ -13,35 +13,11 @@ module Parser = Isla_lang.Parser
 (** {!Bimap.t} test*)
 type loc = Lexing.position
 
-(* location aliases *)
+type rtrc = lrng trc
 
-type 'v ltrc = ('v, lrng) trc
+type revent = lrng event
 
-type 'v levent = ('v, lrng) event
-
-type 'v lexp = ('v, lrng) exp
-
-(* string aliases *)
-
-type svar = string var
-
-type 'a strc = (string, 'a) trc
-
-type 'a sevent = (string, 'a) event
-
-type 'a sexp = (string, 'a) exp
-
-(* raw aliases : parser output *)
-
-type rvar = string var
-
-type rtrc = (string, lrng) trc
-
-type revent = (string, lrng) event
-
-type rexp = (string, lrng) exp
-
-type rsmt_ans = (string, lrng) smt_ans
+type rexp = lrng exp
 
 (*****************************************************************************)
 (*        Isla parsing                                                       *)
@@ -50,7 +26,7 @@ type rsmt_ans = (string, lrng) smt_ans
 (** Exception that represent an Isla parsing error *)
 exception ParseError of loc * string
 
-(* Registering and pretty printer for that exception *)
+(* Registering a pretty printer for that exception *)
 let _ =
   Printexc.register_printer (function
     | ParseError (l, s) ->
@@ -60,7 +36,7 @@ let _ =
 (** Exception that represent an Isla lexing error *)
 exception LexError of loc * string
 
-(* Registering and pretty printer for that exception *)
+(* Registering a pretty printer for that exception *)
 let _ =
   Printexc.register_printer (function
     | LexError (l, s) -> Some PP.(sprint @@ prefix 2 1 (loc l ^^ !^": ") (!^"LexError: " ^^ !^s))
@@ -88,17 +64,6 @@ let parse_exp_string ?(filename = "default") (s : string) : rexp =
 let parse_exp_channel ?(filename = "default") (c : in_channel) : rexp =
   parse_exp ~filename @@ Lexing.from_channel ~with_positions:true c
 
-(** Parse a Z3 answer from a Lexing.lexbuf *)
-let parse_smt_ans : ?filename:string -> Lexing.lexbuf -> rsmt_ans = parse Parser.smt_ans_start
-
-(** Parse a single Isla expression from a string *)
-let parse_smt_ans_string ?(filename = "default") (s : string) : rsmt_ans =
-  parse_smt_ans ~filename @@ Lexing.from_string ~with_positions:true s
-
-(** Parse a single Isla expression from a channel *)
-let parse_smt_ans_channel ?(filename = "default") (c : in_channel) : rsmt_ans =
-  parse_smt_ans ~filename @@ Lexing.from_channel ~with_positions:true c
-
 (** Parse an Isla trace from a Lexing.lexbuf *)
 let parse_trc : ?filename:string -> Lexing.lexbuf -> rtrc = parse Parser.trc_start
 
@@ -111,19 +76,15 @@ let parse_trc_channel ?(filename = "default") (c : in_channel) : rtrc =
   parse_trc ~filename @@ Lexing.from_channel ~with_positions:true c
 
 let _ =
-  Tests.add_test "Isla.parse.exp.var.state" (fun () ->
-      let s = "|test|" in
-      let exp = parse_exp_string ~filename:"test string in Isla.parse.exp.var.state" s in
-      match exp with Var (State "test", _) -> true | _ -> false)
-
-let _ =
   Tests.add_test "Isla.parse.exp.var.free" (fun () ->
       let s = "v42" in
       let exp = parse_exp_string ~filename:"test string in Isla.parse.exp.var.free" s in
-      match exp with Var (Free 42, _) -> true | _ -> false)
+      match exp with Var (42, _) -> true | _ -> false)
 
 let _ =
   Tests.add_test "Isla.parse.exp.and" (fun () ->
       let s = "(and v1 v2)" in
       let exp = parse_exp_string ~filename:"test string in Isla.parse.exp.and" s in
-      match exp with Manyop (And, [Var (Free 1, _); Var (Free 2, _)], _) -> true | _ -> false)
+      match exp with Manyop (And, [Var (1, _); Var (2, _)], _) -> true | _ -> false)
+
+include Isla_lang.PP

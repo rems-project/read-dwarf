@@ -20,7 +20,7 @@ type annot = Isla.lrng
 
 let dummy_annot = Isla.UnknownRng
 
-type ty = Isla.ty
+type ty = Reg.ty
 
 module Id = struct
   type t = int
@@ -40,7 +40,7 @@ type id = Id.t
 (** {1 State types } *)
 
 (** All the possible atomic access sizes *)
-type mem_size = B8 | B16 | B32 | B64 | B128
+type mem_size = Ast.Size.t
 
 (** Represent the state of the machine.
     Should only be mutated when created before locking.
@@ -63,27 +63,23 @@ type t = {
 
 and tval = { ctyp : Ctype.t option; exp : exp }
 
-and exp = (svar, annot) Isla.exp
+and exp = (Ast.lrng, var, Ast.no, Ast.Size.t, Ast.no) Ast.exp
 
-and svar = Register of t * Reg.path | ReadVar of t * int | Arg of int | RetArg
+and var = Register of t * Reg.path | ReadVar of t * int | Arg of int | RetArg
 
 and mem_block = { addr : exp; size : mem_size }
 
 and mem_event =
-  | Read of mem_block * svar
+  | Read of mem_block * var
   | Write of mem_block * exp
   | Lock of t
       (** represents that all the memory operation below were already in the given state *)
 
 and mem = { mutable trace : mem_event list }
 
-(* Other isla aliases *)
+(* Other ast aliases *)
 
-type var = svar Isla.var
-
-type event = (svar, annot) Isla.event
-
-type trc = (svar, annot) Isla.trc
+type smt = (Ast.lrng, var, Ast.no, Ast.Size.t, Ast.no) Ast.smt
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -108,7 +104,7 @@ let to_id (st : t) = st.id
 module Var = struct
   type state = t
 
-  type t = svar
+  type t = var
 
   let to_string = function
     | Register (state, path) ->
@@ -134,12 +130,14 @@ module Var = struct
       )
     | _ -> fail ()
 
-  let to_exp (v : t) : exp = Isla.Var (Isla.State v, dummy_annot)
+  let to_exp (v : t) : exp = Ast.Var (v, dummy_annot)
 
   let pp sv = sv |> to_string |> PP.string
 end
 
-let pp_sexp exp = Isla_lang.PP.pp_exp Var.pp exp
+let pp_exp (exp : exp) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
+
+let pp_smt (smt : smt) = Ast.pp_smt Var.pp (AstManip.smt_allow_lets @@ AstManip.smt_allow_mem smt)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -148,14 +146,7 @@ let pp_sexp exp = Isla_lang.PP.pp_exp Var.pp exp
 
 (** This module helps managing the memory part of the state. *)
 module Mem = struct
-  type size = mem_size
-
-  let size_to_bv : mem_size -> ty = function
-    | B8 -> Ty_BitVec 8
-    | B16 -> Ty_BitVec 16
-    | B32 -> Ty_BitVec 32
-    | B64 -> Ty_BitVec 64
-    | B128 -> Ty_BitVec 128
+  module Size = Ast.Size
 
   type block = mem_block
 
@@ -167,7 +158,7 @@ module Mem = struct
 
   let make state = { trace = [] }
 
-  let read mem mb svar = mem.trace <- Read (mb, svar) :: mem.trace
+  let read mem mb var = mem.trace <- Read (mb, var) :: mem.trace
 
   let write mem mb value = mem.trace <- Write (mb, value) :: mem.trace
 
@@ -205,29 +196,15 @@ module Mem = struct
         | Lock _ -> ())
       mem.trace
 
-  let size_to_bytes = function B8 -> 1 | B16 -> 2 | B32 -> 4 | B64 -> 8 | B128 -> 16
-
-  let size_to_bits size = 8 * size_to_bytes size
-
-  let size_of_bytes = function
-    | 1 -> B8
-    | 2 -> B16
-    | 4 -> B32
-    | 8 -> B64
-    | 16 -> B128
-    | d ->
-        failwith
-          (Printf.sprintf "size_of_bytes: %d bytes is not a supported size for memory access" d)
-
-  let pp_size size = PP.(dprintf "%dbits" (size_to_bits size))
+  let pp_size size = PP.(dprintf "%dbits" (Size.to_bits size))
 
   let pp_block block =
-    PP.(pp_size block.size ^^ surround 2 0 lbracket (pp_sexp block.addr) rbracket)
+    PP.(pp_size block.size ^^ surround 2 0 lbracket (pp_exp block.addr) rbracket)
 
   let pp_event : event -> PP.document = function
     | Lock s -> PP.(dprintf "Lock %d" s.id)
-    | Read (mb, svar) -> PP.(!^"Reading " ^^ Var.pp svar ^^ !^" from: " ^^ pp_block mb)
-    | Write (mb, exp) -> PP.(!^"Writing " ^^ pp_sexp exp ^^ !^" at " ^^ pp_block mb)
+    | Read (mb, var) -> PP.(!^"Reading " ^^ Var.pp var ^^ !^" from: " ^^ pp_block mb)
+    | Write (mb, exp) -> PP.(!^"Writing " ^^ pp_exp exp ^^ !^" at " ^^ pp_block mb)
 
   let pp mem = PP.prefix 2 1 (PP.string "Full trace:") (PP.list pp_event (List.rev mem.trace))
 end
@@ -364,23 +341,23 @@ let iter_exp (f : exp -> unit) s =
   Mem.iter_exp f s.mem
 
 (** Iterates a function on all the variables of a state *)
-let iter_var (f : var -> unit) s = iter_exp (IslaManip.exp_iter_var f) s
+let iter_var (f : var -> unit) s = iter_exp (AstManip.exp_iter_var f) s
 
 (** Return the type of a state variable *)
-let svar_type var =
+let var_type var =
   match var with
   | Register (state, p) -> p |> Reg.path_type |> Reg.assert_plain
   | ReadVar (state, i) -> Vector.get state.read_vars i |> fst
-  | Arg _ -> Isla.Ty_BitVec 64
-  | RetArg -> Isla.Ty_BitVec 64
+  | Arg _ -> Ast.Ty_BitVec 64
+  | RetArg -> Ast.Ty_BitVec 64
 
 (** Create a new Extra symbolic variable by mutating the state *)
-let make_extra (ty : ty) ?ctyp (s : t) : svar =
+let make_extra (ty : ty) ?ctyp (s : t) : var =
   assert (not @@ is_locked s);
   let len = Vector.length s.read_vars in
-  let svar = ReadVar (s, len) in
-  Vector.add_one s.read_vars (ty, { ctyp; exp = Var.to_exp svar });
-  svar
+  let var = ReadVar (s, len) in
+  Vector.add_one s.read_vars (ty, { ctyp; exp = Var.to_exp var });
+  var
 
 (** Read the block designated by mb from the state and return an expression read.
     This may mutate the state to add the read of the state as
@@ -394,7 +371,7 @@ let make_extra (ty : ty) ?ctyp (s : t) : svar =
 *)
 let read (mb : Mem.block) (s : t) : tval =
   assert (not @@ is_locked s);
-  let ty = Mem.size_to_bv mb.size in
+  let ty = Mem.Size.to_bv mb.size in
   let nvar = make_extra ty s in
   Mem.read s.mem mb nvar;
   { ctyp = None; exp = Var.to_exp nvar }
@@ -426,11 +403,9 @@ let set_reg_type (path : Reg.path) (ctyp : Ctype.t) (s : t) : unit =
 (*****************************************************************************)
 (** {1 Pretty printing } *)
 
-let pp_trc trc = Isla_lang.PP.pp_trc Var.pp trc
-
 let pp_tval { exp; ctyp } =
   let open PP in
-  match ctyp with None -> pp_sexp exp | Some t -> infix 2 1 colon (pp_sexp exp) (Ctype.pp t)
+  match ctyp with None -> pp_exp exp | Some t -> infix 2 1 colon (pp_exp exp) (Ctype.pp t)
 
 let pp s =
   PP.(
@@ -440,7 +415,7 @@ let pp s =
         ("regs", Reg.Map.pp pp_tval s.regs);
         ("read_vars", Vector.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
         ( "asserts",
-          s.asserts |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_sexp e) |> separate hardline
+          s.asserts |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_exp e) |> separate hardline
         );
         ("memory", Mem.pp s.mem);
         ("fenv", Fragment.Env.pp s.fenv);

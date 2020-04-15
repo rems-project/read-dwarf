@@ -77,7 +77,7 @@ module BoolTraceList (*: Cache.Value *) = struct
   type t = (bool * Isla.rtrc) list
 
   let to_file file trcs =
-    let output_trc ochannel trc = PP.(fprint ochannel $ pp_trc erase trc) in
+    let output_trc ochannel trc = PP.fprint ochannel @@ Isla.pp_trc trc in
     let output_elem ochannel (bool, trc) =
       if bool then Printf.fprintf ochannel "true\n%a\n" output_trc trc
       else Printf.fprintf ochannel "false\n%a\n" output_trc trc
@@ -103,7 +103,7 @@ module TraceList (*: Cache.Value *) = struct
   type t = Isla.rtrc list
 
   let to_file file (trcs : t) =
-    let output_trc ochannel trc = PP.(fprint ochannel $ pp_trc erase trc) in
+    let output_trc ochannel trc = PP.fprint ochannel @@ Isla.pp_trc trc in
     let output_trcs = Files.output_list output_trc in
     Files.write output_trcs file trcs
 

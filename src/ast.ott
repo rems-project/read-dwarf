@@ -1,0 +1,138 @@
+% Ott grammar for the internal and Z3 AST of read-dwarf
+% need to merged with sections "terminals,annotations,types,bool,operations"
+% of isla_lang.ott (handled by dune automatically)
+
+% bounded varaible (by let)
+metavar bvar ::=     {{ ocaml string }}
+                     {{ lex alphanum }}
+                     {{ ocamllex ['a'-'z''A'-'Z']+'!'['0'-'9']+ }}
+
+% metavar flag ::=     {{ ocaml string }}
+%                     {{ lex alphanum }}
+%                     {{ ocamllex ':'['a'-'z''A'-'Z']+ }}
+%                     {{ ocamllex-of-string (function s -> (String.sub s 1 (String.length s -1))) }}
+%                     {{ pp-raw x = colon ^^ string x  }}
+%                     {{ pp x = colon ^^ string x }}
+embed
+{{ menhir
+
+%{
+   open AstDef
+%}
+
+}}
+
+
+
+grammar
+ptr_size :: '' ::=                      {{ ocaml 'p }}
+                                        {{ phantom }}
+                                        {{ pp-raw x = AstDef.Size.pp_bytes x }}
+                                        {{ pp x = AstDef.Size.pp_bytes x }}
+ | int                                  :: :: PSize {{ ocaml Size.of_bytes int }}
+
+mem_size :: '' ::=                      {{ ocaml 'm }}
+                                        {{ phantom }}
+                                        {{ pp-raw x = AstDef.Size.pp_bytes x }}
+                                        {{ pp x = AstDef.Size.pp_bytes x }}
+ | int                                  :: :: MSize {{ ocaml Size.of_bytes int }}
+
+
+unptr :: '' ::=                         {{ auxparam 'p }}
+ | aligned ptr_size                     :: :: Aligned
+ | align ptr_size                       :: :: Align
+
+%merged with isla_lang
+unop :: '' ::=                          {{ auxparam 'p}}
+ | unptr                                :: :: Unptr
+
+% bvarith :: '' ::=                       {{ ocaml Isla.bvarith }}
+
+% bvcomp :: '' ::=                        {{ ocaml Isla.bvcomp }}
+
+% bvmanyarith :: '' ::=                   {{ ocaml Isla.bvmanyarith }}
+
+binptr :: '' ::=                        {{ auxparam 'p }}
+ | overlap ptr_size                     :: :: Overlap
+
+binmem :: '' ::=                        {{ auxparam 'm }}
+ | select mem_size                      :: :: Select
+ | store mem_size                       :: :: Store
+
+%merged with isla_lang
+binop :: '' ::=                         {{ auxparam ('p, 'm) }}
+ | binptr                               :: :: Binptr
+ | binmem                               :: :: Binmem
+
+
+
+grammar
+var :: '' ::=                           {{ ocaml 'v }}
+                                        {{ phantom }}
+                                        {{ pp-params ppv }}
+                                        {{ pp ppv s = bar ^^ ppv s ^^ bar }}
+                                        {{ pp-raw ppv s = ppv s }}
+  | name                                :: :: VarName {{ocaml name }}
+
+bbvar :: '' ::=                         {{ ocaml 'b }}
+                                        {{ phantom }}
+                                        {{ pp-params }}
+                                        {{ pp s = string s}}
+                                        {{ pp-raw s = string s }}
+  | bvar                                :: :: BVarName {{ocaml bvar }}
+
+exp :: '' ::=                           {{ aux _ annot }}
+                                        {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
+                                        {{ pp-params ppv }}
+                                        {{ menhir-start }}
+                                        {{ menhir-start-type AstDef.rexp }}
+  | var                                 :: :: Var
+  | bbvar                               :: :: Bound
+  | bv                                  :: :: Bits
+  | bool                                :: :: Bool
+  | enum                                :: :: Enum
+  | ( unop exp )                        :: :: Unop
+  | ( binop exp1 exp2 )                 :: :: Binop
+  | ( manyop exp1 .. expj )             :: :: Manyop
+  | ( ite exp1 exp2 exp3 )              :: :: Ite
+  | ( let ( ( bbvar exp1 ) ) exp2 )     :: :: Let
+
+
+ty :: 'Ty_' ::=                         {{ auxparam 'm }}
+  | Mem mem_size                        :: :: Mem
+
+%%%%% smt %%%%%
+grammar
+smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
+                                        {{ pp-params ppv }}
+                                        {{ menhir-start }}
+                                        {{ menhir-start-type AstDef.rsmt }}
+  | ( declare-const var ty )            :: :: DeclareConst
+  | ( define-const var exp )            :: :: DefineConst
+  | ( assert exp )                      :: :: Assert
+  | ( simplify exp )                    :: :: Simplify
+  | ( push )                            :: :: Push
+  | ( pop )                             :: :: Pop
+  | ( get-info :version )               :: :: GetVersion
+  | ( check-sat )                       :: :: CheckSat
+
+smts :: '' ::=                          {{ ocaml ('a, 'v, 'b, 'p, 'm) smt list }}
+                                        {{ phantom }}
+                                        {{ pp-params ppv }}
+                                        {{ menhir-start }}
+                                        {{ menhir-start-type AstDef.rsmts }}
+                                        {{ pp ppv x = x |> List.map (pp_smt ppv) |> separate hardline }}
+                                        {{ pp-raw ppv x = x |> List.map (pp_raw_smt ppv) |> separate hardline }}
+  | smt1 .. smtj                        :: :: Smts {{ ocaml smt0 }}
+
+smt_ans :: '' ::=                       {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
+                                        {{ pp-params ppv }}
+                                        {{ menhir-start }}
+                                        {{ menhir-start-type AstDef.rsmt_ans }}
+  | ( error str )                       :: :: Error
+  | ( :version str )                    :: :: Version
+  | sat                                 :: :: Sat
+  | unsat                               :: :: Unsat
+  | unknown                             :: :: Unknown
+  | unsupported                         :: :: Unsupported
+  | exp                                 :: :: Exp

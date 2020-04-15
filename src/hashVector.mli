@@ -1,7 +1,8 @@
 (** An hash vector allow a vector to behave as hash map indexed by small integers.
     It is hash map with the identity hash function.
 
-    If all goes well it has the same API as [(int, 'a) Hashtbl.t]
+    If all goes well it has the same API as [(int, 'a) Hashtbl.t] for positive integers.
+    Any attempt to use a negative integer will raise [Invalid_argument].
 *)
 
 (** The type of the hash vector *)
@@ -18,7 +19,11 @@ val set : 'a t -> int -> 'a -> unit
 (** Create a new binding. Throws {!Exists} if a binding already exists *)
 val add : 'a t -> int -> 'a -> unit
 
-(** Retrieves the value and throw [Not_found] if that value in not bound *)
+(** Return [Some v] if v is bound to the integer in the hash vector.
+    Return [None] if nothing is bound *)
+val get_opt : 'a t -> int -> 'a option
+
+(** Return the value bound to the integer. Throw [Not_found] if the integer is not bound *)
 val get : 'a t -> int -> 'a
 
 (** Create an empty hashVector.t *)

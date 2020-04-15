@@ -2,6 +2,10 @@
 
 open Files
 
+open Logs.Logger (struct
+  let str = "IslaTest"
+end)
+
 (* possible options :
 
   - call isla or not
@@ -176,26 +180,26 @@ let processing preprocessing pmode (filename, input) : unit =
     let t = IslaManip.remove_ignored t in
     if preprocessing then begin
       let pre = IslaPreprocess.simplify_trc t in
-      PPA.(println @@ pp_trc string pre);
+      base "Preprocessed trace:\n%t\n" (PP.topi Isla.pp_trc pre);
       pre
     end
     else begin
-      PPA.(println @@ pp_trc string t);
+      base "Trace:\n%t\n" (PP.topi Isla.pp_trc t);
       t
     end
   in
   let typer t =
     let c = IslaType.type_trc t in
-    PPA.(println @@ tcontext c);
-    PPA.(println @@ rstruct Reg.index);
+    base "Isla vars typing context:\n%t\n" (PP.topi IslaType.pp_tcontext c);
+    base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
     t
   in
   let run trace =
     let init_state = State.make () in
     State.lock init_state;
-    PPA.(println @@ state init_state);
-    let end_state = IslaTrace.run_trc init_state trace in
-    PPA.(println @@ state end_state);
+    base "Initial state:\n%t\n" (PP.topi State.pp init_state);
+    let end_state = IslaRun.trc init_state trace in
+    base "Final state:\n%t\n" (PP.topi State.pp init_state);
     end_state
   in
   let simp state =
@@ -203,6 +207,7 @@ let processing preprocessing pmode (filename, input) : unit =
     State.unsafe_unlock state;
     State.map_mut_exp SMT.simplify state;
     State.lock state;
+    base "Simplified state:\n%t\n" (PP.topi State.pp state);
     Z3.stop ();
     state
   in
@@ -210,10 +215,8 @@ let processing preprocessing pmode (filename, input) : unit =
   | DUMP -> input |> print_endline
   | PARSE -> input |> parse |> ignore
   | TYPE -> input |> parse |> typer |> ignore
-  | RUN -> input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run |> ignore
-  | SIMP ->
-      input |> parse |> typer |> IslaManip.isla_trace_conv_svar |> run |> simp |> PPA.state
-      |> PPA.println
+  | RUN -> input |> parse |> typer |> run |> ignore
+  | SIMP -> input |> parse |> typer |> run |> simp |> ignore
 
 let term = Term.(func_option z3 processing $ preprocess $ pmode_term $ isla_term)
 

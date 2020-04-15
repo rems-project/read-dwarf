@@ -2,13 +2,15 @@
 
 type t = int
 
-type typ = Plain of Isla.ty | Struct of reg_struct
+type ty = Ast.no Ast.ty
+
+type typ = Plain of ty | Struct of reg_struct
 
 and reg_struct = (string, typ) IdMap.t
 
 let make_struct () = IdMap.make ()
 
-let assert_plain : typ -> Isla.ty = function
+let assert_plain : typ -> ty = function
   | Plain t -> t
   | Struct _ -> failwith "assert_plain failed"
 
@@ -284,8 +286,10 @@ end
 
 let pp reg = reg |> to_string |> PP.string
 
+let pp_ty ty = ty |> AstManip.ty_allow_mem |> Ast.pp_ty
+
 let pp_field rs reg = reg |> field_to_string rs |> PP.string
 
 let rec pp_rstruct rs = IdMap.pp ~name:"struct" ~keys:PP.string ~vals:pp_rtype rs
 
-and pp_rtype = PP.(function Plain i -> pp_ty i | Struct s -> pp_rstruct s)
+and pp_rtype = function Plain i -> pp_ty i | Struct s -> pp_rstruct s

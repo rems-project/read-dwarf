@@ -19,16 +19,13 @@
 
     After each request one should pop and push to delete the context of
     the special request and keep the intro context. Use {!soft_reset} for that.
-    {!request_reset} so that all in one.
-
-
-*)
+    {!request_reset} so that all in one.*)
 
 open Logs.Logger (struct
   let str = "Z3"
 end)
 
-open Isla
+open Ast
 
 (*****************************************************************************)
 (*         Raw server management                                             *)
@@ -117,7 +114,7 @@ let string_request (req : string) : string =
     - Use {!read_answer} to only read and parse the answer.
 
 *)
-let request (req : string) : Isla.rsmt_ans =
+let request (req : string) : rsmt_ans =
   send_string_request req;
   read_answer ()
 
@@ -174,37 +171,33 @@ let stop () =
     If declared is given, use it to know which variable are already declared.
 *)
 let declare_vars ?(declared = Hashtbl.create 10) ochannel (exp : State.exp) : unit =
-  let process_var : State.var -> unit = function
-    | Free _ -> failwith "Z3.declare_vars : free var"
-    | State svar ->
-        if not @@ Hashtbl.mem declared @@ State.Var.to_string svar then begin
-          Isla.(
-            let decl = DeclareConst (State svar, State.svar_type svar) in
-            PPI.(fprint ochannel @@ pp_smt PPI.svar decl ^^ hardline));
-          Hashtbl.add declared (State.Var.to_string svar) ()
-        end
-    | Bound b -> failwith "Z3.declare_vars : bound var"
+  let process_var (var : State.var) =
+    if not @@ Hashtbl.mem declared @@ State.Var.to_string var then begin
+      let decl = DeclareConst (var, State.var_type var |> AstManip.ty_allow_mem) in
+      PPI.(fprint ochannel @@ pp_smt State.Var.pp decl ^^ hardline);
+      Hashtbl.add declared (State.Var.to_string var) ()
+    end
   in
-  IslaManip.exp_iter_var process_var exp
+  AstManip.exp_iter_var process_var exp
 
 (** Simplify an expression using Z3 [simplify] command. This is a context-free simplification*)
 let simplify (exp : State.exp) : State.exp =
   let ochannel = get_request_channel () in
   declare_vars ochannel exp;
-  PPI.(fprint ochannel @@ parens (!^"simplify " ^^ pp_exp svar exp));
+  PPI.(fprint ochannel @@ parens (!^"simplify " ^^ State.pp_exp exp));
   finish_request ();
   let rexp = read_answer () |> expect_exp in
   soft_reset ();
-  let nexp = IslaManip.exp_conv_svar State.Var.of_string rexp in
-  let nexp = IslaManip.unfold_lets nexp in
-  nexp
+  rexp
+  |> AstManip.exp_conv_var State.Var.of_string
+  |> AstManip.unfold_lets |> AstManip.expect_no_mem
 
 (** Check that a set of assertion is satisfiable. If the answer is [None] then Z3 didn't know*)
 let check_sat asserts : bool option =
   let ochannel = get_request_channel () in
   let declared = Hashtbl.create 100 in
   List.iter (declare_vars ~declared ochannel) asserts;
-  List.iter (fun e -> PPI.(fprint ochannel @@ parens (!^"assert " ^^ pp_exp svar e))) asserts;
+  List.iter (fun e -> PP.fprintln ochannel @@ State.pp_smt (Assert e)) asserts;
   let a = request "(check-sat)" in
   soft_reset ();
   match a with
@@ -224,10 +217,8 @@ let check ?(hyps = []) property =
   let declared = Hashtbl.create 100 in
   List.iter (declare_vars ~declared ochannel) hyps;
   declare_vars ~declared ochannel property;
-  List.iter (fun e -> PPI.(fprint ochannel @@ parens (!^"assert " ^^ pp_exp svar e))) hyps;
-  PPI.(
-    fprint ochannel
-    @@ parens (!^"assert " ^^ pp_exp svar (Unop (Not, property, State.dummy_annot))));
+  List.iter (fun e -> PP.fprintln ochannel @@ State.pp_smt (Assert e)) hyps;
+  PP.fprintln ochannel @@ State.pp_smt (Assert (Op.not property));
   match request_reset "(check-sat)" with
   | Error s -> failwith (Printf.sprintf "Z3 encountered an error on request %d : %s" !req_num s)
   | Sat -> Some false
@@ -258,7 +249,7 @@ let _ =
   Tests.add_test "Z3.simplify" (fun () ->
       start ();
       let exp =
-        Isla.(
+        Ast.(
           Binop
             ( Bvarith Bvsub,
               Bits ("#x3", State.dummy_annot),
@@ -273,7 +264,7 @@ let _ =
   Tests.add_test "Z3.check_sat" (fun () ->
       start ();
       let exp =
-        Isla.(
+        Ast.(
           Binop
             ( Eq,
               Bits ("#x1", State.dummy_annot),
@@ -288,7 +279,7 @@ let _ =
   Tests.add_test "Z3.check" (fun () ->
       start ();
       let exp =
-        Isla.(
+        Ast.(
           Binop
             ( Eq,
               Bits ("#x1", State.dummy_annot),

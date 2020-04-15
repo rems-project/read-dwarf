@@ -12,7 +12,7 @@ open CommonOpt
 
 let arch_ref = ref "aarch64.ir"
 
-let enable_tests = true
+let enable_tests = ConfigPre.enable_tests
 
 (** This type of function can be registered to be called between tests *)
 type reset = unit -> unit
@@ -49,6 +49,7 @@ let run_test name (f : test) =
     end
   with e ->
     Printf.printf "Thrown: %s\n" (Printexc.to_string e);
+    if ConfigPre.enable_backtrace then Printexc.print_backtrace stdout;
     flush stdout;
     success := false
 

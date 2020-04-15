@@ -33,10 +33,10 @@ let get_data () =
 let gen_reg_map () =
   let res = Array.make 32 Reg.empty_path in
   for i = 0 to 30 do
-    res.(i) <- [Reg.add (Printf.sprintf "R%d" i) (Reg.Plain (Isla.Ty_BitVec 64))]
+    res.(i) <- [Reg.add (Printf.sprintf "R%d" i) (Reg.Plain (Ast.Ty_BitVec 64))]
   done;
   (* TODO find a way of make the EL2 part of the config *)
-  res.(31) <- [Reg.add "SP_EL2" (Reg.Plain (Isla.Ty_BitVec 64))];
+  res.(31) <- [Reg.add "SP_EL2" (Reg.Plain (Ast.Ty_BitVec 64))];
   res
 
 (** Generates the Register map of local registers *)
@@ -45,10 +45,10 @@ let gen_local (dwarfregs : dwarf_reg_map) : bool Reg.Map.t =
      the only local register seem to be R0-R30, SP and
      flags N,Z,C,V of PSTATE *)
   let pstate = Reg.make_struct () in
-  let n = Reg.add_field pstate "N" (Reg.Plain (Isla.Ty_BitVec 1)) in
-  let z = Reg.add_field pstate "Z" (Reg.Plain (Isla.Ty_BitVec 1)) in
-  let c = Reg.add_field pstate "C" (Reg.Plain (Isla.Ty_BitVec 1)) in
-  let v = Reg.add_field pstate "V" (Reg.Plain (Isla.Ty_BitVec 1)) in
+  let n = Reg.add_field pstate "N" (Reg.Plain (Ast.Ty_BitVec 1)) in
+  let z = Reg.add_field pstate "Z" (Reg.Plain (Ast.Ty_BitVec 1)) in
+  let c = Reg.add_field pstate "C" (Reg.Plain (Ast.Ty_BitVec 1)) in
+  let v = Reg.add_field pstate "V" (Reg.Plain (Ast.Ty_BitVec 1)) in
   let pstate = Reg.add "PSTATE" (Reg.Struct pstate) in
   let res = Reg.Map.init (fun _ -> false) in
   Array.iter (fun path -> Reg.Map.set res path true) dwarfregs;

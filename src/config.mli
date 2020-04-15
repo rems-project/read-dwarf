@@ -20,3 +20,6 @@ module Arch : ArchSig.S
 
 (** Whether to enable backtraces or not *)
 val enable_backtrace : bool
+
+(** Whether to enable internal unit test and the test test sub-command *)
+val enable_tests : bool

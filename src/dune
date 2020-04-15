@@ -33,3 +33,59 @@
   (with-stdout-to
    configPre.ml
    (run awk -f config.awk ../config.ml))))
+
+(rule
+ (target dirname.ml)
+ (action
+  (write-file dirname.ml "read_line () |> Filename.dirname |> print_string;;")))
+
+(rule
+ (target ott.path)
+ (deps dirname.ml)
+ (action
+  (with-stdout-to
+   ott.path
+   (system "echo %{bin:ott} | ocaml dirname.ml | ocaml dirname.ml"))))
+
+(rule
+ (target ottlib.mly)
+ (action
+  (copy "%{read:ott.path}/share/ott/menhir_library_extra.mly" ottlib.mly)))
+
+(rule
+ (target isla-lang.path)
+ (deps dirname.ml)
+ (action
+  (with-stdout-to
+   isla-lang.path
+   (system "echo %{bin:isla-lang} | ocaml dirname.ml | ocaml dirname.ml"))))
+
+(rule
+ (target isla_lang.ott)
+ (action
+  (copy "%{read:isla-lang.path}/share/isla-lang/isla_lang.ott" isla_lang.ott)))
+
+(rule
+ (target ast_base.ott)
+ (deps isla_lang.ott extract_sections.awk)
+ (action
+  (with-stdout-to
+   ast_base.ott
+   (system
+     "awk -v SECS='terminals,annotations,types,bool,operations' -f extract_sections.awk isla_lang.ott"))))
+
+(rule
+ (targets astParser.mly astLexer.mll astOtt.ml astParser_pp.ml)
+ (deps ast.ott ast_base.ott)
+ (action
+  (run ott -show_sort false -quotient_rules false -aux_style_rules false
+    -merge true -i ast.ott -i ast_base.ott -o astParser.mly -o astLexer.mll
+    -o astOtt.ml)))
+
+(menhir
+ (modules astParser ottlib)
+ (merge_into astParser)
+ (infer true))
+
+(ocamllex
+ (modules astLexer))
