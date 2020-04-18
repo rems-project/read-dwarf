@@ -1619,7 +1619,29 @@ let inlining_stack_at_index (an : analysis) k =
       in
       match nls with [] -> [] | (name, line) :: nls' -> shift line nls'
     )
-  | _ -> Warn.fatal "inlining_stack_at_index found non-prefix-related inlinings"
+  | _ ->
+      Warn.nonfatal "inlining_stack_at_index found non-prefix-related inlinings:\n%s"
+        (String.concat "\n===---\n"
+           (List.map
+              (function
+                | sss' ->
+                    String.concat "\n---\n"
+                      (List.map (Dwarf.pp_sdt_subroutine (Nat_big_num.of_int 0)) sss'))
+              maximal));
+      []
+
+(* the above is not working right for the case of handler.c:667
+struct vcpu *fiq_lower(void)
+{
+	return irq_lower();
+}
+which ends up with maximal containing:
+
+           irq_lower (subprogram)         api_preempt  vcpu_index
+fiq_lower  irq_lower (inlined subroutine) api_preempt  vcpu_index
+
+where the first irq_lower's has no call site
+ *)
 
 let graph_cfg_empty () =
   { gc_start_nodes = []; gc_nodes = []; gc_edges = []; gc_edges_exiting = []; gc_subgraphs = [] }
