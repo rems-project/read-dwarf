@@ -1656,156 +1656,158 @@ let graph_cfg_union g1 g2 =
   }
 
 (* the graphviz svg colours from https://www.graphviz.org/doc/info/colors.html without those too close to white or those that dot complains about*)
-let colours_svg =
+let colour_pairs_svg =
   [
-    (*"aliceblue";*)
-    (*"antiquewhite";*)
-    "aqua";
-    "aquamarine";
-    (*"azure";*)
-    (*"beige";*)
-    (*"bisque";*)
-    "black";
-    (*"blanchedalmond";*)
-    "blue";
-    "blueviolet";
-    "brown";
-    "burlywood";
-    "cadetblue";
-    "chartreuse";
-    "chocolate";
-    "coral";
-    "cornflowerblue";
-    (*"cornsilk";*)
-    "crimson";
-    "cyan";
-    "darkblue";
-    "darkcyan";
-    "darkgoldenrod";
-    (*"darkgray";*)
-    "darkgreen";
-    "darkgrey";
-    "darkkhaki";
-    "darkmagenta";
-    "darkolivegreen";
-    "darkorange";
-    "darkorchid";
-    "darkred";
-    "darksalmon";
-    "darkseagreen";
-    "darkslateblue";
-    "darkslategray";
-    "darkslategrey";
-    "darkturquoise";
-    "darkviolet";
-    "deeppink";
-    "deepskyblue";
-    "dimgray";
-    "dimgrey";
-    "dodgerblue";
-    "firebrick";
-    (*"floralwhite";*)
-    "forestgreen";
-    "fuchsia";
-    (*"gainsboro";*)
-    (*"ghostwhite";*)
-    "gold";
-    "goldenrod";
-    "gray";
-    "grey";
-    "green";
-    "greenyellow";
-    (*"honeydew";*)
-    "hotpink";
-    "indianred";
-    "indigo";
-    (*"ivory";*)
-    "khaki";
-    (*"lavender";*)
-    (*"lavenderblush";*)
-    "lawngreen";
-    (*"lemonchiffon";*)
-    "lightblue";
-    "lightcoral";
-    (*"lightcyan";*)
-    (*"lightgoldenrodyellow";*)
-    (*"lightgray";*)
-    "lightgreen";
-    (*    "lightgrey";*)
-    "lightpink";
-    "lightsalmon";
-    "lightseagreen";
-    "lightskyblue";
-    "lightslategray";
-    "lightslategrey";
-    "lightsteelblue";
-    (*"lightyellow";*)
-    "lime";
-    "limegreen";
-    (*"linen";*)
-    "magenta";
-    "maroon";
-    "mediumaquamarine";
-    "mediumblue";
-    "mediumorchid";
-    "mediumpurple";
-    "mediumseagreen";
-    "mediumslateblue";
-    "mediumspringgreen";
-    "mediumturquoise";
-    "mediumvioletred";
-    "midnightblue";
-    (*"mintcream";*)
-    (*"mistyrose";*)
-    "moccasin";
-    "navajowhite";
-    "navy";
-    (*"oldlace";*)
-    "olive";
-    "olivedrab";
-    "orange";
-    "orangered";
-    "orchid";
-    "palegoldenrod";
-    "palegreen";
-    (*"paleturquoise";*)
-    "palevioletred";
-    (*"papayawhip";*)
-    (*"peachpuff";*)
-    "peru";
-    "pink";
-    "plum";
-    "powderblue";
-    "purple";
-    "red";
-    "rosybrown";
-    "royalblue";
-    "saddlebrown";
-    "salmon";
-    "sandybrown";
-    "seagreen";
-    (*"seashell";*)
-    "sienna";
-    "silver";
-    "skyblue";
-    "slateblue";
-    "slategray";
-    "slategrey";
-    (*"snow";*)
-    "springgreen";
-    "steelblue";
-    "tan";
-    "teal";
-    "thistle";
-    "tomato";
-    "turquoise";
-    "violet";
-    "wheat";
-    (*"white";*)
-    (*"whitesmoke";*)
-    "yellow";
-    "yellowgreen";
+    (*"aliceblue","black";*)
+    (*"antiquewhite","black";*)
+    ("aqua", "black");
+    ("aquamarine", "black");
+    (*"azure","black";*)
+    (*"beige","black";*)
+    (*"bisque","black";*)
+    ("black", "white");
+    (*"blanchedalmond","black";*)
+    ("blue", "white");
+    ("blueviolet", "black");
+    ("brown", "white");
+    ("burlywood", "black");
+    ("cadetblue", "black");
+    ("chartreuse", "black");
+    ("chocolate", "white");
+    ("coral", "black");
+    ("cornflowerblue", "black");
+    (*"cornsilk","black";*)
+    ("crimson", "black");
+    ("cyan", "black");
+    ("darkblue", "white");
+    ("darkcyan", "white");
+    ("darkgoldenrod", "black");
+    (*"darkgray","black";*)
+    ("darkgreen", "white");
+    ("darkgrey", "white");
+    ("darkkhaki", "white");
+    ("darkmagenta", "white");
+    ("darkolivegreen", "white");
+    ("darkorange", "black");
+    ("darkorchid", "black");
+    ("darkred", "white");
+    ("darksalmon", "black");
+    ("darkseagreen", "white");
+    ("darkslateblue", "white");
+    ("darkslategray", "white");
+    ("darkslategrey", "white");
+    ("darkturquoise", "white");
+    ("darkviolet", "black");
+    ("deeppink", "black");
+    ("deepskyblue", "black");
+    ("dimgray", "white");
+    (*    "dimgrey","black";*)
+    ("dodgerblue", "black");
+    ("firebrick", "black");
+    (*"floralwhite","black";*)
+    ("forestgreen", "white");
+    ("fuchsia", "black");
+    (*"gainsboro","black";*)
+    (*"ghostwhite","black";*)
+    ("gold", "black");
+    ("goldenrod", "black");
+    ("gray", "black");
+    (*  "grey","black";*)
+    ("green", "black");
+    ("greenyellow", "black");
+    (*"honeydew","black";*)
+    ("hotpink", "black");
+    ("indianred", "black");
+    ("indigo", "white");
+    (*"ivory","black";*)
+    ("khaki", "black");
+    (*"lavender","black";*)
+    (*"lavenderblush","black";*)
+    ("lawngreen", "black");
+    (*"lemonchiffon","black";*)
+    ("lightblue", "black");
+    ("lightcoral", "black");
+    (*"lightcyan","black";*)
+    (*"lightgoldenrodyellow","black";*)
+    (*"lightgray","black";*)
+    ("lightgreen", "black");
+    (*    "lightgrey","black";*)
+    ("lightpink", "black");
+    ("lightsalmon", "black");
+    ("lightseagreen", "black");
+    ("lightskyblue", "black");
+    ("lightslategray", "black");
+    ("lightslategrey", "black");
+    ("lightsteelblue", "black");
+    (*"lightyellow","black";*)
+    ("lime", "black");
+    ("limegreen", "black");
+    (*"linen","black";*)
+    ("magenta", "black");
+    ("maroon", "black");
+    ("mediumaquamarine", "black");
+    ("mediumblue", "black");
+    ("mediumorchid", "black");
+    ("mediumpurple", "black");
+    ("mediumseagreen", "black");
+    ("mediumslateblue", "black");
+    ("mediumspringgreen", "black");
+    ("mediumturquoise", "black");
+    ("mediumvioletred", "black");
+    ("midnightblue", "white");
+    (*"mintcream","black";*)
+    (*"mistyrose","black";*)
+    ("moccasin", "black");
+    ("navajowhite", "black");
+    ("navy", "white");
+    (*"oldlace","black";*)
+    ("olive", "black");
+    ("olivedrab", "black");
+    ("orange", "black");
+    ("orangered", "black");
+    ("orchid", "black");
+    ("palegoldenrod", "black");
+    ("palegreen", "black");
+    (*"paleturquoise","black";*)
+    ("palevioletred", "black");
+    (*"papayawhip","black";*)
+    (*"peachpuff","black";*)
+    ("peru", "white");
+    ("pink", "black");
+    ("plum", "black");
+    ("powderblue", "black");
+    ("purple", "black");
+    ("red", "black");
+    ("rosybrown", "black");
+    ("royalblue", "black");
+    ("saddlebrown", "white");
+    ("salmon", "black");
+    ("sandybrown", "black");
+    ("seagreen", "black");
+    (*"seashell","black";*)
+    ("sienna", "black");
+    ("silver", "black");
+    ("skyblue", "black");
+    ("slateblue", "black");
+    ("slategray", "black");
+    ("slategrey", "black");
+    (*"snow","black";*)
+    ("springgreen", "black");
+    ("steelblue", "black");
+    ("tan", "black");
+    ("teal", "black");
+    ("thistle", "black");
+    ("tomato", "black");
+    ("turquoise", "black");
+    ("violet", "black");
+    ("wheat", "black");
+    (*"white","black";*)
+    (*"whitesmoke","black";*)
+    ("yellow", "black");
+    ("yellowgreen", "black");
   ]
+
+let colours_svg = List.map fst colour_pairs_svg
 
 let colours_dot_complains =
   [
@@ -2373,7 +2375,9 @@ let pp_colour colour visited =
     ^ colour ^ "\"]"
   else
     "[color=\"" ^ colour ^ "\"]" ^ "[style=\"filled\"][fillcolor=\"" ^ colour ^ "\"]"
-    ^ "[fontcolor=\"" ^ "black" ^ "\"]"
+    ^ "[fontcolor=\""
+    ^ List.assoc colour colour_pairs_svg
+    ^ "\"]"
 
 let margin = "[margin=\"0.03,0.02\"]"
 
