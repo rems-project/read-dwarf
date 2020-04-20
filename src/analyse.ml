@@ -1746,7 +1746,7 @@ let colour_pairs_svg =
     ("magenta", "black");
     ("maroon", "black");
     ("mediumaquamarine", "black");
-    ("mediumblue", "black");
+    ("mediumblue", "white");
     ("mediumorchid", "black");
     ("mediumpurple", "black");
     ("mediumseagreen", "black");
@@ -3330,7 +3330,17 @@ let mk_inlining test sdt instructions =
 
       let max_labels' = max max_labels (List.length issr_current') in
 
-      let pp_label label = String.make 1 (Char.chr (label + Char.code 'a')) in
+      let pp_label label =
+        String.make 1
+          (Char.chr
+             ((label
+             + 11
+               (*offset to make mpool_fini inlining start with a, not the confusingly-identical-to-a-variable-name p*)
+              )
+              mod 26
+             + Char.code 'a'
+             ))
+      in
 
       let ppd_labels =
         String.concat "" (List.map (function (label, _) -> pp_label label) issr_current')
