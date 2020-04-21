@@ -158,6 +158,15 @@ let path_type = partial_path_type index
 
 let pp_path path = path |> path_to_string |> PP.string
 
+let iter_path (f : path -> ty -> unit) =
+  let rec iter_path_typ f root = function
+    | Plain ty -> f root ty
+    | Struct rs -> iter_path_rstruct f root rs
+  and iter_path_rstruct f root rs =
+    IdMap.iter (fun name id typ -> iter_path_typ f (root @ [id]) typ) rs
+  in
+  iter_path_rstruct f [] index
+
 (*****************************************************************************)
 (*        Register indexed mapping                                           *)
 (*****************************************************************************)

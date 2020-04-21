@@ -151,6 +151,9 @@ val path_type : path -> typ
 (** Pretty print a path *)
 val pp_path : path -> PP.document
 
+(** Iterate a function through all the register by path *)
+val iter_path : (path -> ty -> unit) -> unit
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)

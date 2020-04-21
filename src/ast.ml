@@ -78,6 +78,22 @@ include AstParser_pp
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
+(** {1 Desctructor }
+
+    Aparently I overestimated ocaml type-system in it's handling of empty types.
+
+    Here are some function to destroy empty types.
+*)
+
+let destr_unptr : no unptr -> 'a = function Aligned _ -> . | Align _ -> .
+
+let destr_binptr : no binptr -> 'a = function Overlap _ -> .
+
+let destr_binmem : no binmem -> 'a = function Select _ -> . | Store _ -> .
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
 (** {1 Operators } *)
 
 module Op = struct
@@ -95,7 +111,7 @@ module Op = struct
 
   let not a = Unop (Not, a, Isla.UnknownRng)
 
-  let assertt e = Assert e
+  let assert_op e = Assert e
 
   let simplify e = Simplify e
 end

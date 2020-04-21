@@ -103,7 +103,7 @@ module TraceList (*: Cache.Value *) = struct
   type t = Isla.rtrc list
 
   let to_file file (trcs : t) =
-    let output_trc ochannel trc = PP.fprint ochannel @@ Isla.pp_trc trc in
+    let output_trc ochannel trc = PP.fprintln ochannel @@ Isla.pp_trc trc in
     let output_trcs = Files.output_list output_trc in
     Files.write output_trcs file trcs
 
@@ -143,7 +143,7 @@ module IC = Cache.Make (Opcode) (TraceList) (Epoch)
 (** An epoch independant of the isla version, bump if you change the representation
     of the traces on disk.
     Reset (or not) when bumping isla version ({!IslaServer.required_version}) *)
-let epoch = 1
+let epoch = 2
 
 (** This varaible stores the cache RAM representation *)
 let cache : IC.t option ref = ref None
@@ -181,7 +181,7 @@ let get_cache () =
   match !cache with Some cache -> cache | None -> failwith "Isla cache was not started"
 
 (** Get the traces of the opcode given. Use {!IslaServer} if the value is not in the cache *)
-let get_traces (opcode : BytesSeq.t) =
+let get_traces (opcode : BytesSeq.t) : Isla.rtrc list =
   let cache = get_cache () in
   match IC.get_opt cache (Some opcode) with
   | Some trcs -> trcs

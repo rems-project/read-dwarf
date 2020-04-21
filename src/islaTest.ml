@@ -1,4 +1,4 @@
-(** This file about testing interaction with Isla mostly for single instructions *)
+(** This file about testing interaction with Isla for single instructions *)
 
 open Files
 

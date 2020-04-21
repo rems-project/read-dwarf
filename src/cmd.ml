@@ -14,21 +14,24 @@ exception Crash of cmd * process_status
 
 let _ =
   Printexc.register_printer (function
-    | Crash (cmd, code) ->
-        Some PP.(sprint @@ array string cmd ^^ !^" exited with " ^^ statusi code)
+    | Crash (cmd, code) -> Some PP.(sprint @@ array string cmd ^^ blank 1 ^^ statusi code)
     | _ -> None)
 
 (** Check the return status and throw Chrash if input is noe WEXITED 0 *)
 let check_status cmd = function
   | WEXITED code when code = 0 -> ()
-  | WSIGNALED code when code < 0 -> err "Signal %d should not exist: ????\n" code
+  | WSIGNALED code when code < 0 -> warn "Signal %d should not exist: ????\n" code
   | code -> raise (Crash (cmd, code))
 
 (** Close input channel for channel openned with open_process_in.
     Throw Crash if the process did not return 0 *)
 let closing_in channel cmd () = check_status cmd @@ close_process_in channel
 
-(** Close input channel for channel openned with open_process_in.
+(** Close output channel for channel openned with open_process_out.
+    Throw Crash if the process did not return 0 *)
+let closing_out channel cmd () = check_status cmd @@ close_process_out channel
+
+(** Close channels for channel openned with open_process.
     Throw Crash if the process did not return 0 *)
 let closing channels cmd () = check_status cmd @@ close_process channels
 
@@ -51,10 +54,11 @@ let get_full_path (s : string) : string =
     )
 
 (*****************************************************************************)
-(*        Pipe input                                                         *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Pipe input } *)
 
-(** Call cmd and then call cont on the output pipe *)
+(** Call cmd and then call cont to read the output of the command *)
 let input (cmd : cmd) (cont : in_channel -> 'a) : 'a =
   cmd.(0) <- get_full_path cmd.(0);
   let output = open_process_args_in cmd.(0) cmd in
@@ -64,8 +68,34 @@ let input (cmd : cmd) (cont : in_channel -> 'a) : 'a =
 let input_string (cmd : string array) : string = input cmd Files.input_string
 
 (*****************************************************************************)
-(*        Pipe input-output                                                  *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Simple command } *)
+
+(** Call cmd. That's it. Check the status is valid with {!check_status}*)
+let cmd (cmd : cmd) : unit =
+  cmd.(0) <- get_full_path cmd.(0);
+  let output = open_process_args_in cmd.(0) cmd in
+  closing_in output cmd ()
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Pipe output } *)
+
+(** Call cmd and then call cont on the output pipe *)
+let output (cmd : cmd) (output : out_channel -> unit) : 'a =
+  cmd.(0) <- get_full_path cmd.(0);
+  let input = open_process_args_out cmd.(0) cmd in
+  protect (fun () -> output input) @@ closing_out input cmd
+
+(** Call a command and read its output in a string *)
+let output_string (cmd : string array) s : unit = output cmd (fun o -> output_string o s)
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Command input and output } *)
 
 (** Call the command provided, then call the first continuation to send
     a message and then call the second continuation to get the answer.
@@ -105,8 +135,9 @@ module IOServer = struct
 end
 
 (*****************************************************************************)
-(*        Socket management                                                  *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Socket management } *)
 
 (** This submodule is to manage another process as request server, like isla *)
 module Server = struct

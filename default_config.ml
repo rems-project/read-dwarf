@@ -20,3 +20,6 @@ let enable_backtrace = true
 
 (** Whether to enable internal unit test and the test test sub-command *)
 let enable_tests = true
+
+(** The toolchain to use when working with aarch64 architecture (GNU Prefix) *)
+let aarch64_toolchain = "aarch64-linux-gnu"

@@ -146,12 +146,17 @@ let direct_valu_map_valu (m : valu -> valu) : valu -> valu = function
     recursively
 
     Doing this when a = b is not well defined, and can be easily done using the direct
-    version from previous section.*)
+    version from previous section.
+
+    In case where a type is not recusive like [event],
+    both direct and recursive versions are the same.*)
 
 (** iterate a function on all the variable of an expression *)
 let rec exp_iter_var (f : int -> unit) : 'a exp -> unit = function
   | Var (v, a) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
+
+let event_iter_valu = direct_event_iter_valu
 
 (*****************************************************************************)
 (*****************************************************************************)

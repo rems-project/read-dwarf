@@ -17,6 +17,8 @@ type rtrc = lrng trc
 
 type revent = lrng event
 
+type rsmt = lrng smt
+
 type rexp = lrng exp
 
 (*****************************************************************************)

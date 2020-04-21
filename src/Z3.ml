@@ -9,10 +9,10 @@
 
     The module keeps Z3 as a child process and communicates through pipes.
     As input and output may be ambiguous in this context
-    (the input of Z3 is the output of read-dwarf), we use "request" for message
-    going from read-dwarf to Z3 and answer for message going from Z3 to read-dwarf.
+    (the input of Z3 is the output of read-dwarf), we use "request" for messages
+    going from read-dwarf to Z3 and answer for messages going from Z3 to read-dwarf.
 
-    On start it sends the introduction in intro.smt2 to Z3 and then {!push} to
+    On start it sends the introduction in [intro.smt2] to Z3 and then {!push} to
     start a specific request. See {!start}.
 
     To do a request look at {!request}
@@ -25,18 +25,20 @@ open Logs.Logger (struct
   let str = "Z3"
 end)
 
-open Ast
+let z3_trace = true
 
 (*****************************************************************************)
-(*         Raw server management                                             *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Raw server management } *)
 
 type server = Cmd.IOServer.t
 
 let server : server option ref = ref None
 
-(** The request number for Z3 *)
-let req_num = ref (-1)
+type context_elem = { name : string; mutable num : int }
+
+let context : context_elem list ref = ref [{ name = "top"; num = 0 }]
 
 (** Assume the server is started and get it out of the reference *)
 let get_server () =
@@ -60,152 +62,218 @@ let raw_stop () =
   | None -> ()
 
 (*****************************************************************************)
-(*         Request and answer management                                     *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Raw Context management } *)
 
-(** Read one Z3 answer as a string. A Z3 answer is always a single S expression
+let context_elem_to_string ce = Printf.sprintf "(%s num %d)" ce.name ce.num
 
-    To get a parsed answer use {!read_answer}.
-*)
-let read_string_answer () : string =
+let get_context_string () =
+  if z3_trace then String.concat "." (List.map context_elem_to_string !context)
+  else "Z3 tracing disabled"
+
+let incr_context () =
+  let ce = List.hd !context in
+  ce.num <- ce.num + 1
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Request and answer management }
+
+    TODO Document this section *)
+
+let send_string (serv : server) s =
+  output_string serv.output s;
+  output_char serv.output '\n';
+  flush serv.output;
+  if z3_trace then incr_context ()
+
+let send_smt (serv : server) ?(ppv = PP.erase) smt =
+  debug "In context %t, sent smt %t"
+    (fun o -> output_string o (get_context_string ()))
+    (PP.top (Ast.pp_smt ppv) smt);
+  PP.fprintln serv.output @@ Ast.pp_smt ppv smt;
+  if z3_trace then incr_context ()
+
+let read_string (serv : server) =
+  let sexp = Files.input_sexp serv.input in
+  debug "In context %t, read %s" (fun o -> output_string o (get_context_string ())) sexp;
+  sexp
+
+let read_smt_ans (serv : server) : Ast.rsmt_ans =
+  let filename = get_context_string () in
+  Ast.parse_smt_ans_string ~filename (read_string serv)
+
+let request ?(ppv = PP.erase) smt : Ast.rsmt_ans =
   let serv = get_server () in
-  Files.input_sexp serv.input
+  send_smt serv ~ppv smt;
+  read_smt_ans serv
 
-(** Read one Z3 answer as a structured smt answer *)
-let read_answer () : rsmt_ans =
-  let filename = "Z3 output " ^ string_of_int !req_num in
-  parse_smt_ans_string ~filename (read_string_answer ())
+let command ?(ppv = PP.erase) smt =
+  let serv = get_server () in
+  send_smt serv ~ppv smt
 
 (** Expect a version answer and fails if it is not the case *)
-let expect_version = function Version s -> s | _ -> failwith "expected version from Z3"
+let expect_version : Ast.rsmt_ans -> string = function
+  | Version s -> s
+  | _ -> failwith "expected version from Z3"
 
 (** Expect an expression answer and fails if it is not the case *)
-let expect_exp = function Exp e -> e | _ -> failwith "expected expression from Z3"
-
-(** Send the string as a request to Z3.
-
-    If the request is too long to be concatenated efficiently in one string,
-    output it directly on {!get_request_channel}[ ()] and then call {!finish_request}
-
-    If you want to get the result call {!request} or {!string_request}
-*)
-let send_string_request (req : string) : unit =
-  let serv = get_server () in
-  req_num := !req_num + 1;
-  output_string serv.output req;
-  output_char serv.output '\n';
-  flush serv.output
-
-(** Call this after sending your request directly on {!get_request_channel}[ ()] *)
-let finish_request () = send_string_request ""
-
-(** Basically {!send_string_request} then {!read_string_answer}  *)
-let string_request (req : string) : string =
-  send_string_request req;
-  read_string_answer ()
-
-(** This function take a string request and give the parsed Z3 answer
-
-    Basically {!send_string_request} then {!read_answer}
-
-    - Use {!string_request} to not parse the answer.
-    - Use {!send_string_request} to not read the answer.
-    - Use {!read_string_answer} to only read the answer.
-    - Use {!read_answer} to only read and parse the answer.
-
-*)
-let request (req : string) : rsmt_ans =
-  send_string_request req;
-  read_answer ()
-
-(** Push Z3 context. All Z3 context added from now on will be deleted at next {!pop}*)
-let push () = send_string_request "(push)"
-
-(** Pop Z3 context. Delete all Z3 context since matching push*)
-let pop () = send_string_request "(pop)"
-
-(** This reset the context except the intro. {!pop} then {!push} *)
-let soft_reset () =
-  pop ();
-  push ()
-
-(** This does a {!request} and then a {!soft_reset} *)
-let request_reset (req : string) =
-  let a = request req in
-  soft_reset ();
-  a
+let expect_exp : Ast.rsmt_ans -> Ast.rexp = function
+  | Exp e -> e
+  | _ -> failwith "expected expression from Z3"
 
 (** Get the Z3 version string *)
 let get_version () =
-  match request "(get-info :version)" with
-  | Version s -> s
-  | _ -> failwith "Z3 version, protocol error"
+  match request Ast.GetVersion with Version s -> s | _ -> failwith "Z3 version, protocol error"
 
 (*****************************************************************************)
-(*         Full startup and shutdowns                                        *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Context management }
+
+    Z3 context can be managed in stack way. When pushing Z3 create a new context.
+    Inside it, all declaration from parent contexts are available.
+    When pop-ing the current context is closed and all the declaration are lost
+*)
+
+let open_context name =
+  let serv = get_server () in
+  if z3_trace then context := { name; num = 0 } :: !context;
+  command Ast.Push
+
+let close_context () =
+  let serv = get_server () in
+  if z3_trace then context := List.tl !context;
+  command Ast.Pop
+
+module ContextCounter (S : Logs.String) = struct
+  let counter = Counter.make 0
+
+  let openc () =
+    if z3_trace then open_context (Printf.sprintf "%s %d" S.str (Counter.get counter))
+    else open_context S.str
+
+  let num () = Counter.read counter
+
+  let closec = close_context
+end
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Full startup and shutdown } *)
 
 (** Start the Z3 Server, setup the intro and {!push} *)
 let start () =
   raw_start ();
   let ver = get_version () in
   info "Z3 started with version %s" ver;
-  flush stdout;
-  send_string_request SmtIntro.intro;
-  push ()
+  send_string (get_server ()) SmtIntro.intro
 
 (** Stop the Z3 server properly *)
 let stop () =
-  send_string_request "(exit)";
+  command Ast.Exit;
   raw_stop ();
-  info "Closed connection with Z3";
-  flush stdout
+  info "Closed connection with Z3"
+
+(** Call {!start} if the server wasn't started *)
+let ensure_started () = match !server with None -> start () | Some _ -> ()
+
+(** Call {!stop} if the server wasn't stopped *)
+let ensure_stopped () = match !server with None -> () | Some _ -> stop ()
 
 (*****************************************************************************)
-(*         High level interaction                                            *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Medium-level interaction } *)
+
+type ('a, 'v) in_exp = ('a, 'v, Ast.no, Ast.Size.t, Ast.Size.t) Ast.exp
+
+type 'v out_exp = (Ast.lrng, 'v, Ast.no, Ast.Size.t, Ast.Size.t) Ast.exp
+
+(** Simplify an expression in the context. The context must already have been declared *)
+let simplify_full ~ppv ~vofs (exp : ('a, 'v) in_exp) : 'v2 out_exp =
+  exp |> AstManip.allow_lets |> Ast.Op.simplify |> request ~ppv |> expect_exp
+  |> AstManip.unfold_lets |> AstManip.exp_conv_var vofs
+
+(** Check a property in the current context. The context must already have been declared
+    Do not modify the context (It creates a subcontext) *)
+let check_full ~ppv (exp : ('a, 'v) in_exp) =
+  open_context "check";
+  command ~ppv (exp |> AstManip.allow_lets |> Ast.Op.not |> Ast.Op.assert_op);
+  let r = request CheckSat in
+  close_context ();
+  match r with
+  | Error s -> Raise.fail "Z3: error %s on check in %s" s (get_context_string ())
+  | Sat -> Some false
+  | Unsat -> Some true
+  | Unknown -> None
+  | _ -> Raise.fail "Z3 protocol error on check in %s" (get_context_string ())
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 High level interaction with state } *)
+
+let exp_conv exp = exp |> AstManip.allow_mem |> AstManip.allow_lets
 
 (** Declare all the variables in exp in the (declare-const ...) format on the
     [out_channel]
 
     If declared is given, use it to know which variable are already declared.
 *)
-let declare_vars ?(declared = Hashtbl.create 10) ochannel (exp : State.exp) : unit =
+let declare_vars ?(declared = Hashtbl.create 10) serv (exp : State.exp) : unit =
   let process_var (var : State.var) =
     if not @@ Hashtbl.mem declared @@ State.Var.to_string var then begin
-      let decl = DeclareConst (var, State.var_type var |> AstManip.ty_allow_mem) in
-      PPI.(fprint ochannel @@ pp_smt State.Var.pp decl ^^ hardline);
+      let decl = Ast.DeclareConst (var, State.var_type var |> AstManip.ty_allow_mem) in
+      send_smt serv ~ppv:State.Var.pp decl;
       Hashtbl.add declared (State.Var.to_string var) ()
     end
   in
   AstManip.exp_iter_var process_var exp
 
+module SimpContext = ContextCounter (struct
+  let str = "Simplification"
+end)
+
 (** Simplify an expression using Z3 [simplify] command. This is a context-free simplification*)
 let simplify (exp : State.exp) : State.exp =
-  let ochannel = get_request_channel () in
-  declare_vars ochannel exp;
-  PPI.(fprint ochannel @@ parens (!^"simplify " ^^ State.pp_exp exp));
-  finish_request ();
-  let rexp = read_answer () |> expect_exp in
-  soft_reset ();
-  rexp
-  |> AstManip.exp_conv_var State.Var.of_string
-  |> AstManip.unfold_lets |> AstManip.expect_no_mem
+  let serv = get_server () in
+  SimpContext.openc ();
+  declare_vars serv exp;
+  let res_exp =
+    exp |> AstManip.allow_mem
+    |> simplify_full ~ppv:State.Var.pp ~vofs:State.Var.of_string
+    |> AstManip.expect_no_mem
+  in
+  close_context ();
+  res_exp
+
+module SatContext = ContextCounter (struct
+  let str = "Check sat"
+end)
 
 (** Check that a set of assertion is satisfiable. If the answer is [None] then Z3 didn't know*)
 let check_sat asserts : bool option =
-  let ochannel = get_request_channel () in
+  let serv = get_server () in
+  SatContext.openc ();
   let declared = Hashtbl.create 100 in
-  List.iter (declare_vars ~declared ochannel) asserts;
-  List.iter (fun e -> PP.fprintln ochannel @@ State.pp_smt (Assert e)) asserts;
-  let a = request "(check-sat)" in
-  soft_reset ();
+  List.iter (declare_vars ~declared serv) asserts;
+  List.iter (fun e -> send_smt ~ppv:State.Var.pp serv (Assert (e |> exp_conv))) asserts;
+  let a = request CheckSat in
+  close_context ();
   match a with
-  | Error s -> failwith (Printf.sprintf "Z3 encountered an error on request %d : %s" !req_num s)
+  | Error s -> Raise.fail "Z3 encountered an error on check_sat %d : %s" (SatContext.num ()) s
   | Sat -> Some true
   | Unsat -> Some false
   | Unknown -> None
-  | _ -> failwith (Printf.sprintf "Z3 protocol error on request %d " !req_num)
+  | _ -> Raise.fail "Z3 protocol error on check_sat %d" (SatContext.num ())
+
+module CheckContext = ContextCounter (struct
+  let str = "Check"
+end)
 
 (** Check that a property always holds under a set of hypothesis ([hyps]).
 
@@ -213,18 +281,21 @@ let check_sat asserts : bool option =
 
     If the answer is [None] then Z3 didn't know *)
 let check ?(hyps = []) property =
-  let ochannel = get_request_channel () in
+  let serv = get_server () in
+  CheckContext.openc ();
   let declared = Hashtbl.create 100 in
-  List.iter (declare_vars ~declared ochannel) hyps;
-  declare_vars ~declared ochannel property;
-  List.iter (fun e -> PP.fprintln ochannel @@ State.pp_smt (Assert e)) hyps;
-  PP.fprintln ochannel @@ State.pp_smt (Assert (Op.not property));
-  match request_reset "(check-sat)" with
-  | Error s -> failwith (Printf.sprintf "Z3 encountered an error on request %d : %s" !req_num s)
+  List.iter (declare_vars ~declared serv) hyps;
+  declare_vars ~declared serv property;
+  List.iter (fun e -> send_smt ~ppv:State.Var.pp serv (Assert (e |> exp_conv))) hyps;
+  send_smt ~ppv:State.Var.pp serv (Assert (property |> exp_conv |> Ast.Op.not));
+  let a = request CheckSat in
+  close_context ();
+  match a with
+  | Error s -> Raise.fail "Z3 encountered an error on check %d : %s" (CheckContext.num ()) s
   | Sat -> Some false
   | Unsat -> Some true
   | Unknown -> None
-  | _ -> failwith (Printf.sprintf "Z3 protocol error on request %d " !req_num)
+  | _ -> Raise.fail "Z3 protocol error on check %d" (CheckContext.num ())
 
 (*****************************************************************************)
 (*        Tests                                                              *)

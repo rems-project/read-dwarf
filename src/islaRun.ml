@@ -8,7 +8,7 @@
 open Isla
 
 open Logs.Logger (struct
-  let str = "IslaTrace"
+  let str = "IslaRun"
 end)
 
 (** Exception that represent an Isla runtime error which should not happen *)

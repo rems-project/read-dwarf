@@ -25,6 +25,7 @@ let pcommands =
     DumpDwarf.command;
     Cache.Cmd.command;
     RunFunc.command;
+    RunInstr.command;
   ]
 
 (** Add the test command if tests are enabled *)
@@ -33,6 +34,8 @@ let commands = if Tests.enable_tests then Tests.command :: pcommands else pcomma
 let _ = Printexc.record_backtrace true
 
 let _ = assert ("aarch64" = Arch.module_name)
+
+let _ = Random.self_init ()
 
 (** main *)
 

@@ -81,6 +81,8 @@ and mem = { mutable trace : mem_event list }
 
 type smt = (Ast.lrng, var, Ast.no, Ast.Size.t, Ast.no) Ast.smt
 
+let make_tval ?ctyp exp = { exp; ctyp }
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -106,29 +108,28 @@ module Var = struct
 
   type t = var
 
+  (** Convert the variable to the string encoding. For parsing infrastructure reason,
+      the encoding must always contain at least one [:]. *)
   let to_string = function
     | Register (state, path) ->
-        Printf.sprintf "%s:%s" (state |> to_id |> Id.to_string) (Reg.path_to_string path)
-    | ReadVar (state, num) -> Printf.sprintf "%s:r%i" (state |> to_id |> Id.to_string) num
-    | Arg num -> Printf.sprintf "arg%i" num
-    | RetArg -> "retarg"
+        Printf.sprintf "reg:%s:%s" (state |> to_id |> Id.to_string) (Reg.path_to_string path)
+    | ReadVar (state, num) -> Printf.sprintf "read:%s:%i" (state |> to_id |> Id.to_string) num
+    | Arg num -> Printf.sprintf "arg:%i" num
+    | RetArg -> "retarg:"
 
   let of_string s : t =
-    let fail () = Raise.inv_arg "Invalid state variable: %s" s in
     match String.split_on_char ':' s with
-    | [state; var] -> (
+    | ["reg"; state; reg] ->
         let state : state = state |> Id.of_string |> of_id in
-        match var.[0] with
-        | 'r' -> ReadVar (state, int_of_string @@ String.sub var 1 (String.length var - 1))
-        | _ -> Register (state, Reg.path_of_string var)
-      )
-    | [var] -> (
-        match var.[0] with
-        | 'a' -> Arg (Scanf.sscanf var "arg%d" Fun.id)
-        | 'r' -> if var != "retarg" then fail () else RetArg
-        | _ -> fail ()
-      )
-    | _ -> fail ()
+        let reg = Reg.path_of_string reg in
+        Register (state, reg)
+    | ["read"; state; num] ->
+        let state : state = state |> Id.of_string |> of_id in
+        let num = int_of_string num in
+        ReadVar (state, num)
+    | ["arg"; num] -> Arg (int_of_string num)
+    | ["retarg"; ""] -> RetArg
+    | _ -> Raise.inv_arg "Invalid state variable: %s" s
 
   let to_exp (v : t) : exp = Ast.Var (v, dummy_annot)
 

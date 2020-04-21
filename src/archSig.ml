@@ -74,4 +74,8 @@ module type S = sig
 
   (** Give the ABI of a function from it's C API *)
   val get_abi : func_api -> func_abi
+
+  (** Take an instruction string and give the name of an temporary ELF file created
+      that contains the instruction at symbol instr.*)
+  val assemble_to_elf : string -> string
 end

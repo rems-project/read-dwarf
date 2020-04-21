@@ -246,3 +246,15 @@ let get_abi api =
     state
   in
   { init }
+
+let assemble_to_elf instr =
+  let assembler = ConfigPre.aarch64_toolchain ^ "-as" in
+  let linker = ConfigPre.aarch64_toolchain ^ "-ld" in
+  let num = Random.bits () in
+  let obj_file = Filename.concat (Filename.get_temp_dir_name ()) (Printf.sprintf "%d.o" num) in
+  let elf_file = Filename.concat (Filename.get_temp_dir_name ()) (Printf.sprintf "%d.elf" num) in
+  let prefix = ".global instr\n.type instr, @function\n.size instr,4\ninstr:" in
+  Cmd.output_string [|assembler; "-g"; "-o"; obj_file|] (prefix ^ instr ^ "\n");
+  Cmd.cmd [|linker; obj_file; "--entry=instr"; "-o"; elf_file|];
+  Sys.remove obj_file;
+  elf_file

@@ -20,7 +20,6 @@
  - Do a html command that basically does the same thing as rd2 but with a collapsible
    html file and way more information, in particular with an option to have
    the result of symbolic evaluation
- - Improve preprocessing like simplify with Z3 at preprocessing time
 
 ## Linksem
 
@@ -57,14 +56,19 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
+ - Update BB and RunBB to use Trace and TraceRun
+ - Clean State.ml to prepare for typing
+ - Update isla to integrate alignment check fix
+ - Decision: Remove pointer operations shortcuts (and thus the AST type parameter)
  - Handle the 52 bits real width pointer problem
- - Handle rodata access: Design question, Put them in the trace ?
+ - Classify symbolic addresses between "concrete", "symbolic reg + concrete offset", and "other"
+ - Add basic type inference to TraceRun.
+ - Plug that into "run-func" (deadline on 24/04/2020)
+ - Add actual control-flow handling to TraceRun (computing the new PC in all cases)
+ - Do the run-block command with breakpoints
+ - Update the run-func command to use run-block and not run-bb as backend
+ - Handle rodata accesses: Design question, Put them in the trace ?
  - Resolve memory read to obviously non-aliasing addresses directly
- - Do a "run-block" command that start execution at any point and stop at breakpoints,
-   with Control-Flow support
- - Do a "run-func" command that does the same as run-block but from the start
-   of function to the "ret", and that setup the state according to the ABI.
- - Start implementing the basic type inference system: stage 1.
 
 ## Memory stack
 
@@ -118,3 +122,5 @@
  - Package isla-lang with dune and opam
  - Refactor the AST to no use isla-lang AST but our own.
  - Package read-dwarf with opam and dune.
+ - Add a simplified trace on which to run the C type inference
+ - Add the execution code (TraceRun) to run the simplified trace like IslaRun

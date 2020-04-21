@@ -24,6 +24,7 @@ embed
 
 
 
+
 grammar
 ptr_size :: '' ::=                      {{ ocaml 'p }}
                                         {{ phantom }}
@@ -115,6 +116,7 @@ smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
   | ( pop )                             :: :: Pop
   | ( get-info :version )               :: :: GetVersion
   | ( check-sat )                       :: :: CheckSat
+  | ( exit )                            :: :: Exit
 
 smts :: '' ::=                          {{ ocaml ('a, 'v, 'b, 'p, 'm) smt list }}
                                         {{ phantom }}

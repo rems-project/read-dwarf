@@ -45,45 +45,40 @@ let simplify_trc (Trace events : rtrc) =
           HashVector.set used i ()
       | v -> IslaManip.direct_valu_iter_valu process_used_valu v
     in
-    IslaManip.direct_event_iter_valu process_used_valu event
+    IslaManip.event_iter_valu process_used_valu event
   in
   List.iter process_used events;
   debug "The list of used vars is:\n%t" (PP.top (HashVector.pp PP.erase) used);
   (* Phase 2: Only keep variables that are actually used
-     This is done lazily. On declaration of definition, variable are
+     This is done lazily. On declaration or definition, variables are
      Stored in a lazy fashion in the context.
      If they are used as determined by the previous phase, they are immediately declared.
      When an expression is required, all defined variable in the expression
      not yet commited are inlined.
-     Variable are also renumbered at the same time.
-  *)
+     Variables are also renumbered at the same time. *)
   let simplify_context = HashVector.empty () in
-  let cur_num = ref 0 in
-  let get_id () =
-    incr cur_num;
-    debug "Generating id %d" !cur_num;
-    !cur_num
-  in
+  let new_variables = Counter.make 0 in
   let res = ref [] in
-  let push (d : revent) = res := d :: !res in
+  let push_event (d : revent) = res := d :: !res in
+  let push_smt loc (d : rsmt) = push_event (Smt (d, loc)) in
   (* Commits the variable i.e output its declaration/definition in the trace,
      and return the new value *)
   let rec commit i =
     match HashVector.get simplify_context i with
     | Declared { ty; loc } ->
         debug "Commiting declared variable %d" i;
-        let new_val = get_id () in
+        let new_val = Counter.get new_variables in
         HashVector.set simplify_context i (Processed new_val);
-        push @@ Smt (DeclareConst (new_val, ty), loc);
+        push_smt loc (DeclareConst (new_val, ty));
         new_val
     | Defined { exp; loc } ->
         debug "Commiting defined variable %d" i;
-        let new_val = get_id () in
+        let new_val = Counter.get new_variables in
         HashVector.set simplify_context i (Processed new_val);
         debug "New id is %d" new_val;
         let new_exp = simplify_exp exp in
         debug "New exp is %t" PP.(fun o -> fprint o $ pp_exp new_exp);
-        push @@ Smt (DefineConst (new_val, new_exp), loc);
+        push_smt loc (DefineConst (new_val, new_exp));
         new_val
     | Processed v -> v
   (* Simplify and expression, by inlining all not committed defined variable and
@@ -119,13 +114,14 @@ let simplify_trc (Trace events : rtrc) =
     | Smt (Assert exp, loc) ->
         let nexp = simplify_exp exp in
         debug "Asserting old %t new %t" (PP.top pp_exp exp) (PP.top pp_exp nexp);
-        push @@ Smt (Assert nexp, loc)
+        push_event @@ Smt (Assert nexp, loc)
     | event ->
         debug "Handling event %t" (PP.top pp_event event);
-        push @@ IslaManip.direct_event_map_valu simplify_valu event
+        push_event @@ IslaManip.direct_event_map_valu simplify_valu event
   in
   List.iter simplify_event events;
-  debug "Nearly finished simplify_trc with %d variables, now reversing" (1 + !cur_num);
+  debug "Nearly finished simplify_trc with %d variables, now reversing"
+    (1 + Counter.read new_variables);
   Trace (List.rev !res)
 
 (** Preprocess a set of traces. *)

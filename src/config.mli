@@ -23,3 +23,6 @@ val enable_backtrace : bool
 
 (** Whether to enable internal unit test and the test test sub-command *)
 val enable_tests : bool
+
+(** The toolchain to use when working with aarch64 architecture (GNU Prefix) *)
+val aarch64_toolchain : string

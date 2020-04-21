@@ -35,6 +35,10 @@ the `module Arch` variable to point to the module you want in `src/archs`.
 
 A simple `make` works. `read-dwarf` symlink will then be created.
 
+While developing, `make merlin` will only build the necessary parts for the
+merlin plugin to work. It will fail later than plain `make` allowing a more
+accurate linting.
+
 ## Installing
 
 To install `read-dwarf`, you can do `dune install` without opam or
