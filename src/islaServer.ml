@@ -11,7 +11,7 @@ open Logs.Logger (struct
 end)
 
 (** Bump when updating isla *)
-let required_version = "dev-d5992b3042a125ca058ad76db23ff2e8142721af"
+let required_version = "dev-9f2194634a96f4046ebbae8ae1c8b30c8c41ab35"
 
 let req_num = ref (-1)
 
