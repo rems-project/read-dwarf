@@ -56,7 +56,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Update BB and RunBB to use Trace and TraceRun
  - Clean State.ml to prepare for typing
  - Update isla to integrate alignment check fix
  - Decision: Remove pointer operations shortcuts (and thus the AST type parameter)
@@ -64,6 +63,10 @@
  - Classify symbolic addresses between "concrete", "symbolic reg + concrete offset", and "other"
  - Add basic type inference to TraceRun.
  - Plug that into "run-func" (deadline on 24/04/2020)
+ - Catch up on all missing documentation to Trace, TraceRun and all typer code
+ - Figure out how to add extra documentation pages and add an overview and a pipeline page.
+ - Add ability to run code at a direct address and not just symbol + offset
+ - Update dump-* to allow to look at symbol containing a specific address
  - Add actual control-flow handling to TraceRun (computing the new PC in all cases)
  - Do the run-block command with breakpoints
  - Update the run-func command to use run-block and not run-bb as backend
@@ -124,3 +127,4 @@
  - Package read-dwarf with opam and dune.
  - Add a simplified trace on which to run the C type inference
  - Add the execution code (TraceRun) to run the simplified trace like IslaRun
+ - Update BB and RunBB to use Trace and TraceRun

@@ -79,7 +79,7 @@ let elf =
   in
   Arg.(value & opt (some non_dir_file) None & info ["e"; "elf"] ~doc)
 
-let get_instr instr elfopt =
+let get_instr instr elfopt : BytesSeq.t =
   let (elfname, symname) =
     match elfopt with
     | None ->
@@ -92,7 +92,7 @@ let get_instr instr elfopt =
   if elfopt = None then Sys.remove elfname;
   let (sym, off) =
     try Elf.SymTbl.sym_offset_of_string elf.symbols symname
-    with Not_found -> fail "The symbol %s cannot found in %s" instr elfname
+    with Not_found -> fail "The symbol %s cannot found in %s" symname elfname
   in
   debug "Got symbol:\n%t\n" (PP.topi Elf.Sym.pp_raw sym);
   let len = 4 (* TODO proper Instruction length system *) in
@@ -104,7 +104,7 @@ let simp_trace_term = Term.(const ( || ) $ simp_trace $ simp)
 
 let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
-let get_traces arch instr isla_run dump_types =
+let get_traces arch instr isla_run dump_types : traces =
   IslaCache.start arch;
   Init.init ();
   let rtraces = IslaCache.get_traces instr in
@@ -161,7 +161,9 @@ let run_instr dump_init norun simp_state traces =
       else states
     in
     List.iteri (fun i state -> base "State %d:\n%t\n" i (PP.topi State.pp state)) states
-  end
+  end;
+  IslaCache.stop ();
+  Z3.ensure_stopped ()
 
 let term = Term.(const run_instr $ init $ no_run $ simp_state_term $ traces_term)
 

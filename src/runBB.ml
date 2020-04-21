@@ -12,68 +12,38 @@ end)
 
 type state = State.t
 
-(* TODO control flow with lazyness *)
-let run_code trcs typ (run : bool) simp (code : BytesSeq.t) : unit =
-  if trcs || typ || run || simp then begin
-    let bb = BB.from_binary code in
-    (if trcs then PP.(println $ BB.pp bb));
-    if typ || run || simp then begin
-      BB.type_regs bb;
-      (if typ then PP.(println $ Reg.pp_rstruct Reg.index));
-      if run || simp then begin
-        let istate = Init.state () in
-        let state = State.copy istate in
-        Printf.printf "Starting with state %d\n" istate.id;
-        BB.run_mut state bb;
-        (if run then PP.(println $ State.pp state));
-        if simp then begin
-          Z3.start ();
-          State.map_mut_exp SMT.simplify state;
-          Z3.stop ()
-        end;
-        PP.(println $ State.pp state)
-      end
-    end
-  end
+let dump =
+  let doc = "Dump the trace representation of the basic block" in
+  Arg.(value & flag & info ["d"; "dump"] ~doc)
 
-let run_bb arch trcs typ run simp elfname sym len =
-  let elf = Elf.File.of_file elfname in
-  try
-    ElfFile.load_arch elf;
-    assert (Arch.initialized () <> None);
-    let (sym, off) = Elf.SymTbl.sym_offset_of_string elf.symbols sym in
-    let len = match len with Some i -> i | None -> sym.size - off in
-    let code = Elf.Sym.sub sym off len in
-    Random.self_init ();
-    IslaCache.start arch;
-    Init.init ();
-    run_code trcs typ run simp code;
-    flush stdout;
-    IslaCache.stop ()
-  with Not_found -> fatal "The symbol %s was not found in %s\n" sym elfname
+let reg_types =
+  let doc = "Print the register types used by the basic block (and base set)" in
+  Arg.(value & flag & info ["t"; "types"] ~doc)
 
-let trcs =
-  let doc = "Print the isla traces of the basic block" in
-  Arg.(value & flag & info ["i"; "isla-trc"] ~doc)
+let no_run =
+  let doc =
+    "Do not run the basic block (useful to only get pre-run data like --dump-trace or --type)"
+  in
+  Arg.(value & flag & info ["n"; "no-run"] ~doc)
 
-let typ =
-  let doc = "Print the register types after the basic block" in
-  Arg.(value & flag & info ["t"; "type"] ~doc)
+let simp_trace =
+  let doc = "Simplify the traces before running" in
+  Arg.(value & flag & info ["simp-trace"] ~doc)
 
-let run =
-  let doc = "Run the basic block and print the end state" in
-  Arg.(value & flag & info ["r"; "run"] ~doc)
+let simp_state =
+  let doc = "Simplify the final state" in
+  Arg.(value & flag & info ["simp-state"] ~doc)
 
 let simp =
-  let doc = "Print a simplified end state" in
-  Arg.(value & flag & info ["s"; "simplify"] ~doc)
+  let doc = "Implies both --simp-state and --simp-trace" in
+  Arg.(value & flag & info ["s"; "simp"] ~doc)
 
 let elf =
   let doc = "ELF file from which to pull the code" in
   Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"ELF_FILE" ~doc)
 
 let sym =
-  let doc = "The symbol to analyse, \"test\" by default. an offset can be added like sym+8" in
+  let doc = "The symbol to analyse, \"test\" by default. An offset can be added like sym+8" in
   Arg.(value & opt string "test" & info ["sym"] ~doc)
 
 let len =
@@ -83,7 +53,52 @@ let len =
   in
   Arg.(value & opt (some int) None & info ["l"; "len"] ~doc)
 
-let term = Term.(func_options comopts run_bb $ arch $ trcs $ typ $ run $ simp $ elf $ sym $ len)
+let get_code elfname symname len : BytesSeq.t =
+  let elf = Elf.File.of_file elfname in
+  Elf.File.load_arch elf;
+  let (sym, off) =
+    try Elf.SymTbl.sym_offset_of_string elf.symbols symname
+    with Not_found -> fail "The symbol %s cannot found in %s" symname elfname
+  in
+  let len = match len with Some i -> i | None -> sym.size - off in
+  Elf.Sym.sub sym off len
+
+let code_term = Term.(func_options comopts get_code $ elf $ sym $ len)
+
+let simp_trace_term = Term.(const ( || ) $ simp_trace $ simp)
+
+let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
+
+let get_bb arch dump reg_types simp_trace code : BB.t =
+  IslaCache.start arch;
+  Init.init ();
+  let bb = BB.from_binary code in
+  if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
+  if simp_trace then begin
+    Z3.ensure_started ();
+    BB.simplify_mut bb
+  end;
+  if dump then base "Basic block:\n%t\n" (PP.topi BB.pp bb);
+  bb
+
+let bb_term = Term.(const get_bb $ arch $ dump $ reg_types $ simp_trace_term $ code_term)
+
+let run_bb norun simp_state bb =
+  if not norun then begin
+    let init_state = Init.state () in
+    let state = BB.run init_state bb in
+    if simp_state then begin
+      Z3.ensure_started ();
+      State.unsafe_unlock state;
+      State.map_mut_exp Z3.simplify state;
+      State.lock state
+    end;
+    base "Final state:\n%t\n" (PP.topi State.pp state)
+  end;
+  IslaCache.stop ();
+  Z3.ensure_stopped ()
+
+let term = Term.(const run_bb $ no_run $ simp_state_term $ bb_term)
 
 let info =
   let doc = "Test operations on a single basic block" in

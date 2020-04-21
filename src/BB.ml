@@ -1,8 +1,6 @@
 (** This module provide code to manipulate basic block and run them *)
 
-open Fun
-
-type trc = Isla.rtrc
+type trc = Trace.t
 
 type state = State.t
 
@@ -26,7 +24,9 @@ let from_binary (code : BytesSeq.t) : t =
   let process (code : BytesSeq.t) : trc =
     let get_normal : Isla.rtrc list -> trc = function
       | [] -> failwith "BB.from_binary: no normal path"
-      | [trc] -> trc
+      | [trc] ->
+          IslaType.type_trc trc |> ignore;
+          Trace.of_isla trc
       | _ -> failwith "BB.from_binary: Multiple path i.e. branching instruction"
     in
     code |> IslaCache.get_traces |> get_normal
@@ -34,11 +34,10 @@ let from_binary (code : BytesSeq.t) : t =
   let main = code |> BytesSeq.to_list32bs |> List.map process |> Array.of_list in
   { main }
 
-(** Add to the register map all the register appearing in the basic block *)
-let type_regs (bb : t) : unit = Array.iter (IslaType.type_trc %> ignore) bb.main
+let simplify_mut (bb : t) = Array.map_mut Trace.simplify bb.main
 
 (** Run a linear basic block on a state by mutation *)
-let run_mut state (bb : t) : unit = Array.iter (IslaRun.trc_mut state) bb.main
+let run_mut state (bb : t) : unit = Array.iter (TraceRun.trace_mut state) bb.main
 
 (** Run a linear basic block on a trace and return a new state *)
 let run start (bb : t) : state =
@@ -47,4 +46,4 @@ let run start (bb : t) : state =
   State.lock state;
   state
 
-let pp (bb : t) = PP.(array Isla.pp_trc bb.main)
+let pp (bb : t) = bb.main |> Array.to_list |> PP.(separate_map (hardline ^^ hardline) Trace.pp)
