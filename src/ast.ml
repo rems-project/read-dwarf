@@ -85,10 +85,6 @@ include AstParser_pp
     Here are some function to destroy empty types.
 *)
 
-let destr_unptr : no unptr -> 'a = function Aligned _ -> . | Align _ -> .
-
-let destr_binptr : no binptr -> 'a = function Overlap _ -> .
-
 let destr_binmem : no binmem -> 'a = function Select _ -> . | Store _ -> .
 
 (*****************************************************************************)

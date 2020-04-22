@@ -63,7 +63,7 @@ type t = {
 
 and tval = { ctyp : Ctype.t option; exp : exp }
 
-and exp = (Ast.lrng, var, Ast.no, Ast.Size.t, Ast.no) Ast.exp
+and exp = (Ast.lrng, var, Ast.no, Ast.no) Ast.exp
 
 and var = Register of t * Reg.path | ReadVar of t * int | Arg of int | RetArg
 
@@ -79,7 +79,7 @@ and mem = { mutable trace : mem_event list }
 
 (* Other ast aliases *)
 
-type smt = (Ast.lrng, var, Ast.no, Ast.Size.t, Ast.no) Ast.smt
+type smt = (Ast.lrng, var, Ast.no, Ast.no) Ast.smt
 
 (*****************************************************************************)
 (*****************************************************************************)

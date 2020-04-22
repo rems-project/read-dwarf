@@ -56,7 +56,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Decision: Remove pointer operations shortcuts (and thus the AST type parameter)
  - Handle the 52 bits real width pointer problem
  - Classify symbolic addresses between "concrete", "symbolic reg + concrete offset", and "other"
  - Add basic type inference to TraceRun.

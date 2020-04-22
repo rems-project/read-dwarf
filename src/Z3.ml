@@ -189,9 +189,9 @@ let ensure_stopped () = match !server with None -> () | Some _ -> stop ()
 (*****************************************************************************)
 (** {1 Medium-level interaction } *)
 
-type ('a, 'v) in_exp = ('a, 'v, Ast.no, Ast.Size.t, Ast.Size.t) Ast.exp
+type ('a, 'v) in_exp = ('a, 'v, Ast.no, Ast.Size.t) Ast.exp
 
-type 'v out_exp = (Ast.lrng, 'v, Ast.no, Ast.Size.t, Ast.Size.t) Ast.exp
+type 'v out_exp = (Ast.lrng, 'v, Ast.no, Ast.Size.t) Ast.exp
 
 (** Simplify an expression in the context. The context must already have been declared *)
 let simplify_full ~ppv ~vofs (exp : ('a, 'v) in_exp) : 'v2 out_exp =

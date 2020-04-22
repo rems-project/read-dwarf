@@ -22,11 +22,11 @@ module Var = struct
   let pp v = v |> to_string |> PP.string
 end
 
-type exp = (Ast.lrng, Var.t, Ast.no, Ast.no, Ast.no) Ast.exp
+type exp = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
 
-let exp_to_z3 (e : exp) = e |> AstManip.allow_lets |> AstManip.allow_mem |> AstManip.allow_ptr
+let exp_to_z3 (e : exp) = e |> AstManip.allow_lets |> AstManip.allow_mem
 
-let exp_of_z3 e = e |> AstManip.expect_no_mem |> AstManip.expect_no_ptr
+let exp_of_z3 e = e |> AstManip.expect_no_mem
 
 let pp_exp e = Ast.pp_exp Var.pp (exp_to_z3 e)
 

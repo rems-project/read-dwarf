@@ -19,7 +19,7 @@ let expand_var ~(ctxt : context) (v : Trace.Var.t) (a : Ast.lrng) =
   | Read i -> (HashVector.get ctxt.mem_reads i).exp
 
 let expand ~(ctxt : context) (exp : Trace.exp) : State.exp =
-  AstManip.exp_var_subst (expand_var ~ctxt) (exp |> AstManip.allow_ptr)
+  AstManip.exp_var_subst (expand_var ~ctxt) exp
 
 (* This is where type-inference will happen (soon) *)
 let event_mut ~(ctxt : context) (event : Trace.event) =

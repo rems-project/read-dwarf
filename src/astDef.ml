@@ -24,10 +24,10 @@ module Size = struct
   let pp_bytes s = s |> to_bytes |> PP.int
 end
 
-type rexp = (lrng, string, string, Size.t, Size.t) exp
+type rexp = (lrng, string, string, Size.t) exp
 
-type rsmt = (lrng, string, string, Size.t, Size.t) smt
+type rsmt = (lrng, string, string, Size.t) smt
 
 type rsmts = rsmt list
 
-type rsmt_ans = (lrng, string, string, Size.t, Size.t) smt_ans
+type rsmt_ans = (lrng, string, string, Size.t) smt_ans

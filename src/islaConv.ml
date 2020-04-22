@@ -6,7 +6,7 @@ let ty : Isla.ty -> 'a Ast.ty = function
   | Ty_BitVec i -> Ty_BitVec i
   | Ty_Enum e -> Ty_Enum e
 
-let unop : Isla.unop -> 'p Ast.unop = function
+let unop : Isla.unop -> Ast.unop = function
   | Not -> Not
   | Bvnot -> Bvnot
   | Bvredand -> Bvredand
@@ -49,7 +49,7 @@ let bvmanyarith : Isla.bvmanyarith -> Ast.bvmanyarith = function
   | Bvadd -> Bvadd
   | Bvmul -> Bvmul
 
-let binop : Isla.binop -> ('p, 'm) Ast.binop = function
+let binop : Isla.binop -> 'm Ast.binop = function
   | Eq -> Eq
   | Neq -> Neq
   | Bvarith b -> Bvarith (bvarith b)
@@ -61,8 +61,8 @@ let manyop : Isla.manyop -> Ast.manyop = function
   | Bvmanyarith b -> Bvmanyarith (bvmanyarith b)
   | Concat -> Concat
 
-let direct_exp_no_var (conv : 'a Isla.exp -> ('a, 'v, 'b, 'p, 'm) Ast.exp) :
-    'a Isla.exp -> ('a, 'v, 'b, 'p, 'm) Ast.exp = function
+let direct_exp_no_var (conv : 'a Isla.exp -> ('a, 'v, 'b, 'm) Ast.exp) :
+    'a Isla.exp -> ('a, 'v, 'b, 'm) Ast.exp = function
   | Bits (b, a) -> Bits (b, a)
   | Bool (b, a) -> Bool (b, a)
   | Enum (e, a) -> Enum (e, a)
@@ -72,19 +72,19 @@ let direct_exp_no_var (conv : 'a Isla.exp -> ('a, 'v, 'b, 'p, 'm) Ast.exp) :
   | Ite (c, e, e', a) -> Ite (conv c, conv e, conv e', a)
   | Var (_, _) -> failwith "var in direct_exp_no_var"
 
-let rec exp_var_conv (vconv : int -> 'v) : 'a Isla.exp -> ('a, 'v, 'b, 'p, 'm) Ast.exp = function
+let rec exp_var_conv (vconv : int -> 'v) : 'a Isla.exp -> ('a, 'v, 'b, 'm) Ast.exp = function
   | Var (i, a) -> Var (vconv i, a)
   | e -> direct_exp_no_var (exp_var_conv vconv) e
 
 let rec exp e = exp_var_conv Fun.id e
 
 (** Convert an expression from isla to Ast but using a var-to-exp conversion function *)
-let rec exp_var_subst (vconv : int -> 'a -> ('a, 'v, 'b, 'p, 'm) Ast.exp) :
-    'a Isla.exp -> ('a, 'v, 'b, 'p, 'm) Ast.exp = function
+let rec exp_var_subst (vconv : int -> 'a -> ('a, 'v, 'b, 'm) Ast.exp) :
+    'a Isla.exp -> ('a, 'v, 'b, 'm) Ast.exp = function
   | Var (i, a) -> vconv i a
   | e -> direct_exp_no_var (exp_var_subst vconv) e
 
-let smt_var_conv (vconv : int -> 'v) : 'a Isla.smt -> ('a, 'v, 'b, 'p, 'm) Ast.smt = function
+let smt_var_conv (vconv : int -> 'v) : 'a Isla.smt -> ('a, 'v, 'b, 'm) Ast.smt = function
   | DeclareConst (i, t) -> DeclareConst (vconv i, ty t)
   | DefineConst (i, e) -> DefineConst (vconv i, exp_var_conv vconv e)
   | Assert e -> Assert (exp_var_conv vconv e)

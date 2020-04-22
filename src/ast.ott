@@ -26,12 +26,6 @@ embed
 
 
 grammar
-ptr_size :: '' ::=                      {{ ocaml 'p }}
-                                        {{ phantom }}
-                                        {{ pp-raw x = AstDef.Size.pp_bytes x }}
-                                        {{ pp x = AstDef.Size.pp_bytes x }}
- | int                                  :: :: PSize {{ ocaml Size.of_bytes int }}
-
 mem_size :: '' ::=                      {{ ocaml 'm }}
                                         {{ phantom }}
                                         {{ pp-raw x = AstDef.Size.pp_bytes x }}
@@ -39,30 +33,18 @@ mem_size :: '' ::=                      {{ ocaml 'm }}
  | int                                  :: :: MSize {{ ocaml Size.of_bytes int }}
 
 
-unptr :: '' ::=                         {{ auxparam 'p }}
- | aligned ptr_size                     :: :: Aligned
- | align ptr_size                       :: :: Align
-
-%merged with isla_lang
-unop :: '' ::=                          {{ auxparam 'p}}
- | unptr                                :: :: Unptr
-
 % bvarith :: '' ::=                       {{ ocaml Isla.bvarith }}
 
 % bvcomp :: '' ::=                        {{ ocaml Isla.bvcomp }}
 
 % bvmanyarith :: '' ::=                   {{ ocaml Isla.bvmanyarith }}
 
-binptr :: '' ::=                        {{ auxparam 'p }}
- | overlap ptr_size                     :: :: Overlap
-
 binmem :: '' ::=                        {{ auxparam 'm }}
  | select mem_size                      :: :: Select
  | store mem_size                       :: :: Store
 
 %merged with isla_lang
-binop :: '' ::=                         {{ auxparam ('p, 'm) }}
- | binptr                               :: :: Binptr
+binop :: '' ::=                         {{ auxparam 'm }}
  | binmem                               :: :: Binmem
 
 
@@ -83,7 +65,7 @@ bbvar :: '' ::=                         {{ ocaml 'b }}
   | bvar                                :: :: BVarName {{ocaml bvar }}
 
 exp :: '' ::=                           {{ aux _ annot }}
-                                        {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
+                                        {{ auxparam ('a, 'v, 'b, 'm) }}
                                         {{ pp-params ppv }}
                                         {{ menhir-start }}
                                         {{ menhir-start-type AstDef.rexp }}
@@ -104,7 +86,7 @@ ty :: 'Ty_' ::=                         {{ auxparam 'm }}
 
 %%%%% smt %%%%%
 grammar
-smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
+smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'm) }}
                                         {{ pp-params ppv }}
                                         {{ menhir-start }}
                                         {{ menhir-start-type AstDef.rsmt }}
@@ -118,7 +100,7 @@ smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
   | ( check-sat )                       :: :: CheckSat
   | ( exit )                            :: :: Exit
 
-smts :: '' ::=                          {{ ocaml ('a, 'v, 'b, 'p, 'm) smt list }}
+smts :: '' ::=                          {{ ocaml ('a, 'v, 'b, 'm) smt list }}
                                         {{ phantom }}
                                         {{ pp-params ppv }}
                                         {{ menhir-start }}
@@ -127,7 +109,7 @@ smts :: '' ::=                          {{ ocaml ('a, 'v, 'b, 'p, 'm) smt list }
                                         {{ pp-raw ppv x = x |> List.map (pp_raw_smt ppv) |> separate hardline }}
   | smt1 .. smtj                        :: :: Smts {{ ocaml smt0 }}
 
-smt_ans :: '' ::=                       {{ auxparam ('a, 'v, 'b, 'p, 'm) }}
+smt_ans :: '' ::=                       {{ auxparam ('a, 'v, 'b, 'm) }}
                                         {{ pp-params ppv }}
                                         {{ menhir-start }}
                                         {{ menhir-start-type AstDef.rsmt_ans }}

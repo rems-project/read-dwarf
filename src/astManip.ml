@@ -19,7 +19,7 @@ end)
    [direct_a_iter_b] take a function [b -> unit] and applies it to all [b] in [a], non-recursively.
 *)
 
-let direct_exp_map_exp (f : ('a, 'v, 'b, 'p, 'm) exp -> ('a, 'v, 'b, 'p, 'm) exp) = function
+let direct_exp_map_exp (f : ('a, 'v, 'b, 'm) exp -> ('a, 'v, 'b, 'm) exp) = function
   | Unop (u, e, l) -> Unop (u, f e, l)
   | Binop (b, e, e', l) -> Binop (b, f e, f e', l)
   | Manyop (m, el, l) -> Manyop (m, List.map f el, l)
@@ -31,7 +31,7 @@ let direct_exp_map_exp (f : ('a, 'v, 'b, 'p, 'm) exp -> ('a, 'v, 'b, 'p, 'm) exp
   | Enum _ as e -> e
   | Var _ as v -> v
 
-let direct_exp_iter_exp (i : ('a, 'v, 'b, 'p, 'm) exp -> unit) = function
+let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
   | Unop (u, e, l) -> i e
   | Binop (b, e, e', l) ->
       i e;
@@ -69,7 +69,7 @@ let direct_exp_iter_exp (i : ('a, 'v, 'b, 'p, 'm) exp -> unit) = function
 *)
 
 (** iterate a function on all the variable of an expression *)
-let rec exp_iter_var (f : 'v -> unit) : ('a, 'v, 'b, 'p, 'm) exp -> unit = function
+let rec exp_iter_var (f : 'v -> unit) : ('a, 'v, 'b, 'm) exp -> unit = function
   | Var (v, a) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
 
@@ -82,8 +82,7 @@ let rec exp_iter_var (f : 'v -> unit) : ('a, 'v, 'b, 'p, 'm) exp -> unit = funct
     All of those function convert the underlying variable type through the AST.
     They cannot be the usual map function because they change the type
 *)
-let rec exp_conv_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'p, 'm) exp) :
-    ('a, 'vb', 'b, 'p, 'm) exp =
+let rec exp_conv_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'vb', 'b, 'm) exp =
   let ec = exp_conv_var conv in
   match exp with
   | Var (v, a) -> Var (conv v, a)
@@ -98,8 +97,8 @@ let rec exp_conv_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'p, 'm) exp) :
   | Let (v, e, e', a) -> Let (v, ec e, ec e', a)
 
 (** Substitute variable with expression according to substitution function *)
-let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'p, 'm) exp)
-    (exp : ('a, 'va, 'b, 'p, 'm) exp) : ('a, 'vb, 'b, 'p, 'm) exp =
+let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, 'va, 'b, 'm) exp) :
+    ('a, 'vb, 'b, 'm) exp =
   let es = exp_var_subst subst in
   match exp with
   | Var (v, a) -> subst v a
@@ -119,27 +118,27 @@ let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'p, 'm) exp)
 (** {1 Bound variables and let-bindings } *)
 
 (** Allow bound variables and lets in an expression. *)
-let allow_lets : ('a, 'v, no, 'p, 'm) exp -> ('a, 'v, 'b, 'p, 'm) exp =
+let allow_lets : ('a, 'v, no, 'm) exp -> ('a, 'v, 'b, 'm) exp =
   (* Check that exp is covariant in the 'b parameter, otherwise this is unsound *)
   let module M : sig
     type +'b t
   end = struct
-    type 'b t = (no, no, 'b, no, no) exp
+    type 'b t = (no, no, 'b, no) exp
   end in
   Obj.magic
 
-let smt_allow_lets : ('a, 'v, no, 'p, 'm) smt -> ('a, 'v, 'b, 'p, 'm) smt =
+let smt_allow_lets : ('a, 'v, no, 'm) smt -> ('a, 'v, 'b, 'm) smt =
   (* Check that smt is covariant in the 'b parameter, otherwise this is unsound *)
   let module M : sig
     type +'b t
   end = struct
-    type 'b t = (no, no, 'b, no, no) smt
+    type 'b t = (no, no, 'b, no) smt
   end in
   Obj.magic
 
 (** Unfold all lets. The output type still allow lets so that the output of this function can still be used without {!allow_bound} *)
-let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'p, 'm) exp) :
-    ('a, 'v, 'b2, 'p, 'm) exp =
+let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) :
+    ('a, 'v, 'b2, 'm) exp =
   let ul = unfold_lets ~context in
   match exp with
   | Bound (b, l) -> Hashtbl.find context b
@@ -164,21 +163,21 @@ let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'p, 'm) e
 (** {1 Memory operation } *)
 
 (** Allow memory operations in an expression. *)
-let allow_mem : ('a, 'v, 'b, 'p, no) exp -> ('a, 'v, 'b, 'p, 'm) exp =
+let allow_mem : ('a, 'v, 'b, no) exp -> ('a, 'v, 'b, 'm) exp =
   (* Check that exp is covariant in the 'm parameter, otherwise this is unsound *)
   let module M : sig
     type +'m t
   end = struct
-    type 'm t = (no, no, no, no, 'm) exp
+    type 'm t = (no, no, no, 'm) exp
   end in
   Obj.magic
 
-let smt_allow_mem : ('a, 'v, 'b, 'p, no) smt -> ('a, 'v, 'b, 'p, 'm) smt =
+let smt_allow_mem : ('a, 'v, 'b, no) smt -> ('a, 'v, 'b, 'm) smt =
   (* Check that smt is covariant in the 'm parameter, otherwise this is unsound *)
   let module M : sig
     type +'m t
   end = struct
-    type 'm t = (no, no, no, no, 'm) exp
+    type 'm t = (no, no, no, 'm) exp
   end in
   Obj.magic
 
@@ -192,7 +191,7 @@ let ty_allow_mem : no ty -> 'm ty =
   end in
   Obj.magic
 
-let check_no_mem (e : ('a, 'v, 'b, 'p, 'm) exp) : bool =
+let check_no_mem (e : ('a, 'v, 'b, 'm) exp) : bool =
   let ref_res = ref true in
   let rec check = function
     | Binop (Binmem _, _, _, _) -> ref_res := false
@@ -204,44 +203,7 @@ let check_no_mem (e : ('a, 'v, 'b, 'p, 'm) exp) : bool =
 (** expect that an [exp] has no memory constructor, and then return it with
     memory remove from the type. Throws [Failure] if the value had memory constructors.
 
-    TODO This is not resilient to change of type, find a way to make it resilient
-*)
+    TODO This is not resilient to change of type, find a way to make it resilient *)
 let expect_no_mem ?(handler = fun () -> failwith "Expected no mem") :
-    ('a, 'v, 'b, 'p, 'm1) exp -> ('a, 'v, 'b, 'p, 'm2) exp =
+    ('a, 'v, 'b, 'm1) exp -> ('a, 'v, 'b, 'm2) exp =
  fun exp -> if check_no_mem exp then Obj.magic exp else handler ()
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Pointer operation } *)
-
-(** Allow pointer operations in an expression. *)
-let allow_ptr (type a v b m) (exp : (a, v, b, no, m) exp) : (a, v, b, 'p, m) exp =
-  (* Check that exp is covariant in the 'm parameter, otherwise this is unsound *)
-  let module M : sig
-    type +'p t
-  end = struct
-    type 'p t = (a, v, b, 'p, m) exp
-  end in
-  Obj.magic exp
-
-let check_no_ptr (e : ('a, 'v, 'b, 'p, 'm) exp) : bool =
-  let ref_res = ref true in
-  let rec check = function
-    | Binop (Binptr _, _, _, _) -> ref_res := false
-    | Unop (Unptr _, _, _) -> ref_res := true
-    | e -> direct_exp_iter_exp check e
-  in
-  check e;
-  !ref_res
-
-(** Expects that an [exp] has no pointer constructor, and then return it with
-    pointer operations removed from the type.
-    Throws [Failure] if the value had memory constructors.
-
-    TODO This is not resilient to change of type in a type-safe manner,
-         find a way to make it resilient
-*)
-let expect_no_ptr ?(handler = fun () -> failwith "Expected no ptr") :
-    ('a, 'v, 'b, 'p1, 'm) exp -> ('a, 'v, 'b, 'p2, 'm) exp =
- fun exp -> if check_no_ptr exp then Obj.magic exp else handler ()
