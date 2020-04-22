@@ -1656,15 +1656,16 @@ let graph_cfg_union g1 g2 =
   }
 
 let count_branch_nodes g =
-  List.length (List.filter 
-                 (function n -> match n.nc_kind with 
-                                | CFG_node_branch_cond
-                                  | CFG_node_branch_register -> true
-                                | _ -> false)
-                 g.gc_nodes)
-  
+  List.length
+    (List.filter
+       (function
+         | n -> (
+             match n.nc_kind with
+             | CFG_node_branch_cond | CFG_node_branch_register -> true
+             | _ -> false
+           ))
+       g.gc_nodes)
 
-  
 (* the graphviz svg colours from https://www.graphviz.org/doc/info/colors.html without those too close to white or those that dot complains about*)
 let colour_pairs_svg =
   [
@@ -3618,8 +3619,8 @@ let pp_instruction test an k i =
 
 let pp_test_analysis test an =
   "* ************* instruction count *****************\n"
-  ^ string_of_int (Array.length an.instructions) ^ " instructions\n"
-  ^ "* ************* globals *****************\n"
+  ^ string_of_int (Array.length an.instructions)
+  ^ " instructions\n" ^ "* ************* globals *****************\n"
   ^ pp_vars an.ranged_vars_at_instructions.rvai_globals
   (*  ^ "************** locals *****************\n"
   ^ pp_ranged_vars
