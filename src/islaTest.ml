@@ -199,7 +199,7 @@ let processing preprocessing pmode (filename, input) : unit =
     State.lock init_state;
     base "Initial state:\n%t\n" (PP.topi State.pp init_state);
     let end_state = IslaRun.trc init_state trace in
-    base "Final state:\n%t\n" (PP.topi State.pp init_state);
+    base "Final state:\n%t\n" (PP.topi State.pp end_state);
     end_state
   in
   let simp state =

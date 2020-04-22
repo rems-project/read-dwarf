@@ -46,7 +46,8 @@ let input_sexp (i : in_channel) : string =
       while !pnum > 0 do
         let line = input_line i in
         count line;
-        Buffer.add_string buf line
+        Buffer.add_string buf line;
+        Buffer.add_char buf '\n'
       done;
       Buffer.contents buf
   end

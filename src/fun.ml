@@ -16,3 +16,6 @@ let ( $ ) = ( @@ )
     The trivial definition is [x |> (f %> g) = x |> f |> g]
 *)
 let ( %> ) f g x = x |> f |> g
+
+(** The function that does nothing. Useful for high-order programming *)
+let nop _ = ()

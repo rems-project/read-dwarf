@@ -83,14 +83,14 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
     )
   | Smt (Assert e, l) -> State.push_assert state (exp_conv_subst vc e)
   | ReadReg (name, al, valu, l) ->
-      debug "Reading Reg %s from %t" name PP.(top pp_valu valu);
+      debug "Reading Reg %s at %t from %t" name PP.(top pp_accessor_list al) PP.(top pp_valu valu);
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
       let path = Reg.path_of_string_list (name :: string_path) in
       let e : State.exp = (Reg.Map.get state.regs path).exp in
       write_to_valu l vc valu e
   | WriteReg (name, al, valu, l) ->
-      debug "Writing Reg %s from %t" name PP.(top pp_valu valu);
+      debug "Writing Reg %s at %t from %t" name PP.(top pp_accessor_list al) PP.(top pp_valu valu);
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
       let path = Reg.path_of_string_list (name :: string_path) in

@@ -59,10 +59,19 @@ var :: '' ::=                           {{ ocaml 'v }}
 
 bbvar :: '' ::=                         {{ ocaml 'b }}
                                         {{ phantom }}
-                                        {{ pp-params }}
                                         {{ pp s = string s}}
                                         {{ pp-raw s = string s }}
   | bvar                                :: :: BVarName {{ocaml bvar }}
+
+bind :: '' ::=                          {{ phantom }}
+                                        {{ ocaml 'b * ('a, 'v, 'b, 'm) exp }}
+                                        {{ pp-params ppv }}
+                                        {{ pp ppv se = let (n,v) = se in
+                                                   parens (pp_bbvar n ^^ blank 1 ^^ pp_exp ppv v) }}
+                                        {{ pp-raw ppv se = let (n,v) = se in
+                                                       pp_raw_bbvar n ^^ !^"," ^^ pp_raw_exp ppv v }}
+ | ( bbvar exp )                        :: :: Struct_elem {{ ocaml (bbvar,exp) }}
+
 
 exp :: '' ::=                           {{ aux _ annot }}
                                         {{ auxparam ('a, 'v, 'b, 'm) }}
@@ -78,7 +87,7 @@ exp :: '' ::=                           {{ aux _ annot }}
   | ( binop exp1 exp2 )                 :: :: Binop
   | ( manyop exp1 .. expj )             :: :: Manyop
   | ( ite exp1 exp2 exp3 )              :: :: Ite
-  | ( let ( ( bbvar exp1 ) ) exp2 )     :: :: Let
+  | ( let ( bind1 .. bindj ) exp2 )     :: :: Let
 
 
 ty :: 'Ty_' ::=                         {{ auxparam 'm }}
