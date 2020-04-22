@@ -56,8 +56,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Clean State.ml to prepare for typing
- - Update isla to integrate alignment check fix
  - Decision: Remove pointer operations shortcuts (and thus the AST type parameter)
  - Handle the 52 bits real width pointer problem
  - Classify symbolic addresses between "concrete", "symbolic reg + concrete offset", and "other"

@@ -15,7 +15,7 @@ let make_context state =
 
 let expand_var ~(ctxt : context) (v : Trace.Var.t) (a : Ast.lrng) =
   match v with
-  | Register reg -> (Reg.Map.get ctxt.state.regs reg).exp
+  | Register reg -> State.get_reg ctxt.state reg |> State.get_exp
   | Read i -> (HashVector.get ctxt.mem_reads i).exp
 
 let expand ~(ctxt : context) (exp : Trace.exp) : State.exp =
@@ -29,12 +29,12 @@ let event_mut ~(ctxt : context) (event : Trace.event) =
       Vector.add_one ctxt.reg_writes (reg, State.make_tval (expand ~ctxt value))
   | ReadMem { addr; value; size } ->
       let mb : State.Mem.block = { addr = expand ~ctxt addr; size } in
-      let tval = State.read mb ctxt.state in
+      let tval = State.make_tval @@ State.read ctxt.state mb in
       HashVector.set ctxt.mem_reads value tval
   | WriteMem { addr; value; size } ->
       let mb : State.Mem.block = { addr = expand ~ctxt addr; size } in
       let value = expand ~ctxt value in
-      State.write mb value ctxt.state
+      State.write ctxt.state mb value
   | Assert exp -> State.push_assert ctxt.state (expand ~ctxt exp)
 
 let trace_mut (state : State.t) (events : Trace.t) : unit =

@@ -81,8 +81,6 @@ and mem = { mutable trace : mem_event list }
 
 type smt = (Ast.lrng, var, Ast.no, Ast.Size.t, Ast.no) Ast.smt
 
-let make_tval ?ctyp exp = { exp; ctyp }
-
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -135,6 +133,15 @@ module Var = struct
 
   let pp sv = sv |> to_string |> PP.string
 end
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 State expression and typed-value management } *)
+
+let make_tval ?ctyp exp = { exp; ctyp }
+
+let get_exp tval = tval.exp
 
 let pp_exp (exp : exp) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
 
@@ -328,6 +335,7 @@ let map_mut_exp (f : exp -> exp) s : unit =
   s.asserts <- List.map f s.asserts;
   Mem.map_mut_exp f s.mem
 
+(** Copy the state and map all the expression on it. The new state is unlocked *)
 let map_exp (f : exp -> exp) s : t =
   let res = copy s in
   map_mut_exp f res;
@@ -352,8 +360,13 @@ let var_type var =
   | Arg _ -> Ast.Ty_BitVec 64
   | RetArg -> Ast.Ty_BitVec 64
 
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 State accessors } *)
+
 (** Create a new Extra symbolic variable by mutating the state *)
-let make_extra (ty : ty) ?ctyp (s : t) : var =
+let make_read (s : t) ?ctyp (ty : ty) : var =
   assert (not @@ is_locked s);
   let len = Vector.length s.read_vars in
   let var = ReadVar (s, len) in
@@ -368,36 +381,48 @@ let make_extra (ty : ty) ?ctyp (s : t) : var =
     - a concrete constant (read from rodata)
     - a symbolic initial memory variable (when and if those exist)
 
-    In practice for now it is always the first case
-*)
-let read (mb : Mem.block) (s : t) : tval =
+    In practice for now it is always the first case *)
+let read (s : t) (mb : Mem.block) : exp =
   assert (not @@ is_locked s);
   let ty = Mem.Size.to_bv mb.size in
-  let nvar = make_extra ty s in
+  let nvar = make_read s ty in
   Mem.read s.mem mb nvar;
-  { ctyp = None; exp = Var.to_exp nvar }
+  Var.to_exp nvar
 
 (** Write the provided value in the block. Mutate the state.*)
-let write (mb : Mem.block) (value : exp) (s : t) : unit =
+let write (s : t) (mb : Mem.block) (value : exp) : unit =
   assert (not @@ is_locked s);
   Mem.write s.mem mb value
 
-(** Reset the register in given path to a symbolic value *)
-let reset_reg (path : Reg.path) ?(ctyp : Ctype.t option) (s : t) : unit =
+(** Does the same as read, but additionally take care of reading the type from a fragment
+    and marking the type of the read variable. *)
+let typed_read (s : t) ~(ptrtype : Ctype.t) (mb : Mem.block) : tval = Raise.fail "unimplemented"
+
+(** Does the same as read, but additionally take care of writing the type if the write is on
+    a {!Ctype.FreeFragment}.*)
+let typed_write (s : t) ~(ptrtype : Ctype.t) (mb : Mem.block) (value : tval) : unit =
+  Raise.fail "unimplemented"
+
+(** Reset the register in given path to a symbolic value,
+    and resets the type to the provided type (or no type if not provided)*)
+let reset_reg (s : t) ?(ctyp : Ctype.t option) (path : Reg.path) : unit =
   assert (not @@ is_locked s);
   Reg.Map.set s.regs path @@ make_reg_cell s ?ctyp path
 
 (** Sets the content of register *)
-let set_reg (path : Reg.path) ?(ctyp : Ctype.t option) (exp : exp) (s : t) : unit =
+let set_reg (s : t) (path : Reg.path) (tval : tval) : unit =
   assert (not @@ is_locked s);
-  Reg.Map.set s.regs path @@ { exp; ctyp }
+  Reg.Map.set s.regs path @@ tval
 
 (** Sets the type of the register, leaves the value unchanged *)
-let set_reg_type (path : Reg.path) (ctyp : Ctype.t) (s : t) : unit =
+let set_reg_type (s : t) (path : Reg.path) (ctyp : Ctype.t) : unit =
   assert (not @@ is_locked s);
   let { exp; _ } = Reg.Map.get s.regs path in
   let ntval = { exp; ctyp = Some ctyp } in
   Reg.Map.set s.regs path ntval
+
+(** Get the content of the register *)
+let get_reg (s : t) (path : Reg.path) : tval = Reg.Map.get s.regs path
 
 (*****************************************************************************)
 (*****************************************************************************)

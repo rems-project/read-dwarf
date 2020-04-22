@@ -231,17 +231,19 @@ let get_abi api =
     Reg.Map.iteri
       (fun path b ->
         if b then debug "path to be reset %t" (PP.topi Reg.pp_path path);
-        State.reset_reg path state)
+        State.reset_reg state path)
       data.local_regs;
     for i = 0 to repr.reg_num - 1 do
-      State.set_reg data.reg_map.(i) ~ctyp:repr.reg_types.(i) (State.Var.to_exp @@ Arg i) state
+      let tval = State.make_tval ~ctyp:repr.reg_types.(i) (State.Var.to_exp @@ Arg i) in
+      State.set_reg state data.reg_map.(i) tval
     done;
     ( match repr.ret_pointer with
     | None -> ()
-    | Some ctyp -> State.set_reg ret_pointer_reg ~ctyp (State.Var.to_exp @@ RetArg) state
+    | Some ctyp ->
+        State.set_reg state ret_pointer_reg (State.make_tval ~ctyp (State.Var.to_exp @@ RetArg))
     );
     let stack_frag_id = Fragment.Env.add_frag ~frag:repr.stack_fragment state.fenv in
-    State.set_reg_type sp (Ctype.of_frag @@ FreeFragment stack_frag_id) state;
+    State.set_reg_type state sp (Ctype.of_frag @@ FreeFragment stack_frag_id);
     State.lock state;
     state
   in
