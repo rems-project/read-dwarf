@@ -107,6 +107,10 @@ module Op = struct
 
   let not a = Unop (Not, a, Isla.UnknownRng)
 
+  let extract a b e = Unop (Extract (a, b), e, Isla.UnknownRng)
+
+  let var v = Var (v, Isla.UnknownRng)
+
   let assert_op e = Assert e
 
   let simplify e = Simplify e

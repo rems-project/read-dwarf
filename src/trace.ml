@@ -108,13 +108,13 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
       Hashtbl.add written_registers path new_exp;
       Some (WriteReg { reg = path; value = new_exp })
   | ReadMem (result, kind, addr, size, l) ->
-      let addr = exp_of_valu l vc addr in
+      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
       let size = Ast.Size.of_bytes size in
       let value = Counter.get read_counter in
       write_to_valu vc result (Var (Read value, l));
       Some (ReadMem { addr; size; value })
   | WriteMem (success, kind, addr, data, size, l) ->
-      let addr = exp_of_valu l vc addr in
+      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
       let size = Ast.Size.of_bytes size in
       let value = exp_of_valu l vc data in
       Some (WriteMem { addr; size; value })

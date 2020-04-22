@@ -101,14 +101,20 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
       debug "Reading Mem";
       (* TODO stop ignoring kind *)
       let mb : State.Mem.block =
-        { addr = exp_of_valu l vc addr; size = State.Mem.Size.of_bytes size }
+        {
+          addr = exp_of_valu l vc addr |> Pointer.to_ptr_size;
+          size = State.Mem.Size.of_bytes size;
+        }
       in
       write_to_valu l vc result (State.read state mb)
   | WriteMem (success, kind, addr, data, size, l) ->
       debug "Writing Mem";
       (* TODO stop ignoring kind *)
       let mb : State.Mem.block =
-        { addr = exp_of_valu l vc addr; size = State.Mem.Size.of_bytes size }
+        {
+          addr = exp_of_valu l vc addr |> Pointer.to_ptr_size;
+          size = State.Mem.Size.of_bytes size;
+        }
       in
       let data = exp_of_valu l vc data in
       State.write state mb data

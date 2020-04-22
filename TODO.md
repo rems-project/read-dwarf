@@ -56,8 +56,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Handle the 52 bits real width pointer problem
- - Classify symbolic addresses between "concrete", "symbolic reg + concrete offset", and "other"
  - Add basic type inference to TraceRun.
  - Plug that into "run-func" (deadline on 24/04/2020)
  - Catch up on all missing documentation to Trace, TraceRun and all typer code
@@ -125,3 +123,5 @@
  - Add a simplified trace on which to run the C type inference
  - Add the execution code (TraceRun) to run the simplified trace like IslaRun
  - Update BB and RunBB to use Trace and TraceRun
+ - Handle the 52 bits real width pointer problem
+ - Classify symbolic addresses between "concrete", "symbolic reg + concrete offset", and "other"

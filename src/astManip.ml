@@ -207,3 +207,38 @@ let check_no_mem (e : ('a, 'v, 'b, 'm) exp) : bool =
 let expect_no_mem ?(handler = fun () -> failwith "Expected no mem") :
     ('a, 'v, 'b, 'm1) exp -> ('a, 'v, 'b, 'm2) exp =
  fun exp -> if check_no_mem exp then Obj.magic exp else handler ()
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Bit vector constant manipulation } *)
+
+let int_to_bv ~size value : bv = IslaManip.bvi_to_bv value size
+
+let bv_size (b : bv) =
+  match b.[1] with
+  | 'x' -> 4 * (String.length b - 2)
+  | 'b' -> String.length b - 2
+  | _ -> Raise.fail "Wrong bv string value \"%s\"" b
+
+let bv_to_uz (b : bv) =
+  let len = String.length b - 2 in
+  match b.[1] with
+  | 'x' -> Z.of_substring_base 16 b ~pos:2 ~len
+  | 'b' -> Z.of_substring_base 2 b ~pos:2 ~len
+  | _ -> Raise.fail "Wrong bv string value \"%s\"" b
+
+let bv_to_z (b : bv) =
+  let len = String.length b - 2 in
+  let (z, bvsize) : Z.t * int =
+    match b.[1] with
+    | 'x' -> (Z.of_substring_base 16 b ~pos:2 ~len, 4 * len)
+    | 'b' -> (Z.of_substring_base 2 b ~pos:2 ~len, len)
+    | _ -> Raise.fail "Wrong bv string value \"%s\"" b
+  in
+  if Z.testbit z (bvsize - 1) then
+    let x = Z.(z - (one lsl bvsize)) in
+    x
+  else z
+
+let bv_to_int (b : bv) = b |> bv_to_z |> Z.to_int

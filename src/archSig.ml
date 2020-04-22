@@ -63,6 +63,9 @@ module type S = sig
       Otherwise {!module_name} *)
   val loaded_name : string
 
+  (** The true size of addresses for memory operation *)
+  val address_size : int
+
   (** Get the register map of the architecture *)
   val dwarf_reg_map : unit -> dwarf_reg_map
 

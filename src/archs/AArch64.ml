@@ -210,6 +210,8 @@ let module_name = "aarch64"
 
 let loaded_name = "aarch64"
 
+let address_size = 52
+
 let dwarf_reg_map () = (get_data ()).reg_map
 
 let is_local (reg : Reg.path) =
