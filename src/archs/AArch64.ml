@@ -41,6 +41,8 @@ let gen_reg_map () =
 
 (** Generates the Register map of local registers *)
 let gen_local (dwarfregs : dwarf_reg_map) : bool Reg.Map.t =
+  (* The PC is local in a certain sense, I don't want to match it in any way *)
+  let pc = Reg.add "_PC" (Reg.Plain (Ast.Ty_BitVec 64)) in
   (* According to section 5.1, if we exclude any FP registers,
      the only local register seem to be R0-R30, SP and
      flags N,Z,C,V of PSTATE *)
@@ -52,6 +54,7 @@ let gen_local (dwarfregs : dwarf_reg_map) : bool Reg.Map.t =
   let pstate = Reg.add "PSTATE" (Reg.Struct pstate) in
   let res = Reg.Map.init (fun _ -> false) in
   Array.iter (fun path -> Reg.Map.set res path true) dwarfregs;
+  Reg.Map.set res [pc] true;
   Reg.Map.set res [pstate; n] true;
   Reg.Map.set res [pstate; z] true;
   Reg.Map.set res [pstate; c] true;
@@ -100,7 +103,7 @@ let roundupto x align = (x + align - 1) / align * align
 let get_abi_repr api : abi_repr =
   let open Ctype in
   (* Replace array by pointer to Single of the array *)
-  let cdecay arg = if is_array arg.unqualified then of_frag (Single arg) else arg in
+  let cdecay arg = if is_array arg then of_frag (Single arg) else arg in
   let args = List.map cdecay api.args in
 
   (* Section B of 5.4.2 *)
@@ -111,7 +114,7 @@ let get_abi_repr api : abi_repr =
       (* B.3 *)
       let fragment = Single argt in
       (8, of_frag ~restrict:true fragment)
-    else if is_composite argt.unqualified then
+    else if is_composite argt then
       (* B.4 *)
       let size = sizeof argt in
       (roundupto size 8, argt)
@@ -135,7 +138,7 @@ let get_abi_repr api : abi_repr =
       try
         (* From C.1 to C.6: We ignore floating point values *)
         (* Item C.7 *)
-        if is_scalar arg.unqualified && size <= 8 then begin
+        if is_scalar arg && size <= 8 then begin
           reg_types.(!vNGRN) <- arg;
           incr vNGRN;
           raise Allocated
@@ -143,7 +146,7 @@ let get_abi_repr api : abi_repr =
         (* Item C.8 : We don't support 16 bytes alignement *)
         (* Item C.9 : We don't support 16 bytes integers *)
         (* Item C.10 *)
-        if is_composite arg.unqualified && size / 8 <= 8 - !vNGRN then begin
+        if is_composite arg && size / 8 <= 8 - !vNGRN then begin
           if size <= 8 then reg_types.(!vNGRN) <- arg
           else
             (* If struct is bigger than one register, then don't type the registers *)
@@ -158,7 +161,7 @@ let get_abi_repr api : abi_repr =
         (* Item C.12 : No 16 bytes alignement *)
         vNSAA := roundupto !vNSAA 8;
         (* Item C.13 *)
-        if is_composite arg.unqualified then begin
+        if is_composite arg then begin
           allocate_stack arg;
           vNSAA := !vNSAA + size;
           raise Allocated
@@ -225,6 +228,7 @@ let get_abi api =
   let data = get_data () in
   let repr = get_abi_repr api in
   let sp = data.reg_map.(31) in
+  let r30 = data.reg_map.(30) in
   let ret_pointer_reg = data.reg_map.(8) in
   let init (state : State.t) =
     let state = State.copy_extend state in
@@ -246,6 +250,7 @@ let get_abi api =
     );
     let stack_frag_id = Fragment.Env.add_frag ~frag:repr.stack_fragment state.fenv in
     State.set_reg_type state sp (Ctype.of_frag @@ FreeFragment stack_frag_id);
+    State.set_reg state r30 (State.make_tval (State.Var.to_exp RetAddr));
     State.lock state;
     state
   in

@@ -76,7 +76,7 @@ let rec exp_var_conv (vconv : int -> 'v) : 'a Isla.exp -> ('a, 'v, 'b, 'm) Ast.e
   | Var (i, a) -> Var (vconv i, a)
   | e -> direct_exp_no_var (exp_var_conv vconv) e
 
-let rec exp e = exp_var_conv Fun.id e
+let exp e = exp_var_conv Fun.id e
 
 (** Convert an expression from isla to Ast but using a var-to-exp conversion function *)
 let rec exp_var_subst (vconv : int -> 'a -> ('a, 'v, 'b, 'm) Ast.exp) :

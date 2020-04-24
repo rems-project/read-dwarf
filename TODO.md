@@ -56,9 +56,8 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Add basic type inference to TraceRun.
- - Plug that into "run-func" (deadline on 24/04/2020)
  - Catch up on all missing documentation to Trace, TraceRun and all typer code
+ - Represent bitvectors in a clean way (probably with Z) and implement constexpr evaluator
  - Figure out how to add extra documentation pages and add an overview and a pipeline page.
  - Add ability to run code at a direct address and not just symbol + offset
  - Update dump-* to allow to look at symbol containing a specific address
@@ -125,3 +124,5 @@
  - Update BB and RunBB to use Trace and TraceRun
  - Handle the 52 bits real width pointer problem
  - Classify symbolic addresses between "concrete", "symbolic reg + concrete offset", and "other"
+ - Add basic type inference to TraceRun.
+ - Plug that into "run-func" (deadline on 24/04/2020)

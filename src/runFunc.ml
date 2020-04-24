@@ -8,7 +8,7 @@ open Logs.Logger (struct
   let str = "RunFunc"
 end)
 
-let run_func arch elfname name =
+let run_func arch elfname name len =
   base "Running %s in %s" name elfname;
   warn "Only ABI start for now";
   base "Loading %s" elfname;
@@ -28,17 +28,37 @@ let run_func arch elfname name =
   base "Init state:\n%t" (PP.topi State.pp (Init.state ()));
   let start = abi.init @@ Init.state () in
   base "Entry state:\n%t" (PP.topi State.pp start);
+  ( match (len, func.sym) with
+  | (Some len, Some sym) ->
+      let code = Elf.Sym.sub sym 0 len in
+      let bb = BB.from_binary code in
+      Z3.ensure_started ();
+      BB.simplify_mut bb;
+      State.unsafe_unlock start;
+      State.extend_mut start;
+      State.lock start;
+      let final_state = BB.run ~env:dwarf.tenv start bb in
+      State.unsafe_unlock final_state;
+      State.map_mut_exp Z3.simplify final_state;
+      State.lock final_state;
+      base "Final state:\n%t\n" (PP.topi State.pp final_state)
+  | _ -> ()
+  );
   IslaCache.stop ()
 
 let elf =
   let doc = "ELF file from which to pull the code" in
   Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"ELF_FILE" ~doc)
 
+let len =
+  let doc = "length of function to run (BB only). No run if not present" in
+  Arg.(value & opt (some int) None & info ["len"] ~docv:"BYTES" ~doc)
+
 let func =
   let doc = "Symbol name of the function to run" in
   Arg.(required & pos 1 (some string) None & info [] ~docv:"FUNCTION" ~doc)
 
-let term = Term.(func_options comopts run_func $ arch $ elf $ func)
+let term = Term.(func_options comopts run_func $ arch $ elf $ func $ len)
 
 let info =
   let doc = "Run a symbolically (or not) a single function" in

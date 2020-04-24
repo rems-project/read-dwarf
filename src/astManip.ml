@@ -24,7 +24,7 @@ let direct_exp_map_exp (f : ('a, 'v, 'b, 'm) exp -> ('a, 'v, 'b, 'm) exp) = func
   | Binop (b, e, e', l) -> Binop (b, f e, f e', l)
   | Manyop (m, el, l) -> Manyop (m, List.map f el, l)
   | Ite (c, e, e', l) -> Ite (f c, f e, f e', l)
-  | Let (bs, e, l) -> Let (List.map (Pair.map Fun.id f) bs, f e, l)
+  | Let (b, bs, e, l) -> Let (Pair.map Fun.id f b, List.map (Pair.map Fun.id f) bs, f e, l)
   | Bound _ as b -> b
   | Bits _ as b -> b
   | Bool _ as b -> b
@@ -41,7 +41,8 @@ let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
       i c;
       i e;
       i e'
-  | Let (bs, e, l) ->
+  | Let (b, bs, e, l) ->
+      i (snd b);
       List.iter (Pair.iter Fun.nop i) bs;
       i e
   | Bits (bv, a) -> ()
@@ -94,7 +95,7 @@ let rec exp_conv_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'v
   | Binop (u, e, e', a) -> Binop (u, ec e, ec e', a)
   | Manyop (m, el, a) -> Manyop (m, List.map ec el, a)
   | Ite (c, e, e', a) -> Ite (ec c, ec e, ec e', a)
-  | Let (bs, e, a) -> Let (List.map (Pair.map Fun.id ec) bs, ec e, a)
+  | Let (b, bs, e, l) -> Let (Pair.map Fun.id ec b, List.map (Pair.map Fun.id ec) bs, ec e, l)
 
 (** Substitute variable with expression according to substitution function *)
 let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, 'va, 'b, 'm) exp) :
@@ -110,7 +111,7 @@ let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, '
   | Binop (u, e, e', a) -> Binop (u, es e, es e', a)
   | Manyop (m, el, a) -> Manyop (m, List.map es el, a)
   | Ite (c, e, e', a) -> Ite (es c, es e, es e', a)
-  | Let (bs, e, a) -> Let (List.map (Pair.map Fun.id es) bs, es e, a)
+  | Let (b, bs, e, l) -> Let (Pair.map Fun.id es b, List.map (Pair.map Fun.id es) bs, es e, l)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -142,14 +143,14 @@ let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) 
   let ul = unfold_lets ~context in
   match exp with
   | Bound (b, l) -> Hashtbl.find context b
-  | Let (bs, e, l) ->
+  | Let (b, bs, e, l) ->
       List.iter
         (fun (b, e) ->
           let e = ul e in
           Hashtbl.add context b e)
-        bs;
+        (b :: bs);
       let res = ul e in
-      List.iter (Pair.iter (Hashtbl.remove context) Fun.nop) bs;
+      List.iter (Pair.iter (Hashtbl.remove context) Fun.nop) (b :: bs);
       res
   | Bits _ as b -> b
   | Bool _ as b -> b
@@ -245,3 +246,8 @@ let bv_to_z (b : bv) =
   else z
 
 let bv_to_int (b : bv) = b |> bv_to_z |> Z.to_int
+
+let exp_bv_to_int (e : _ exp) : int =
+  match e with
+  | Bits (bv, _) -> bv_to_int bv
+  | _ -> Raise.fail "Constant folding is not implemented yet, sorry"

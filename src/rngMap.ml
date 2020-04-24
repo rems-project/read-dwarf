@@ -55,9 +55,18 @@ module type S = sig
       Throw [Not_found] if no object contains the address *)
   val at_off : t -> int -> obj_off
 
+  (** Get the object containing the address and the offset of the address inside the object
+
+      [None] if no object contains the address *)
+  val at_off_opt : t -> int -> obj_off option
+
+
   (** Update the binding containing the provided addr.
       If no binding contained the address, this is a no-op *)
   val update : (obj -> obj) -> t -> int -> t
+
+  (** Clear an area of the RngMap *)
+  val clear : t -> start:int -> len:int -> t
 
   (** Add an object at a specific address. The whole range of addresses covered by the object
       must be free *)
@@ -100,16 +109,34 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
 
   let at t addr = match at_opt t addr with Some o -> o | None -> raise Not_found
 
+  let at_off_opt t addr =
+    match prev t addr with
+    | Some (objaddr, candidate) ->
+      if is_in ~objaddr candidate addr then Some (candidate, addr - objaddr) else None
+    | None -> None
+
+
   let at_off t addr =
     match prev t addr with
     | Some (objaddr, candidate) ->
         if is_in ~objaddr candidate addr then (candidate, addr - objaddr) else raise Not_found
     | None -> raise Not_found
 
+
   let update f t addr =
     match prev t addr with
     | None -> t
     | Some (objaddr, obj) -> IMap.update objaddr (Option.map f) t
+
+  let clear t ~start ~len =
+    let endp = start + len in
+    let rec clear_end t start endp : t =
+    match next t (start - 1) with
+      |  Some (objaddr, obj) -> clear_end (IMap.remove objaddr t) objaddr endp
+      | None -> t
+    in
+    clear_end t start endp
+
 
   let unsafe_add t addr obj = IMap.add addr obj t
 

@@ -65,7 +65,7 @@ and tval = { ctyp : Ctype.t option; exp : exp }
 
 and exp = (Ast.lrng, var, Ast.no, Ast.no) Ast.exp
 
-and var = Register of t * Reg.path | ReadVar of t * int | Arg of int | RetArg
+and var = Register of t * Reg.path | ReadVar of t * int | Arg of int | RetArg | RetAddr
 
 and mem_block = { addr : exp; size : mem_size }
 
@@ -114,6 +114,7 @@ module Var = struct
     | ReadVar (state, num) -> Printf.sprintf "read:%s:%i" (state |> to_id |> Id.to_string) num
     | Arg num -> Printf.sprintf "arg:%i" num
     | RetArg -> "retarg:"
+    | RetAddr -> "retaddr:"
 
   let of_string s : t =
     match String.split_on_char ':' s with
@@ -127,6 +128,7 @@ module Var = struct
         ReadVar (state, num)
     | ["arg"; num] -> Arg (int_of_string num)
     | ["retarg"; ""] -> RetArg
+    | ["retaddr"; ""] -> RetAddr
     | _ -> Raise.inv_arg "Invalid state variable: %s" s
 
   let to_exp (v : t) : exp = Ast.Var (v, dummy_annot)
@@ -142,6 +144,8 @@ end
 let make_tval ?ctyp exp = { exp; ctyp }
 
 let get_exp tval = tval.exp
+
+let get_ctyp tval = tval.ctyp
 
 let pp_exp (exp : exp) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
 
@@ -359,6 +363,7 @@ let var_type var =
   | ReadVar (state, i) -> Vector.get state.read_vars i |> fst
   | Arg _ -> Ast.Ty_BitVec 64
   | RetArg -> Ast.Ty_BitVec 64
+  | RetAddr -> Ast.Ty_BitVec 64
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -396,12 +401,34 @@ let write (s : t) (mb : Mem.block) (value : exp) : unit =
 
 (** Does the same as read, but additionally take care of reading the type from a fragment
     and marking the type of the read variable. *)
-let typed_read (s : t) ~(ptrtype : Ctype.t) (mb : Mem.block) : tval = Raise.fail "unimplemented"
+let typed_read ~env (s : t) ?(ptrtype : Ctype.t option) (mb : Mem.block) : tval =
+  assert (not @@ is_locked s);
+  match ptrtype with
+  | Some { unqualified = Ptr { fragment; offset }; _ } ->
+      let fenv = s.fenv in
+      let size = Mem.Size.to_bytes mb.size in
+      let ctyp = Fragment.ptr_deref ~env ~fenv ~size fragment offset in
+      let ty = Mem.Size.to_bv mb.size in
+      let nvar = make_read s ?ctyp ty in
+      Mem.read s.mem mb nvar;
+      let exp = Var.to_exp nvar in
+      { exp; ctyp }
+  | Some _ ->
+      warn "Reading from non-ptr unimplemented for now";
+      read s mb |> make_tval
+  | None -> read s mb |> make_tval
 
 (** Does the same as read, but additionally take care of writing the type if the write is on
     a {!Ctype.FreeFragment}.*)
-let typed_write (s : t) ~(ptrtype : Ctype.t) (mb : Mem.block) (value : tval) : unit =
-  Raise.fail "unimplemented"
+let typed_write ~env (s : t) ?(ptrtype : Ctype.t option) (mb : Mem.block) (value : tval) : unit =
+  assert (not @@ is_locked s);
+  match (ptrtype, value.ctyp) with
+  | (Some { unqualified = Ptr { fragment; offset }; _ }, Some ctyp) ->
+      let fenv = s.fenv in
+      let size = Mem.Size.to_bytes mb.size in
+      let ctyp = Fragment.ptr_write ~env ~fenv ~ctyp fragment offset in
+      write s mb value.exp
+  | _ -> write s mb value.exp
 
 (** Reset the register in given path to a symbolic value,
     and resets the type to the provided type (or no type if not provided)*)

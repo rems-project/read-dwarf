@@ -134,11 +134,14 @@ let enum_size = 4
 (*****************************************************************************)
 (** {1 Convenience manipulation } *)
 
-let is_struct = function Struct _ -> true | _ -> false
+let is_struct t = match t.unqualified with Struct _ -> true | _ -> false
 
-let is_array = function Array _ -> true | _ -> false
+let is_array t = match t.unqualified with Array _ -> true | _ -> false
 
-let is_scalar = function
+let is_ptr t = match t.unqualified with Ptr _ -> true | _ -> false
+
+let is_scalar t =
+  match t.unqualified with
   | Machine _ -> true
   | Cint _ -> true
   | Cbool -> true
@@ -146,7 +149,9 @@ let is_scalar = function
   | Enum _ -> true
   | _ -> false
 
-let is_composite = function Struct _ -> true | Array _ -> true | _ -> false
+let is_composite t = match t.unqualified with Struct _ -> true | Array _ -> true | _ -> false
+
+let is_constexpr t = t.constexpr
 
 (** Make a simple pointer from a type *)
 let ptr t = Ptr { fragment = DynArray t; offset = Const 0 }
@@ -154,23 +159,49 @@ let ptr t = Ptr { fragment = DynArray t; offset = Const 0 }
 (** A void* pointer *)
 let voidstar = Ptr { fragment = Unknown; offset = Somewhere }
 
-(** Create a qualified type without qualifier from an unqualified type *)
-let noqual unqualified =
-  { unqualified; const = false; volatile = false; restrict = false; constexpr = false }
+(** Create a qualified type from an unqualified type with the specified qualifiers *)
+let qual ?(const = false) ?(volatile = false) ?(restrict = false) ?(constexpr = false) unqualified
+    =
+  { unqualified; const; volatile; restrict; constexpr }
+
+(** update specified qualifiers. Other qualifier are kept *)
+let add_qual ?const ?volatile ?restrict ?constexpr old =
+  let unqualified = old.unqualified in
+  let const = Option.value const ~default:old.const in
+  let volatile = Option.value volatile ~default:old.volatile in
+  let restrict = Option.value restrict ~default:old.restrict in
+  let constexpr = Option.value constexpr ~default:old.constexpr in
+  { unqualified; const; volatile; restrict; constexpr }
 
 (** Create a machine type of that size without qualifiers *)
-let machine size = noqual (Machine size)
+let machine ?(constexpr = false) size = Machine size |> qual ~constexpr
 
 (** Create a pointer to fragment with specified offset (0 by default) *)
 let of_frag ?(offset = 0) ?(restrict = false) fragment =
-  let unqualified = Ptr { fragment; offset = Const offset } in
-  { unqualified; const = false; volatile = false; restrict; constexpr = false }
+  Ptr { fragment; offset = Const offset } |> qual ~restrict
 
 (** Build an incomplete struct with a linking name and a size *)
 let incomplete_struct name size = { layout = FieldMap.empty; name; size; complete = false }
 
 (** Makes an empty environement from and indexed linksem environement *)
 let make_env lenv = { structs = IdMap.make (); enums = IdMap.make (); lenv }
+
+(** Update an {!offset} with an integer update *)
+let offset_update offset update =
+  match offset with Const i -> Const (i + update) | Somewhere -> offset
+
+(** Update an pointer with an integer update *)
+let ptr_update ptr update =
+  match ptr.unqualified with
+  | Ptr { fragment; offset } ->
+      { ptr with unqualified = Ptr { fragment; offset = offset_update offset update } }
+  | _ -> Raise.inv_arg "ptr_update: not a pointer"
+
+(** Make a pointer forget it's offset *)
+let ptr_forget ptr =
+  match ptr.unqualified with
+  | Ptr { fragment; offset } -> { ptr with unqualified = Ptr { fragment; offset = Somewhere } }
+  | _ -> Raise.inv_arg "ptr_forget: not a pointer"
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -495,7 +526,7 @@ and pp_fragment frag =
 
 and pp_offset = function
   | Const off when off = 0 -> empty
-  | Const off -> dprintf "at 0x%x in" off ^^ space
+  | Const off -> !^"at " ^^ shex off ^^ !^" in" ^^ space
   | Somewhere -> !^"somewhere in" ^^ space
 
 and pp_arr elem dims =
@@ -521,3 +552,45 @@ let pp_env env =
         ("structs", IdMap.pp ~keys:string ~vals:pp_struct env.structs);
         ("enums", IdMap.pp ~keys:string ~vals:pp_enums env.enums);
       ])
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Type at }
+
+    This section is about getting the type at a specific offset in things.
+*)
+
+(** Same as {!type_at} but for structs *)
+let rec struct_at ~env ~size struc at : t option =
+  let open Opt in
+  let* (field, off) = FieldMap.at_off_opt struc.layout at in
+  type_at ~env ~size field.typ off
+
+(** Get the type of size [size] at the provided offset in another type*)
+and type_at ~env ~size typ at : t option =
+  let open Opt in
+  if at = 0 && size >= sizeof typ then begin
+    if size > sizeof typ then warn "type_at: size %d in only %t" size (PP.top pp typ);
+    Some typ
+  end
+  else
+    let+ rtyp =
+      match typ.unqualified with
+      | Machine n ->
+          if at + size > n then warn "type_at: machine out of bound access";
+          let constexpr = typ.constexpr in
+          machine ~constexpr size |> some
+      | Struct { id; _ } ->
+          let struc = IdMap.geti env.structs id in
+          struct_at ~env ~size struc at
+      | Array {elem; _} ->
+        let at = at mod sizeof elem in
+        type_at ~env ~size elem at
+      | _ ->
+        warn "type_at: reading inside %t is wierd" (PP.top pp typ);
+        None
+    in
+    let const = Opt.of_bool ~some:true typ.const in
+    let volatile = Opt.of_bool ~some:true typ.volatile in
+    add_qual ?const ?volatile rtyp

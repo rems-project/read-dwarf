@@ -37,11 +37,13 @@ let ( and* ) = ( and+ )
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 folding } *)
+(** {1 Lists } *)
 
-let list_fold_left f i l =
-  List.fold_left
-    (fun ao e ->
-      let* a = ao in
-      f a e)
-    (Some i) l
+let lift l =
+  List.fold_right (fun e l ->
+      let+ e =e and+ l = l in e :: l) l (Some [])
+
+let map_lift f l =
+  List.fold_right (fun e l ->
+      let+ fe = f e and+ l = l in
+      fe :: l) l (Some [])

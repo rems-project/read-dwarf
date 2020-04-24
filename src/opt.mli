@@ -73,3 +73,14 @@ val ( let* ) : 'a option -> ('a -> 'b option) -> 'b option
 
 (** Monadic and: [let* x = mx and* y = my in e] is [let* x = mx in let* y = my in e] *)
 val ( and* ) : 'a option -> 'b option -> ('a * 'b) option
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Lists } *)
+
+(** Commute the list and the option. If the list contains one [None] then the result is [None] *)
+val lift : 'a option list -> 'a list option
+
+(** The same as a List.map and then a {!lift} *)
+val map_lift : ('a -> 'b option) -> 'a list -> 'b list option
