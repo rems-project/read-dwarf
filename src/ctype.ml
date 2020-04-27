@@ -584,12 +584,12 @@ and type_at ~env ~size typ at : t option =
       | Struct { id; _ } ->
           let struc = IdMap.geti env.structs id in
           struct_at ~env ~size struc at
-      | Array {elem; _} ->
-        let at = at mod sizeof elem in
-        type_at ~env ~size elem at
+      | Array { elem; _ } ->
+          let at = at mod sizeof elem in
+          type_at ~env ~size elem at
       | _ ->
-        warn "type_at: reading inside %t is wierd" (PP.top pp typ);
-        None
+          warn "type_at: reading inside %t is wierd" (PP.top pp typ);
+          None
     in
     let const = Opt.of_bool ~some:true typ.const in
     let volatile = Opt.of_bool ~some:true typ.volatile in

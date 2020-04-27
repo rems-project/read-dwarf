@@ -92,9 +92,7 @@ let int i = i |> string_of_int |> string
 let hex i = i |> Printf.sprintf "%x" |> string
 
 let shex i =
-  if i >= 0 then i |> Printf.sprintf "0x%x" |> string
-  else
-    -i |> Printf.sprintf "-0x%x" |> string
+  if i >= 0 then i |> Printf.sprintf "0x%x" |> string else -i |> Printf.sprintf "-0x%x" |> string
 
 let ptr i = i |> Printf.sprintf "0x%x" |> string
 

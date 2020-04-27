@@ -1,9 +1,8 @@
 (** This module provide code to manipulate basic block and run them *)
 
 open Logs.Logger (struct
-    let str = "BB"
-  end)
-
+  let str = "BB"
+end)
 
 type trc = Trace.t
 
@@ -41,15 +40,21 @@ let from_binary (code : BytesSeq.t) : t =
 
 let simplify_mut (bb : t) = Array.map_mut Trace.simplify bb.main
 
-(** Run a linear basic block on a state by mutation *)
-let run_mut ?env state (bb : t) : unit =
-  Array.iter (TraceRun.trace_mut ?env state) bb.main
+(** Run a linear basic block on a state by mutation.
 
-(** Run a linear basic block on a trace and return a new state *)
+    If [env] is provided, the run is typed.
+*)
+let run_mut ?env state (bb : t) : unit = Array.iter (TraceRun.trace_mut ?env state) bb.main
+
+(** Run a linear basic block on a trace and return a new state
+
+    If [env] is provided, the run is typed.
+*)
 let run ?env start (bb : t) : state =
   let state = State.copy start in
   run_mut ?env state bb;
   State.lock state;
   state
 
+(** Pretty print the basic block (The traces) *)
 let pp (bb : t) = bb.main |> Array.to_list |> PP.(separate_map (hardline ^^ hardline) Trace.pp)

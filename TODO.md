@@ -56,7 +56,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Catch up on all missing documentation to Trace, TraceRun and all typer code
  - Represent bitvectors in a clean way (probably with Z) and implement constexpr evaluator
  - Figure out how to add extra documentation pages and add an overview and a pipeline page.
  - Add ability to run code at a direct address and not just symbol + offset

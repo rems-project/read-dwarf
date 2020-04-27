@@ -1,27 +1,47 @@
+(** This module is for running trace from {!Trace} like {!IslaRun} runs Isla traces.
+
+    Due to the semantic of a register access being the register at the beginning of the trace,
+    All register writes are not done immediately but delayed and stored in the {!context}.
+*)
+
 open Logs.Logger (struct
   let str = "TraceRun"
 end)
 
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Context} *)
+
+(** The context to run a trace *)
 type context = {
-  reg_writes : (Reg.path * State.tval) Vector.t;
-  mem_reads : State.tval HashVector.t;
+  reg_writes : (Reg.path * State.tval) Vector.t;  (** Stores the delayed register writes *)
+  mem_reads : State.tval HashVector.t;  (** Stores the result of register reads *)
   state : State.t;
 }
 
+(** Build a {!context} from a state *)
+let make_context state =
+  let reg_writes = Vector.empty () in
+  let mem_reads = HashVector.empty () in
+  { state; reg_writes; mem_reads }
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 C type inference for expression}
+
+    This section implements all the C type expression inference rules.
+
+    C Types are always option and if any part of an expression is not typed,
+    then the result is not typed.
+*)
+
+(** A typed {!Trace.exp} *)
 type tval = { ctyp : Ctype.t option; exp : Trace.exp }
 
-(* (\** Exception that represent an Isla typing error *\)
- * exception TypeError of Ast.lrng * string
- *
- * (\* Registering and pretty printer for that exception *\)
- * let _ =
- *   Printexc.register_printer (function
- *     | TypeError (l, s) ->
- *         Some PP.(sprint @@ hardline ^^ prefix 2 1 (lrng l ^^ !^": ") (!^"TypeError: " ^^ !^s))
- *     | _ -> None)
- *
- * let type_error l fmt = Printf.ksprintf (fun s -> raise (TypeError (l, s))) fmt *)
-
+(** Ouput a Machine type of the same size at the original type.
+    If [update] has a value, the size if modified by the update value. *)
 let machine_of_size ?(update = 0) (typ : Ctype.t) : Ctype.t =
   let size = Ctype.sizeof typ in
   let constexpr = typ.constexpr in
@@ -115,19 +135,30 @@ let rec type_exp ~ctxt (exp : Trace.exp) : Ctype.t option =
 
 and type_exp_tval ~ctxt exp = { exp; ctyp = type_exp ~ctxt exp }
 
-let make_context state =
-  let reg_writes = Vector.empty () in
-  let mem_reads = HashVector.empty () in
-  { state; reg_writes; mem_reads }
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Actual trace running}
 
-let expand_var ~(ctxt : context) (v : Trace.Var.t) (a : Ast.lrng) =
+    All function that take an optional paramter [env] will run the trace with
+    C type inference if [env] is provided and without if it is not.
+*)
+
+(** Expand a Trace variable to a State expression, using the context *)
+let expand_var ~(ctxt : context) (v : Trace.Var.t) (a : Ast.lrng) : State.exp =
   match v with
   | Register reg -> State.get_reg ctxt.state reg |> State.get_exp
   | Read i -> (HashVector.get ctxt.mem_reads i).exp
 
+(** Expand a Trace expression to a State expression, using the context *)
 let expand ~(ctxt : context) (exp : Trace.exp) : State.exp =
   AstManip.exp_var_subst (expand_var ~ctxt) exp
 
+(** Expand a Trace expression to a typed State expression, using the context.
+
+    If [env] is provided, expression will actually be typed,
+    otherwise the type will be [None]
+*)
 let expand_tval ?env ~(ctxt : context) (exp : Trace.exp) : State.tval =
   let sexp = expand ~ctxt exp in
   if env = None then { ctyp = None; exp = sexp }
@@ -135,7 +166,8 @@ let expand_tval ?env ~(ctxt : context) (exp : Trace.exp) : State.tval =
     let ctyp = type_exp ~ctxt exp in
     { ctyp; exp = sexp }
 
-(* This is where type-inference will happen (soon) *)
+(** Run the event (with type inference if [env] is provided).
+    The modified state is the one inside [ctxt]. *)
 let event_mut ?env ~(ctxt : context) (event : Trace.event) =
   debug "Running: %t with env:%b" (PP.top Trace.pp_event event) (env <> None);
   match event with
@@ -164,12 +196,14 @@ let event_mut ?env ~(ctxt : context) (event : Trace.event) =
     )
   | Assert exp -> State.push_assert ctxt.state (expand ~ctxt exp)
 
+(** Run a trace on the provided state by mutation *)
 let trace_mut ?env (state : State.t) (events : Trace.t) : unit =
   debug "running trace with env:%b" (env <> None);
   let ctxt = make_context state in
   List.iter (event_mut ?env ~ctxt) events;
   Vector.iter (fun (reg, tval) -> Reg.Map.set state.regs reg tval) ctxt.reg_writes
 
+(** Run a trace on the provided state by returning an updated copy.*)
 let trace ?env (start : State.t) (events : Trace.t) : State.t =
   let state = State.copy start in
   trace_mut ?env state events;

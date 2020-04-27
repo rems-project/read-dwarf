@@ -1,11 +1,27 @@
-(* Semantic note:
+(** This module defines a new simplified kind of trace to replace Isla traces in the later stages of the instruction processing.
 
-   When a register variable is used in an expression, it means the value of this register
-   at the beginning of the trace, even if there are write to that register at certain points.
+    The traces are even simpler and more easily typable.
+    The possible events are in the type {!event} and traces ({!t}) are just list of them.
+
+    Compared to Isla, the concept of reading a register do not exist anymore.
+    Instead, a register can be used as a variable in any expression.
+    When a register appears in an expression, it represents the value of the register at
+    the start of the trace even if that register was written to later.
+    This is why trace are {i not} naively concatenable.
+
+    Furthermore, branching do not exist either. Branching instruction are represented by a
+    set of trace.
+
+    The important functions are {!of_isla} to convert and Isla traces
+    and {!simplify} for simplify traces.
 *)
 
+(** This module contains variable used in traces *)
 module Var = struct
-  type t = Register of Reg.path | Read of int
+  (** A trace variable *)
+  type t =
+    | Register of Reg.path  (** The value of the register at the beginning of the trace *)
+    | Read of int  (** The result of that memory reading operation *)
 
   (** Convert the variable to the string encoding. For parsing infractructure reason,
       the encoding must always contain at least one [:]. *)
@@ -13,24 +29,19 @@ module Var = struct
     | Register r -> Printf.sprintf "reg:%s" (Reg.path_to_string r)
     | Read i -> Printf.sprintf "read:%d" i
 
+  (** Inverse of {!to_string} *)
   let of_string s =
     match String.split_on_char ':' s with
     | ["reg"; reg] -> Register (Reg.path_of_string reg)
     | ["read"; num] -> Read (int_of_string num)
     | _ -> Raise.inv_arg "%s is not a Trace.Var.t" s
 
+  (** Pretty prints the variable *)
   let pp v = v |> to_string |> PP.string
 end
 
+(** A trace expression. No let bindings, no memory operations *)
 type exp = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
-
-let exp_to_z3 (e : exp) = e |> AstManip.allow_lets |> AstManip.allow_mem
-
-let exp_of_z3 e = e |> AstManip.expect_no_mem
-
-let pp_exp e = Ast.pp_exp Var.pp (exp_to_z3 e)
-
-(* Implicitely, ReadMem and WriteMem add an assertion about the address expression *)
 
 type event =
   | WriteReg of { reg : Reg.path; value : exp }
@@ -38,6 +49,23 @@ type event =
   | WriteMem of { addr : exp; value : exp; size : Ast.Size.t }
   | Assert of exp
 
+type t = event list
+
+(** Allow all feature in an expression *)
+let exp_allow (e : exp) = e |> AstManip.allow_lets |> AstManip.allow_mem
+
+(** Restrict the features of an expression to make it usable in this module again *)
+let exp_restrict e = e |> AstManip.expect_no_mem
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Pretty printing } *)
+
+(** Pretty print an expression *)
+let pp_exp e = Ast.pp_exp Var.pp (exp_allow e)
+
+(** Pretty print an event *)
 let pp_event =
   let open PP in
   function
@@ -51,26 +79,42 @@ let pp_event =
       ^^ nest 4 (pp_exp addr ^^ !^" with " ^^ pp_exp value)
   | Assert exp -> !^"Assert " ^^ nest 4 (pp_exp exp)
 
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Isla to Trace conversion } *)
-
-exception OfIslaError
-
-type value_context = exp HashVector.t
-
-type t = event list
-
+(** Pretty print a trace *)
 let pp events = PP.separate_map PP.hardline pp_event events
 
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Isla to Trace conversion }
+
+    This section perform the conversion from Isla trace to the
+    traces of this module.
+
+    The conversion is generrally obvious, however there is subtlety: If the Isla
+    trace reads a register after having written it, then the read produce the written
+    expression instead of just the symbolic value of that register. That why there is
+    a [written_registers] parameter to some function of this section.
+*)
+
+(** throw an error in case of local conversion error.
+    Normally a type-checked Isla trace should not fail in this section *)
+exception OfIslaError
+
+(** The context mapping Isla variable numbers to trace expression *)
+type value_context = exp HashVector.t
+
+(** Get the exression of the variable at the index.
+    Throw {!OfIslaError} if the variable is not bound *)
 let get_var vc i =
   match HashVector.get_opt vc i with Some exp -> exp | None -> raise OfIslaError
 
+(** Convert an Isla expression to a [Trace] expression by replacing all Isla variable
+    by their value in the context. Throw {!OfIslaError} if the substitution fails *)
 let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : exp =
   let vconv i l = get_var vc i in
   IslaConv.exp_var_subst vconv exp
 
+(** Convert an {!Isla.valu} in a expression *)
 let exp_of_valu l vc : Isla.valu -> exp = function
   | Val_Symbolic i -> get_var vc i
   | Val_Bool b -> Bool (b, l)
@@ -81,6 +125,7 @@ let exp_of_valu l vc : Isla.valu -> exp = function
       Raise.fail "%t Can't convert %t to a trace expression" (PP.tos PP.lrng l)
         (PP.tos Isla.pp_valu valu)
 
+(** Write an expression to an {!Isla.valu} *)
 let write_to_valu vc valu exp =
   match valu with Isla.Val_Symbolic i -> HashVector.set vc i exp | _ -> ()
 
@@ -123,7 +168,8 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
   | BranchAddress _ -> None
   | DefineEnum _ -> None
 
-let of_isla (Trace events : Isla.rtrc) =
+(** Top level function to convert an isla trace to one of this module *)
+let of_isla (Trace events : Isla.rtrc) : t =
   let written_registers = Hashtbl.create 10 in
   let read_counter = Counter.make 0 in
   let vc = HashVector.empty () in
@@ -134,13 +180,16 @@ let of_isla (Trace events : Isla.rtrc) =
 (*****************************************************************************)
 (** {1 Trace simplification } *)
 
+(** A instance of {!Z3.ContextCounter}. *)
 module TraceSimpContext = Z3.ContextCounter (struct
   let str = "Trace simplification"
 end)
 
+(** Simplify a trace by using Z3. Perform both local expression simplification and
+    global assertion removal (when an assertion is always true) *)
 let simplify events =
   let exp_simplify exp : exp =
-    exp |> exp_to_z3 |> Z3.simplify_full ~ppv:Var.pp ~vofs:Var.of_string |> exp_of_z3
+    exp |> exp_allow |> Z3.simplify_gen ~ppv:Var.pp ~vofs:Var.of_string |> exp_restrict
   in
   let event_simplify = function
     | WriteReg wr -> Some (WriteReg { wr with value = exp_simplify wr.value })
@@ -151,10 +200,10 @@ let simplify events =
         Some (WriteMem { wm with addr = exp_simplify wm.addr; value = exp_simplify wm.value })
     | Assert exp -> (
         let nexp = exp_simplify exp in
-        match Z3.check_full ~ppv:Var.pp (nexp |> exp_to_z3) with
+        match Z3.check_gen ~ppv:Var.pp (nexp |> exp_allow) with
         | Some true -> None
         | _ ->
-            Z3.command ~ppv:Var.pp (Ast.Assert (nexp |> exp_to_z3));
+            Z3.command ~ppv:Var.pp (Ast.Assert (nexp |> exp_allow));
             Some (Assert nexp)
       )
   in

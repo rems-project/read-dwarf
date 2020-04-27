@@ -60,7 +60,6 @@ module type S = sig
       [None] if no object contains the address *)
   val at_off_opt : t -> int -> obj_off option
 
-
   (** Update the binding containing the provided addr.
       If no binding contained the address, this is a no-op *)
   val update : (obj -> obj) -> t -> int -> t
@@ -112,16 +111,14 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
   let at_off_opt t addr =
     match prev t addr with
     | Some (objaddr, candidate) ->
-      if is_in ~objaddr candidate addr then Some (candidate, addr - objaddr) else None
+        if is_in ~objaddr candidate addr then Some (candidate, addr - objaddr) else None
     | None -> None
-
 
   let at_off t addr =
     match prev t addr with
     | Some (objaddr, candidate) ->
         if is_in ~objaddr candidate addr then (candidate, addr - objaddr) else raise Not_found
     | None -> raise Not_found
-
 
   let update f t addr =
     match prev t addr with
@@ -131,12 +128,11 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
   let clear t ~start ~len =
     let endp = start + len in
     let rec clear_end t start endp : t =
-    match next t (start - 1) with
-      |  Some (objaddr, obj) -> clear_end (IMap.remove objaddr t) objaddr endp
+      match next t (start - 1) with
+      | Some (objaddr, obj) -> clear_end (IMap.remove objaddr t) objaddr endp
       | None -> t
     in
     clear_end t start endp
-
 
   let unsafe_add t addr obj = IMap.add addr obj t
 

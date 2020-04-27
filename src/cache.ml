@@ -15,8 +15,9 @@ open Logs.Logger (struct
 end)
 
 (*****************************************************************************)
-(*        Utility                                                            *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Utility } *)
 
 (** The name of the read-dwarf cache. [.rdcache] for now. *)
 let base_dir = ".rdcache"
@@ -48,6 +49,8 @@ let find_dir () : string =
 (** Remove a directory and all it's content.contents
 
     TODO: Make that Windows friendly
+
+    TODO move that in {!Files}
 *)
 let removedir dir : unit = ignore @@ Sys.command @@ "rm -rf " ^ Filename.quote dir
 
@@ -107,8 +110,9 @@ let clear_all_caches () =
 exception Exists
 
 (*****************************************************************************)
-(*        Input signatures                                                   *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Input signatures } *)
 
 (** The interface of keys. The key is allowed to not use the files to store information
     and to use the hash to reconstruct the value *)
@@ -178,8 +182,9 @@ module UnitEpoch = struct
 end
 
 (*****************************************************************************)
-(*        CacheMap                                                           *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 CacheMap } *)
 
 (** The output signature of {!Make} *)
 module type S = sig
@@ -382,8 +387,9 @@ module Make (Key : Key) (Value : Value) (Epoch : Epoch) :
 end
 
 (*****************************************************************************)
-(*         Single cache                                                      *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Single Cache } *)
 
 (** The signature of the output of {!Single} *)
 module type SingleS = sig
@@ -439,8 +445,9 @@ module Single (Value : Value) : SingleS with type value = Value.t = struct
 end
 
 (*****************************************************************************)
-(*         Command line                                                      *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Command line operations } *)
 
 (** The cache command line. TODO documentation of the inside *)
 module Cmd = struct

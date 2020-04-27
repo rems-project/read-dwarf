@@ -11,8 +11,9 @@ type 'a reader = in_channel -> 'a
 type 'a writer = out_channel -> 'a -> unit
 
 (*****************************************************************************)
-(*        IO functions                                                       *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 IO functions } *)
 
 (** Double the size of a bytes object *)
 let double_byte b = Bytes.extend b 0 (Bytes.length b)
@@ -63,8 +64,9 @@ let output_list (elem_writer : 'a writer) (o : out_channel) (l : 'a list) =
   List.iter (elem_writer o) l
 
 (*****************************************************************************)
-(*        File IO                                                            *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Direct file IO } *)
 
 (** Take a reader and a file and read an object from the file using the reader. Text mode *)
 let read (reader : 'a reader) (file : string) : 'a =
@@ -86,8 +88,19 @@ let write_bin (writer : 'a writer) (file : string) (obj : 'a) =
   let c = open_out_bin file in
   Protect.protect (fun () -> writer c obj) (fun () -> close_out c)
 
-(** [read_file s] return the content of file s *)
+(** Return the content of specified file as a string *)
 let read_string = read input_string
 
-(** [write_file file cont] write cont as the content of file s which is overwritten if it exists *)
+(** [write_string file cont] write [cont] in [file] s which is overwritten if it exists *)
 let write_string = write output_string
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 File management } *)
+
+(** Remove a file *)
+let remove_file = Sys.remove
+
+(** Remove a file at program exit *)
+let remove_at_exit s = at_exit (fun () -> try remove_file s with Sys_error _ -> ())

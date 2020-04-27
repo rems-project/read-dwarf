@@ -40,10 +40,15 @@ let ( and* ) = ( and+ )
 (** {1 Lists } *)
 
 let lift l =
-  List.fold_right (fun e l ->
-      let+ e =e and+ l = l in e :: l) l (Some [])
+  List.fold_right
+    (fun e l ->
+      let+ e = e and+ l = l in
+      e :: l)
+    l (Some [])
 
 let map_lift f l =
-  List.fold_right (fun e l ->
+  List.fold_right
+    (fun e l ->
       let+ fe = f e and+ l = l in
-      fe :: l) l (Some [])
+      fe :: l)
+    l (Some [])
