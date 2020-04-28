@@ -176,7 +176,7 @@ let start () =
 let ensure_started () = match !server with None -> start () | Some _ -> ()
 
 (** Call {!start} if the server wasn't started, then return the server *)
-let rec ensure_started_get () =
+let ensure_started_get () =
   match !server with
   | None ->
       start ();
@@ -373,6 +373,8 @@ let check ?(hyps = []) property =
 (*****************************************************************************)
 (*        Tests                                                              *)
 (*****************************************************************************)
+
+let _ = Tests.add_reset "Z3 stop" ensure_stopped
 
 let _ =
   Tests.add_test "Z3.direct" (fun () ->
