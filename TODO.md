@@ -6,6 +6,7 @@
 
 ## Internal infrastructure
 
+ - Figure out how to add extra documentation pages and add an overview and a pipeline page.
  - Try to have read-dwarf automatically create/cache the objdump instead
    of asking it as a command line parameter.
  - Add prefix to external output or error coming from servers like isla or z3 with sed
@@ -56,7 +57,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Figure out how to add extra documentation pages and add an overview and a pipeline page.
  - Add ability to run code at a direct address and not just symbol + offset
  - Update dump-* to allow to look at symbol containing a specific address
  - Add actual control-flow handling to TraceRun (computing the new PC in all cases)
