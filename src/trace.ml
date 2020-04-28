@@ -118,8 +118,8 @@ let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : exp =
 let exp_of_valu l vc : Isla.valu -> exp = function
   | Val_Symbolic i -> get_var vc i
   | Val_Bool b -> Bool (b, l)
-  | Val_Bits bv -> Bits (bv, l)
-  | Val_I (bvi, i) -> Bits (IslaManip.bvi_to_bv bvi i, l)
+  | Val_Bits bv -> Bits (BitVec.of_smt bv, l)
+  | Val_I (int, size) -> Bits (BitVec.of_int ~size int, l)
   | Val_Enum (n, a) -> Enum ((n, a), l)
   | valu ->
       Raise.fail "%t Can't convert %t to a trace expression" (PP.tos PP.lrng l)

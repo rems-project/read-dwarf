@@ -29,7 +29,7 @@ module Term = struct
   let of_exp (exp : 'v exp) =
     let open Ast in
     match exp with
-    | Bits (bv, _) -> Const (AstManip.bv_to_int bv)
+    | Bits (bv, _) -> Const (BitVec.to_int bv)
     | Unop (Extract (a, 0), Var (v, _), _) when a = pointer_size - 1 -> Var v
     | e -> Exp e
 end

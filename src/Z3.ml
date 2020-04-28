@@ -394,29 +394,15 @@ let _ =
 let _ =
   Tests.add_test "Z3.simplify" (fun () ->
       start ();
-      let exp =
-        Ast.(
-          Binop
-            ( Bvarith Bvsub,
-              Bits ("#x3", State.dummy_annot),
-              Bits ("#x1", State.dummy_annot),
-              State.dummy_annot ))
-      in
+      let exp = Ast.Op.(bits_smt "#x3" - bits_int ~size:4 1) in
       let exp = simplify exp in
       stop ();
-      match exp with Bits ("#x2", _) -> true | _ -> false)
+      match exp with Bits (v, _) -> BitVec.to_int v = 2 | _ -> false)
 
 let _ =
   Tests.add_test "Z3.check_sat" (fun () ->
       start ();
-      let exp =
-        Ast.(
-          Binop
-            ( Eq,
-              Bits ("#x1", State.dummy_annot),
-              Bits ("#x1", State.dummy_annot),
-              State.dummy_annot ))
-      in
+      let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
       let res = check_sat [exp] in
       stop ();
       Option.value res ~default:false)
@@ -424,14 +410,7 @@ let _ =
 let _ =
   Tests.add_test "Z3.check" (fun () ->
       start ();
-      let exp =
-        Ast.(
-          Binop
-            ( Eq,
-              Bits ("#x1", State.dummy_annot),
-              Bits ("#x1", State.dummy_annot),
-              State.dummy_annot ))
-      in
+      let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
       let res = check exp in
       stop ();
       Option.value res ~default:false)

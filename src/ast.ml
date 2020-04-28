@@ -95,21 +95,31 @@ let destr_binmem : no binmem -> 'a = function Select _ -> . | Store _ -> .
 module Op = struct
   let add a b = Manyop (Bvmanyarith Bvadd, [a; b], Isla.UnknownRng)
 
-  let ( + ) a b = add
+  let ( + ) a b = add a b
 
   let sub a b = Binop (Bvarith Bvsub, a, b, Isla.UnknownRng)
 
-  let ( - ) a b = sub
+  let ( - ) a b = sub a b
 
   let mul a b = Manyop (Bvmanyarith Bvmul, [a; b], Isla.UnknownRng)
 
-  let ( * ) a b = add
+  let ( * ) a b = add a b
 
   let not a = Unop (Not, a, Isla.UnknownRng)
 
   let extract a b e = Unop (Extract (a, b), e, Isla.UnknownRng)
 
   let var v = Var (v, Isla.UnknownRng)
+
+  let eq a b = Binop (Eq, a, b, Isla.UnknownRng)
+
+  let ( = ) = eq
+
+  let bits bv = Bits (bv, Isla.UnknownRng)
+
+  let bits_int ~size i = bits (BitVec.of_int ~size i)
+
+  let bits_smt s = bits (BitVec.of_smt s)
 
   let assert_op e = Assert e
 

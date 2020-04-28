@@ -3,9 +3,19 @@
 % of isla_lang.ott (handled by dune automatically)
 
 % bounded varaible (by let)
-metavar bvar ::=     {{ ocaml string }}
-                     {{ lex alphanum }}
-                     {{ ocamllex ['a'-'z''A'-'Z']+'!'['0'-'9']+ }}
+metavar bvar ::=    {{ ocaml string }}
+                    {{ lex alphanum }}
+                    {{ ocamllex ['a'-'z''A'-'Z']+'!'['0'-'9']+ }}
+
+metavar bvf ::=     {{ ocaml BitVec.t }}
+                    {{ phantom }}
+                    {{ lex numeric }}
+                    {{ ocamllex ('#''b'['0'-'1']+)|('#''x'['0'-'9''a'-'f''A'-'F']+) }}
+                    {{ ocamllex-of-string BitVec.of_smt }}
+                    {{ pp x = string (BitVec.to_smt x) }}
+                    {{ pp-raw x = string (BitVec.to_smt x) }}
+
+
 
 % metavar flag ::=     {{ ocaml string }}
 %                     {{ lex alphanum }}
@@ -80,7 +90,7 @@ exp :: '' ::=                           {{ aux _ annot }}
                                         {{ menhir-start-type AstDef.rexp }}
   | var                                 :: :: Var
   | bbvar                               :: :: Bound
-  | bv                                  :: :: Bits
+  | bvf                                 :: :: Bits
   | bool                                :: :: Bool
   | enum                                :: :: Enum
   | ( unop exp )                        :: :: Unop

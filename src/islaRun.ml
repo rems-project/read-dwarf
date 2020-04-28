@@ -53,8 +53,8 @@ let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : State.exp =
 let exp_of_valu l vc : Isla.valu -> State.exp = function
   | Val_Symbolic i -> get_var l vc i
   | Val_Bool b -> Bool (b, l)
-  | Val_Bits bv -> Bits (bv, l)
-  | Val_I (bvi, i) -> Bits (IslaManip.bvi_to_bv bvi i, l)
+  | Val_Bits bv -> Bits (BitVec.of_smt bv, l)
+  | Val_I (int, size) -> Bits (BitVec.of_int ~size int, l)
   | Val_Enum (n, a) -> Enum ((n, a), l)
   | valu -> run_error l "Can't convert %t to a state expression" (PP.tos pp_valu valu)
 

@@ -117,7 +117,7 @@ let rec type_exp ~ctxt (exp : Trace.exp) : Ctype.t option =
   | Var (Register reg, l) -> State.get_reg ctxt.state reg |> State.get_ctyp
   | Var (Read r, l) -> HashVector.get ctxt.mem_reads r |> State.get_ctyp
   | Bits (bv, l) ->
-      let size = AstManip.bv_size bv in
+      let size = BitVec.size bv in
       if size mod 8 = 0 || size = Arch.address_size then
         Ctype.machine ~constexpr:true (size / 8) |> Opt.some
       else None

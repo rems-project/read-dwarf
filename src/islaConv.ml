@@ -63,7 +63,7 @@ let manyop : Isla.manyop -> Ast.manyop = function
 
 let direct_exp_no_var (conv : 'a Isla.exp -> ('a, 'v, 'b, 'm) Ast.exp) :
     'a Isla.exp -> ('a, 'v, 'b, 'm) Ast.exp = function
-  | Bits (b, a) -> Bits (b, a)
+  | Bits (b, a) -> Bits (BitVec.of_smt b, a)
   | Bool (b, a) -> Bool (b, a)
   | Enum (e, a) -> Enum (e, a)
   | Unop (u, e, a) -> Unop (unop u, conv e, a)
