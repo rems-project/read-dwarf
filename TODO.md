@@ -57,8 +57,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Add ability to run code at a direct address and not just symbol + offset
- - Update dump-* to allow to look at symbol containing a specific address
  - Add actual control-flow handling to TraceRun (computing the new PC in all cases)
  - Do the run-block command with breakpoints
  - Update the run-func command to use run-block and not run-bb as backend
@@ -67,7 +65,6 @@
 
 ## Memory stack
 
- - Handle the 52 bits real width pointer problem
  - Add support for concrete to symbol offset rewrite
    if concrete value is <sym+off> then it is replaced by (bvadd sym off)
  - Add support for rodata detection

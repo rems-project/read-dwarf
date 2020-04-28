@@ -2,6 +2,10 @@
 
      The interesting operation provided are fetching symbol by name
      and knowing which symbol own a specific address
+
+    {!of_position_string} provides a convenient way of describing a position
+    in the ELF file from a human text input like the CLI.
+
  *)
 type sym = ElfSymbol.t
 
@@ -43,6 +47,15 @@ val string_of_sym_offset : sym_offset -> string
 
 (** Transform a symbol + offset string into the actual symbol and the integer offset *)
 val sym_offset_of_string : t -> string -> sym_offset
+
+(** Convert a position string to a symbol + offset
+
+   A position string is string describing a position in an ELF file.
+   Two format are accepted for now:
+   - A raw address of the form "0x40cafe"
+   - A symbol name with optional offset like "sym" or "sym+4" or "sym+0x4"
+*)
+val of_position_string : t -> string -> sym_offset
 
 (** Extract the symbol from the linksem symbol representation.
 

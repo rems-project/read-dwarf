@@ -57,7 +57,7 @@ let get_code elfname symname len : BytesSeq.t =
   let elf = Elf.File.of_file elfname in
   Elf.File.load_arch elf;
   let (sym, off) =
-    try Elf.SymTbl.sym_offset_of_string elf.symbols symname
+    try Elf.SymTbl.of_position_string elf.symbols symname
     with Not_found -> fail "The symbol %s cannot found in %s" symname elfname
   in
   let len = match len with Some i -> i | None -> sym.size - off in

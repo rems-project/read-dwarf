@@ -91,7 +91,7 @@ let get_instr instr elfopt : BytesSeq.t =
   Elf.File.load_arch elf;
   if elfopt = None then Sys.remove elfname;
   let (sym, off) =
-    try Elf.SymTbl.sym_offset_of_string elf.symbols symname
+    try Elf.SymTbl.of_position_string elf.symbols symname
     with Not_found -> fail "The symbol %s cannot found in %s" symname elfname
   in
   debug "Got symbol:\n%t\n" (PP.topi Elf.Sym.pp_raw sym);

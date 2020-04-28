@@ -53,6 +53,11 @@ let sym_offset_of_string t s : sym_offset =
   | [ssym; soff] -> (of_name t (String.trim ssym), soff |> String.trim |> int_of_string)
   | _ -> Raise.fail "sym_offset_to_string: wrong format: %s" s
 
+let of_position_string t s : sym_offset =
+  let s = String.trim s in
+  if s = "" then raise Not_found;
+  if s.[0] = '0' then of_addr_with_offset t (int_of_string s) else sym_offset_of_string t s
+
 let of_linksem segments linksem_map =
   let add_linksem_sym_to_map (map : t) (lsym : linksem_sym) =
     if is_interesting_linksem lsym then add map (ElfSymbol.of_linksem segments lsym) else map
