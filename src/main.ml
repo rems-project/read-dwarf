@@ -41,6 +41,4 @@ let _ = Random.self_init ()
 
 let _ = Term.exit @@ Term.eval_choice Default.command commands
 
-(* let _ = Z3Lexer.parse *)
-
-let _ = Ast.parse
+let _ = BitVec.one
