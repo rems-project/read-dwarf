@@ -150,7 +150,8 @@ let start arch =
   if version = required_version then info "Isla started with version %s" version
   else begin
     stop ();
-    fatal "Isla started with API version %s but version %s was required" version required_version
+    Raise.fail "Isla started with API version %s but version %s was required" version
+      required_version
   end
 
 (** Test that isla can start and keep a valid version *)
