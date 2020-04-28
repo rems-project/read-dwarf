@@ -23,6 +23,8 @@ end
 module Parser = AstParser
 module Lexer = AstLexer
 
+let unknown = Isla.UnknownRng
+
 (** Exception that represent an Isla parsing error *)
 exception ParseError of loc * string
 
@@ -93,29 +95,31 @@ let destr_binmem : no binmem -> 'a = function Select _ -> . | Store _ -> .
 (** {1 Operators } *)
 
 module Op = struct
-  let add a b = Manyop (Bvmanyarith Bvadd, [a; b], Isla.UnknownRng)
+  let add a b = Manyop (Bvmanyarith Bvadd, [a; b], unknown)
 
   let ( + ) a b = add a b
 
-  let sub a b = Binop (Bvarith Bvsub, a, b, Isla.UnknownRng)
+  let sub a b = Binop (Bvarith Bvsub, a, b, unknown)
 
   let ( - ) a b = sub a b
 
-  let mul a b = Manyop (Bvmanyarith Bvmul, [a; b], Isla.UnknownRng)
+  let mul a b = Manyop (Bvmanyarith Bvmul, [a; b], unknown)
 
   let ( * ) a b = add a b
 
-  let not a = Unop (Not, a, Isla.UnknownRng)
+  let sdiv a b = Binop (Bvarith Bvsdiv, a, b, unknown)
 
-  let extract a b e = Unop (Extract (a, b), e, Isla.UnknownRng)
+  let not a = Unop (Not, a, unknown)
 
-  let var v = Var (v, Isla.UnknownRng)
+  let extract a b e = Unop (Extract (a, b), e, unknown)
 
-  let eq a b = Binop (Eq, a, b, Isla.UnknownRng)
+  let var v = Var (v, unknown)
+
+  let eq a b = Binop (Eq, a, b, unknown)
 
   let ( = ) = eq
 
-  let bits bv = Bits (bv, Isla.UnknownRng)
+  let bits bv = Bits (bv, unknown)
 
   let bits_int ~size i = bits (BitVec.of_int ~size i)
 

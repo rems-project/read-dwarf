@@ -41,4 +41,4 @@ let _ = Random.self_init ()
 
 let _ = Term.exit @@ Term.eval_choice Default.command commands
 
-let _ = BitVec.one
+let _ = ConcreteEval.eval

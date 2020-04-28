@@ -23,6 +23,9 @@ val one : size:int -> t
 (** The bitvector representing -1 of specified size *)
 val minus_one : size:int -> t
 
+(** The empty bitvector of size 0 *)
+val empty : t
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -196,13 +199,13 @@ val shift_right_logic_bv : t -> t -> t
 val concat : t -> t -> t
 
 (** [extract bv a b] extract bits a to b included from bv. Indexs starts at 0 *)
-val extract : t -> int -> int -> t
+val extract : int -> int -> t -> t
 
 (** Add the second argument of zero to the left *)
-val zero_extend : t -> int -> t
+val zero_extend : int -> t -> t
 
 (** Copy the bit sign as much as specified by the integer on the left *)
-val sign_extend : t -> int -> t
+val sign_extend : int -> t -> t
 
 (*****************************************************************************)
 (*****************************************************************************)

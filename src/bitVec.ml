@@ -27,6 +27,8 @@ let of_int ~size i = i |> Z.of_int |> of_z ~size
 
 let zero ~size = of_z ~size Z.zero
 
+let empty = { z = Z.zero; size = 0 }
+
 let one ~size = of_z ~size Z.one
 
 let minus_one ~size = of_z ~size Z.minus_one
@@ -169,15 +171,15 @@ let shift_right_logic_bv v v' = shift_right_logic v (to_uint v')
 let concat v v' =
   let u' = to_uz v' in
   let size = v.size + v'.size in
-  { z = Z.((v.z lsl v'.size) + u'); size }
+  { z = Z.((v.z lsl v'.size) lor u'); size }
 
-let extract v off endo =
+let extract off endo v =
   let size = endo - off + 1 in
   { z = Z.signed_extract v.z off size; size }
 
-let zero_extend v m = if m > 0 then { z = to_uz v; size = v.size + m } else v
+let zero_extend m v = if m > 0 then { z = to_uz v; size = v.size + m } else v
 
-let sign_extend v m = if m > 0 then { v with size = v.size + m } else v
+let sign_extend m v = if m > 0 then { v with size = v.size + m } else v
 
 (*****************************************************************************)
 (*        Infix operators                                                    *)

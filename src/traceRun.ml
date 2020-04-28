@@ -26,6 +26,12 @@ let make_context state =
   let mem_reads = HashVector.empty () in
   { state; reg_writes; mem_reads }
 
+(** Expand a Trace variable to a State expression, using the context *)
+let expand_var ~(ctxt : context) (v : Trace.Var.t) (a : Ast.lrng) : State.exp =
+  match v with
+  | Register reg -> State.get_reg ctxt.state reg |> State.get_exp
+  | Read i -> (HashVector.get ctxt.mem_reads i).exp
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -62,14 +68,18 @@ let type_unop (u : Ast.unop) tval : Ctype.t option =
   | ZeroExtend m | SignExtend m ->
       if m mod 8 = 0 then machine_of_size ~update:(m / 8) typ |> some else None
 
-let type_binop (b : Ast.no Ast.binop) (tval : tval) (tval' : tval) : Ctype.t option =
+let constexpr_to_int ~ctxt e =
+  let vctxt v = expand_var ~ctxt v Ast.unknown |> ConcreteEval.eval_direct in
+  e |> ConcreteEval.eval_direct ~ctxt:vctxt |> Value.expect_bv |> BitVec.to_int
+
+let type_binop ~ctxt (b : Ast.no Ast.binop) (tval : tval) (tval' : tval) : Ctype.t option =
   let open Opt in
   let* typ = tval.ctyp and* typ' = tval'.ctyp in
   match b with
   | Eq | Neq | Bvcomp _ -> None
   | Bvarith Bvsub when Ctype.is_ptr typ ->
       if typ'.constexpr then
-        let v' = AstManip.exp_bv_to_int tval'.exp in
+        let v' = constexpr_to_int ~ctxt tval'.exp in
         Ctype.ptr_update typ (-v') |> some
       else Ctype.ptr_forget typ |> some
   | Bvarith _ ->
@@ -77,7 +87,7 @@ let type_binop (b : Ast.no Ast.binop) (tval : tval) (tval' : tval) : Ctype.t opt
       Ctype.machine ~constexpr (Ctype.sizeof typ) |> some
   | Binmem b -> Ast.destr_binmem b
 
-let type_manyop (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
+let type_manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
   let open Opt in
   match m with
   | Concat | And | Or -> None
@@ -96,7 +106,7 @@ let type_manyop (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
               List.fold_left
                 (fun v tval ->
                   let c = Option.get tval.ctyp in
-                  if c.constexpr then v + AstManip.exp_bv_to_int tval.exp else v)
+                  if c.constexpr then v + constexpr_to_int ~ctxt tval.exp else v)
                 0 tvals
             in
             Ctype.ptr_update ptr v
@@ -127,8 +137,8 @@ let rec type_exp ~ctxt (exp : Trace.exp) : Ctype.t option =
   | Binop (b, e, e', l) ->
       let te = type_exp_tval ~ctxt e in
       let te' = type_exp_tval ~ctxt e' in
-      type_binop b te te'
-  | Manyop (m, el, l) -> List.map (type_exp_tval ~ctxt) el |> type_manyop m
+      type_binop ~ctxt b te te'
+  | Manyop (m, el, l) -> List.map (type_exp_tval ~ctxt) el |> type_manyop ~ctxt m
   | Ite (c, e, e', l) -> None
   | Bound _ -> .
   | Let _ -> .
@@ -143,12 +153,6 @@ and type_exp_tval ~ctxt exp = { exp; ctyp = type_exp ~ctxt exp }
     All function that take an optional paramter [env] will run the trace with
     C type inference if [env] is provided and without if it is not.
 *)
-
-(** Expand a Trace variable to a State expression, using the context *)
-let expand_var ~(ctxt : context) (v : Trace.Var.t) (a : Ast.lrng) : State.exp =
-  match v with
-  | Register reg -> State.get_reg ctxt.state reg |> State.get_exp
-  | Read i -> (HashVector.get ctxt.mem_reads i).exp
 
 (** Expand a Trace expression to a State expression, using the context *)
 let expand ~(ctxt : context) (exp : Trace.exp) : State.exp =

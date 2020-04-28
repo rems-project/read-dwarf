@@ -211,14 +211,3 @@ let check_no_mem (e : ('a, 'v, 'b, 'm) exp) : bool =
 let expect_no_mem ?(handler = fun () -> failwith "Expected no mem") :
     ('a, 'v, 'b, 'm1) exp -> ('a, 'v, 'b, 'm2) exp =
  fun exp -> if check_no_mem exp then Obj.magic exp else handler ()
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Bit vector constant manipulation } *)
-
-(* TODO actual constant folding *)
-let exp_bv_to_int (e : _ exp) : int =
-  match e with
-  | Bits (bv, _) -> BitVec.to_int bv
-  | _ -> Raise.fail "Constant folding is not implemented yet, sorry"
