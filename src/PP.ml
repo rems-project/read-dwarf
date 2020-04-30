@@ -140,6 +140,20 @@ let hashtbl ?(name = "") key value ht =
 
 let record name fields : document = !^name ^^ OCaml.record name fields
 
+(** Like [separate_map] but with the index *)
+let separate_mapi sep f l =
+  match l with
+  | [] -> empty
+  | a :: l -> List.fold_left (fun (i, d) a -> (i + 1, d ^^ sep ^^ f i a)) (1, f 0 a) l |> snd
+
+(** Concatenate the document produces the function on the array *)
+let concat_array_map f a = Array.fold_left (fun d a -> d ^^ f a) empty a
+
+(** Concatenate the document produced by the function on the array.
+    The function also gets the index of the element *)
+let concat_array_mapi f a =
+  Array.fold_left (fun (i, d) a -> (i + 1, d ^^ f i a)) (0, empty) a |> snd
+
 (*****************************************************************************)
 (*        Unix                                                               *)
 (*****************************************************************************)

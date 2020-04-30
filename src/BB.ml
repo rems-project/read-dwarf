@@ -18,6 +18,7 @@ type state = State.t
 type t = { main : trc array (* TODO: branch : trc list *) }
 
 (** Take a binary block and call isla on all the instruction to get traces
+    Also does the typing of traces for register discovery.
     TODO Support variable length instructions
 *)
 let from_binary (code : BytesSeq.t) : t =
@@ -38,6 +39,7 @@ let from_binary (code : BytesSeq.t) : t =
   let main = code |> BytesSeq.to_list32bs |> List.map process |> Array.of_list in
   { main }
 
+(** Simplifies the traces in the basic block *)
 let simplify_mut (bb : t) = Array.map_mut Trace.simplify bb.main
 
 (** Run a linear basic block on a state by mutation.

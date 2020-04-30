@@ -26,12 +26,13 @@ let pcommands =
     Cache.Cmd.command;
     RunFunc.command;
     RunInstr.command;
+    RunBlock.command;
   ]
 
 (** Add the test command if tests are enabled *)
 let commands = if Tests.enable_tests then Tests.command :: pcommands else pcommands
 
-let _ = Printexc.record_backtrace true
+let _ = Printexc.record_backtrace Config.enable_backtrace
 
 let _ = assert ("aarch64" = Arch.module_name)
 

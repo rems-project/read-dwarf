@@ -19,3 +19,8 @@ let ( %> ) f g x = x |> f |> g
 
 (** The function that does nothing. Useful for high-order programming *)
 let nop _ = ()
+
+(** When you want to run some imperative code on a value before continuing the pipeline *)
+let tee f a =
+  f a;
+  a

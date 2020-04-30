@@ -202,6 +202,7 @@ let event_mut ?env ~(ctxt : context) (event : Trace.event) =
 
 (** Run a trace on the provided state by mutation *)
 let trace_mut ?env (state : State.t) (events : Trace.t) : unit =
+  assert (not @@ State.is_locked state);
   debug "running trace with env:%b" (env <> None);
   let ctxt = make_context state in
   List.iter (event_mut ?env ~ctxt) events;
@@ -213,3 +214,24 @@ let trace ?env (start : State.t) (events : Trace.t) : State.t =
   trace_mut ?env state events;
   State.lock state;
   state
+
+(** Run a trace by mutating the provided state including it's PC.
+    If the trace modified the PC then nothing is done otherwise [next] is added to it.
+
+    TODO reorganize the PC handling better.
+*)
+let trace_pc_mut ?env ~(next : int) (state : State.t) (events : Trace.t) : unit =
+  let pc = Arch.pc () in
+  let rec is_touching_pc : Trace.t -> bool = function
+    | [] -> false
+    | WriteReg { reg; _ } :: _ when reg = [pc] -> true
+    | _ :: l -> is_touching_pc l
+  in
+  trace_mut ?env state events;
+  let updated_pc =
+    if is_touching_pc events then fun exp ->
+      try ConcreteEval.eval exp |> Value.to_exp with Failure _ -> exp (* The PC stays symbolic *)
+    else fun exp ->
+      exp |> Ast.expect_bits |> BitVec.add (BitVec.of_int ~size:64 next) |> Ast.Op.bits
+  in
+  State.update_reg_exp state [pc] updated_pc

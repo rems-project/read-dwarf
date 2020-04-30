@@ -18,7 +18,7 @@ end)
 let nop_int : Int32.t = 0xd503201fl
 
 (** All the internal data that should be loaded *)
-type t = { reg_map : dwarf_reg_map; local_regs : bool Reg.Map.t; nop : BytesSeq.t }
+type t = { reg_map : dwarf_reg_map; local_regs : bool Reg.Map.t; nop : BytesSeq.t; pc : Reg.t }
 
 (** Is the module loaded *)
 let data = ref None
@@ -67,12 +67,15 @@ let gen_nop () =
   Bytes.set_int32_le nop 0 nop_int;
   BytesSeq.of_bytes nop
 
+let gen_pc () = Reg.of_string "_PC"
+
 (** Generate the internal arch data *)
 let gen_t () =
   let reg_map = gen_reg_map () in
   let local_regs = gen_local reg_map in
   let nop = gen_nop () in
-  { reg_map; local_regs; nop }
+  let pc = gen_pc () in
+  { reg_map; local_regs; nop; pc }
 
 (** Initialize the module. Internal function *)
 let actual_init () =
@@ -222,6 +225,8 @@ let is_local (reg : Reg.path) =
   Reg.Map.get_or ~value:false data.local_regs reg
 
 let nop () = (get_data ()).nop
+
+let pc () = (get_data ()).pc
 
 let get_abi api =
   let open Ctype in

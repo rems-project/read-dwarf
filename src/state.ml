@@ -143,6 +143,8 @@ end
 
 let make_tval ?ctyp exp = { exp; ctyp }
 
+let tval_map_exp f t = { t with exp = f t.exp }
+
 let get_exp tval = tval.exp
 
 let get_ctyp tval = tval.ctyp
@@ -368,7 +370,7 @@ let var_type var =
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 State accessors } *)
+(** {1 State memory accessors } *)
 
 (** Create a new Extra symbolic variable by mutating the state *)
 let make_read (s : t) ?ctyp (ty : ty) : var =
@@ -430,6 +432,11 @@ let typed_write ~env (s : t) ?(ptrtype : Ctype.t option) (mb : Mem.block) (value
       write s mb value.exp
   | _ -> write s mb value.exp
 
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 State register accessors } *)
+
 (** Reset the register in given path to a symbolic value,
     and resets the type to the provided type (or no type if not provided)*)
 let reset_reg (s : t) ?(ctyp : Ctype.t option) (path : Reg.path) : unit =
@@ -450,6 +457,9 @@ let set_reg_type (s : t) (path : Reg.path) (ctyp : Ctype.t) : unit =
 
 (** Get the content of the register *)
 let get_reg (s : t) (path : Reg.path) : tval = Reg.Map.get s.regs path
+
+let update_reg_exp (s : t) (path : Reg.path) (f : exp -> exp) =
+  Reg.Map.get s.regs path |> tval_map_exp f |> Reg.Map.set s.regs path
 
 (*****************************************************************************)
 (*****************************************************************************)

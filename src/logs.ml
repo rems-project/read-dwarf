@@ -64,7 +64,11 @@ let baselogd_fatal ~code name lvl doc =
 
 let loggers : (string, level) IdMap.t = IdMap.make ()
 
-let register (name : string) = IdMap.add loggers name default_level
+let register (name : string) =
+  try IdMap.add loggers name default_level
+  with IdMap.Exists ->
+    Printf.eprintf "Logger %s is registered twice, fix and recompile\n" name;
+    exit 125
 
 let mainlog i lvl fmt =
   if lvl <= IdMap.geti loggers i then
