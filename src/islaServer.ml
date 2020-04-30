@@ -179,7 +179,7 @@ module Cmd = struct
         try
           let answer = string_request c in
           PP.(print $ pp_answer answer ^^ hardline)
-        with IslaError -> print_string "Isla send back an error\nx "
+        with IslaError -> print_string "Isla sent back an error\nx "
       done
     with
     | End_of_file ->
