@@ -3,7 +3,7 @@
 open Ast
 
 open Logs.Logger (struct
-  let str = "AstManip"
+  let str = __MODULE__
 end)
 
 (*****************************************************************************)

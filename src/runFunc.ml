@@ -5,7 +5,7 @@ open Cmdliner
 open CommonOpt
 
 open Logs.Logger (struct
-  let str = "RunFunc"
+  let str = __MODULE__
 end)
 
 let run_func arch elfname name len =

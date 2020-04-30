@@ -1,7 +1,7 @@
 (** This module provide code to manipulate basic block and run them *)
 
 open Logs.Logger (struct
-  let str = "BB"
+  let str = __MODULE__
 end)
 
 type trc = Trace.t

@@ -1,7 +1,7 @@
 (** This module adds a command to dump the symbol of an ELF file with their content *)
 
 open Logs.Logger (struct
-  let str = "DumpSym"
+  let str = __MODULE__
 end)
 
 open Cmdliner

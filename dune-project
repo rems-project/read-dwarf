@@ -8,6 +8,8 @@
 
 (generate_opam_files true)
 
+(wrapped_executables false)
+
 (package
  (name read-dwarf)
  (synopsis "C Translation checking software")

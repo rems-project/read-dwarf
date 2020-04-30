@@ -1,7 +1,7 @@
 (** This module is about calling external processes, and helper functions for doing that *)
 
 open Logs.Logger (struct
-  let str = "Cmd"
+  let str = __MODULE__
 end)
 
 open Protect

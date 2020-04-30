@@ -11,7 +11,7 @@
 open Fun
 
 open Logs.Logger (struct
-  let str = "Cache"
+  let str = __MODULE__
 end)
 
 (*****************************************************************************)

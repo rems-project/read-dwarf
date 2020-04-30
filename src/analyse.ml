@@ -1,5 +1,5 @@
 open Logs.Logger (struct
-  let str = "Analyse"
+  let str = __MODULE__
 end)
 
 open Printf

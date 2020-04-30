@@ -3,7 +3,7 @@
 open Fun
 
 open Logs.Logger (struct
-  let str = "Loc"
+  let str = __MODULE__
 end)
 
 (** The type of a dwarf location stack operation *)

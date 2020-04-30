@@ -1,7 +1,7 @@
 (** This module represent an ELF 64 file we do not deal with 32 bit for now *)
 
 open Logs.Logger (struct
-  let str = "ElfFile"
+  let str = __MODULE__
 end)
 
 module SymTbl = ElfSymTable

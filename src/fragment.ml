@@ -1,7 +1,7 @@
 (* The documentation is in the mli file *)
 
 open Logs.Logger (struct
-  let str = "Fragment"
+  let str = __MODULE__
 end)
 
 (*****************************************************************************)

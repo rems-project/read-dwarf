@@ -4,7 +4,7 @@
  *)
 
 open Logs.Logger (struct
-  let str = "State"
+  let str = __MODULE__
 end)
 
 (*****************************************************************************)

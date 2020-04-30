@@ -1,5 +1,5 @@
 open Logs.Logger (struct
-  let str = "BitVec"
+  let str = __MODULE__
 end)
 
 (* The value do not need to be normalized to any value to be valid.

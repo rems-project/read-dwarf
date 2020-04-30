@@ -5,7 +5,7 @@
 *)
 
 open Logs.Logger (struct
-  let str = "TraceRun"
+  let str = __MODULE__
 end)
 
 (*****************************************************************************)

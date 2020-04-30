@@ -3,7 +3,7 @@
 *)
 
 module L = Logs.Logger (struct
-  let str = "Warn"
+  let str = "Warn/Legacy"
 end)
 
 (** Report a fatal error in the Printf style format *)

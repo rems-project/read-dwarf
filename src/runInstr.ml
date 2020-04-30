@@ -27,7 +27,7 @@ open Cmdliner
 open CommonOpt
 
 open Logs.Logger (struct
-  let str = "RunInstr"
+  let str = __MODULE__
 end)
 
 type traces = IslaTraces of Isla.rtrc list | Traces of Trace.t list

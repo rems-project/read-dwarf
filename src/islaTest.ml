@@ -3,7 +3,7 @@
 open Files
 
 open Logs.Logger (struct
-  let str = "IslaTest"
+  let str = __MODULE__
 end)
 
 (* possible options :

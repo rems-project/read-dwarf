@@ -7,7 +7,7 @@
 *)
 
 open Logs.Logger (struct
-  let str = "IslaServer"
+  let str = __MODULE__
 end)
 
 (** Bump when updating isla *)

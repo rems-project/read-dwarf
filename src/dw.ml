@@ -9,7 +9,7 @@ module Var = DwVar
 module Func = DwFunc
 
 open Logs.Logger (struct
-  let str = "Dw"
+  let str = __MODULE__
 end)
 
 (** The type that represent a elf-dwarf binary whose information has been fully interpreted *)

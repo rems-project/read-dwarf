@@ -4,7 +4,7 @@
 *)
 
 open Logs.Logger (struct
-  let str = "Tests"
+  let str = __MODULE__
 end)
 
 open Cmdliner

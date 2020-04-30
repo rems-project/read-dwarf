@@ -23,7 +23,7 @@
 open Isla
 
 open Logs.Logger (struct
-  let str = "IslaPreprocess"
+  let str = __MODULE__
 end)
 
 type simplify_context_element =

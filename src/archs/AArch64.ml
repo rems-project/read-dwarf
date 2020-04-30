@@ -7,7 +7,7 @@
 open ArchSig
 
 open Logs.Logger (struct
-  let str = "AArch64"
+  let str = __MODULE__
 end)
 
 (*****************************************************************************)

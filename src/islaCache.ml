@@ -10,7 +10,7 @@
 *)
 
 open Logs.Logger (struct
-  let str = "IslaCache"
+  let str = __MODULE__
 end)
 
 (** Special encoding of BytesSeq. If it is short enough to fit in the hash, then we do it.

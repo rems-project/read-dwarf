@@ -7,7 +7,7 @@ open CommonOpt
 module SMT = Z3
 
 open Logs.Logger (struct
-  let str = "RunBB"
+  let str = __MODULE__
 end)
 
 type state = State.t

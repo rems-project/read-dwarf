@@ -1,7 +1,7 @@
 open Isla
 
 open Logs.Logger (struct
-  let str = "IslaType"
+  let str = __MODULE__
 end)
 
 type 'a vector = 'a Vector.t

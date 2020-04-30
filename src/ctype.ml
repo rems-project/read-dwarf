@@ -3,7 +3,7 @@
 *)
 
 open Logs.Logger (struct
-  let str = "Ctype"
+  let str = __MODULE__
 end)
 
 (*****************************************************************************)
