@@ -164,7 +164,10 @@ let archs_of_toml ~path (table : table) : archs_type =
     |> Seq.map (fun (k, (v : value)) ->
            let name = Key.to_string k in
            match v with
-           | TTable t -> (ArchType.of_string name, Arch.of_toml ~name ~path t)
+           | TTable t -> (
+               try (ArchType.of_string name, Arch.of_toml ~name ~path t)
+               with InvalidKey (s, kl) -> raise (InvalidKey (s, Key.to_string k :: kl))
+             )
            | _ -> raise (InvalidKey ("bad type, expected table", [Key.to_string k])))
     |> Hashtbl.of_seq
   with Failure s -> raise (InvalidKey (s, []))
@@ -219,11 +222,11 @@ let ensure_loaded file = match !data with Some _ -> () | None -> load file
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-
 (** {1 Accessors }
 
     The config must be loaded otherwise {!UnloadedConfig} will be thrown
 *)
+
 exception UnloadedConfig
 
 let raise_unloaded _ = raise UnloadedConfig
