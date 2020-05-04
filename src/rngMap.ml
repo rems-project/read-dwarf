@@ -129,8 +129,8 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
     let endp = start + len in
     let rec clear_end t start endp : t =
       match next t (start - 1) with
-      | Some (objaddr, obj) -> clear_end (IMap.remove objaddr t) objaddr endp
-      | None -> t
+      | Some (objaddr, obj) when objaddr < endp -> clear_end (IMap.remove objaddr t) objaddr endp
+      | _ -> t
     in
     clear_end t start endp
 
