@@ -44,9 +44,7 @@ module Opcode (*: Cache.Key *) = struct
         let l = BytesSeq.length bs in
         if l < BytesSeq.int_bytes then begin
           assert (not @@ IntBits.get i IntBits.back);
-          debug "back:%d" (IntBits.back - 3);
           let res = IntBits.blit l 0 i (IntBits.back - 3) 3 in
-          debug "before %x, after:%x" i res;
           res
         end
         else IntBits.set i IntBits.back
