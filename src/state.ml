@@ -476,10 +476,10 @@ let pp s =
       [
         ("id", Id.pp s.id);
         ("regs", Reg.Map.pp pp_tval s.regs);
+        ("fenv", Fragment.Env.pp s.fenv);
         ("read_vars", Vector.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
+        ("memory", Mem.pp s.mem);
         ( "asserts",
           s.asserts |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_exp e) |> separate hardline
         );
-        ("memory", Mem.pp s.mem);
-        ("fenv", Fragment.Env.pp s.fenv);
       ])
