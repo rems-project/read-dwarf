@@ -213,18 +213,11 @@ let bvi_to_bv (bvi : bvi) (size : int) =
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Isla Filtering }
+(** {1 Trace Filtering }
 
     This is some basic trace filtering that remove unwanted item from the trace in
     various situations
 *)
-
-(** List of ignored register for the purposes of the semantics.
-
-    TODO Take that list from the {!Arch} module
-
-*)
-let ignored_regs = ["SEE"; "__unconditional"; "__v85_implemented"; "DBGEN"]
 
 (** Split the trace between before and after the "cycle" event *)
 let split_cycle : 'a trc -> 'a trc * 'a trc = function
@@ -248,8 +241,8 @@ let remove_init : 'a trc -> 'a trc = function
       in
       Trace (pop_until_cycle l)
 
-(** Remove all the events related to ignored registers (ignored_regs) *)
-let remove_ignored : 'a trc -> 'a trc = function
+(** Remove all the events related to ignored registers *)
+let remove_ignored ignored_regs : 'a trc -> 'a trc = function
   | Trace l ->
       Trace
         (List.filter
@@ -258,8 +251,3 @@ let remove_ignored : 'a trc -> 'a trc = function
                  not @@ List.mem name ignored_regs
              | _ -> true)
            l)
-
-(* TODO smarter filter merging *)
-
-(** Do the global filtering to get the main usable trace *)
-let filter t = t |> remove_init |> remove_ignored

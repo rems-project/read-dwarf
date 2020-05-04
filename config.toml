@@ -1,0 +1,26 @@
+# The config format is unstable while read-dwarf is in developement, but it is simpler to add
+# options here than on the command line
+
+# Default achitecture to use when no ELF is provided (for text instruction commands)
+# Optional. The default_arch option of compile-time config.ml will decide then.
+default-arch = "aarch64"
+
+[archs.aarch64]
+toolchain = "aarch64-linux-gnu"
+
+    [archs.aarch64.isla]
+    ignored-regs = ["SEE",
+                    "__unconditional",
+                    "DBGEN",
+                    "__v81_implemented",
+                    "__v82_implemented",
+                    "__v83_implemented",
+                    "__v84_implemented",
+                    "__v85_implemented"]
+    arch-file = "aarch64.ir" # relative to the toml file
+    linearize = ["ConditionHolds", "integer_conditional_select"]
+    other-opts = []
+
+# [archs.riscv]
+# riscv stuff for example
+

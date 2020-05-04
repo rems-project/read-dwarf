@@ -23,5 +23,6 @@ let state () =
 
 (** Intialize this module by calling isla on {!nop} to get initial machine state *)
 let init () =
-  IslaCache.get_nop () |> IslaManip.split_cycle |> fst |> IslaManip.remove_ignored
+  IslaCache.get_nop () |> IslaManip.split_cycle |> fst
+  |> IslaManip.remove_ignored (Arch.get_isla_config ()).ignored_regs
   |> load_init_trc

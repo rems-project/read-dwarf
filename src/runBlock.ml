@@ -71,8 +71,7 @@ let get_elf_start elfname startname =
 
 let elf_term = Term.(func_options comopts get_elf_start $ elf $ start)
 
-let gen_block arch ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop_sym
-    breakpoints =
+let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop_sym breakpoints =
   let brks =
     List.map (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset) breakpoints
   in
@@ -87,11 +86,11 @@ let gen_block arch ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len
       )
     | _ -> stop_sym
   in
-  IslaCache.start arch;
+  IslaCache.start @@ Arch.get_isla_config ();
   let (sym, start) = symoffset in
   Block.make ~sym ~start ~endpred
 
-let block_term = Term.(const gen_block $ arch $ elf_term $ len $ stop_sym $ breakpoints)
+let block_term = Term.(const gen_block $ elf_term $ len $ stop_sym $ breakpoints)
 
 let run_block block no_run dump reg_types =
   Block.simplify_mut block;

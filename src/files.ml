@@ -100,7 +100,13 @@ let write_string = write output_string
 (** {1 File management } *)
 
 (** Remove a file *)
-let remove_file = Sys.remove
+let remove = Sys.remove
+
+(** Test if a files exists *)
+let exists = Sys.file_exists
 
 (** Remove a file at program exit *)
-let remove_at_exit s = at_exit (fun () -> try remove_file s with Sys_error _ -> ())
+let remove_at_exit s = at_exit (fun () -> try remove s with Sys_error _ -> ())
+
+let add_to_relative ~newp path =
+  if Filename.is_relative path then Filename.concat newp path else path

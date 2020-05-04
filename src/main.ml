@@ -41,5 +41,3 @@ let _ = Random.self_init ()
 (** main *)
 
 let _ = Term.exit @@ Term.eval_choice Default.command commands
-
-let _ = ConcreteEval.eval

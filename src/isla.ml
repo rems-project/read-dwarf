@@ -77,16 +77,17 @@ let parse_trc_string ?(filename = "default") (s : string) : rtrc =
 let parse_trc_channel ?(filename = "default") (c : in_channel) : rtrc =
   parse_trc ~filename @@ Lexing.from_channel ~with_positions:true c
 
-let _ =
-  Tests.add_test "Isla.parse.exp.var.free" (fun () ->
-      let s = "v42" in
-      let exp = parse_exp_string ~filename:"test string in Isla.parse.exp.var.free" s in
-      match exp with Var (42, _) -> true | _ -> false)
-
-let _ =
-  Tests.add_test "Isla.parse.exp.and" (fun () ->
-      let s = "(and v1 v2)" in
-      let exp = parse_exp_string ~filename:"test string in Isla.parse.exp.and" s in
-      match exp with Manyop (And, [Var (1, _); Var (2, _)], _) -> true | _ -> false)
+(* TODO I need some external inline test system to avoid cyclic dependencies *)
+(* let _ =
+ *   Tests.add_test "Isla.parse.exp.var.free" (fun () ->
+ *       let s = "v42" in
+ *       let exp = parse_exp_string ~filename:"test string in Isla.parse.exp.var.free" s in
+ *       match exp with Var (42, _) -> true | _ -> false)
+ *
+ * let _ =
+ *   Tests.add_test "Isla.parse.exp.and" (fun () ->
+ *       let s = "(and v1 v2)" in
+ *       let exp = parse_exp_string ~filename:"test string in Isla.parse.exp.and" s in
+ *       match exp with Manyop (And, [Var (1, _); Var (2, _)], _) -> true | _ -> false) *)
 
 include Isla_lang.PP

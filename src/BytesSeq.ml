@@ -43,10 +43,11 @@ let of_hex hexstr : t =
   done;
   of_bytes res
 
-let _ =
-  Tests.add_test "BytesSeq.of_hex" (fun () ->
-      let bs = of_hex "2a615B7c" in
-      to_string bs = "*a[|")
+(* TODO I need some external inline test system to avoid cyclic dependencies *)
+(* let _ =
+ *   Tests.add_test "BytesSeq.of_hex" (fun () ->
+ *       let bs = of_hex "2a615B7c" in
+ *       to_string bs = "*a[|") *)
 
 (** Convert to a char array *)
 let to_array bs = Array.init (length bs) (fun i -> unsafe_get bs i)

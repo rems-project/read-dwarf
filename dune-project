@@ -20,6 +20,7 @@
   (cmdliner (>= 1.0.0))
   (res (>= 5.0.0))
   (ocamlgraph (>= 1.8.8))
+  (toml (>= 5.0.0))
   isla-lang
  )
 

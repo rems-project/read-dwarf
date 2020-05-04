@@ -25,11 +25,30 @@ let exits =
   let doc2 = "on non-exception internal errors like assertion failed." in
   Term.exit_info ~doc 1 :: Term.exit_info ~doc:doc2 2 :: Term.default_exits
 
-let arch =
-  let doc = "Overrides the default architecture to use in isla" in
-  let env = Arg.env_var "ISLA_ARCH" ~doc in
-  let doc = "Architecture to be analysed" in
-  Arg.(value & opt non_dir_file "aarch64.ir" & info ["a"; "arch"] ~env ~docv:"ARCH_IR" ~doc)
+let config =
+  let doc =
+    Printf.sprintf "Overrides the default location of the configuration file (%s)"
+      ConfigPre.config_file
+  in
+  let env = Arg.env_var "READ_DWARF_CONFIG" ~doc in
+  let doc = "Configuration file path" in
+  Term.(
+    const ConfigFile.ensure_loaded
+    $ Arg.(
+        value
+        & opt non_dir_file ConfigPre.config_file
+        & info ["c"; "config"] ~env ~docv:"CONFIG_TOML" ~doc))
+
+let arch_val config archopt = Opt.value_fun archopt ~default:ConfigFile.get_arch_name
+
+let arch_opt =
+  let doc =
+    "Override architecture to be analysed. If an ELF is provided this option is ignored and the \
+     architecture of the ELF is used instead"
+  in
+  Arg.(value & opt (some ArchSig.Type.conv) None & info ["a"; "arch"] ~docv:"ARCH" ~doc)
+
+let arch = Term.(const arch_val $ config $ arch_opt)
 
 let isla_client_ref = ref "isla-client"
 
@@ -82,4 +101,4 @@ let process_logs_opts quiet verbose info debug =
 
 let logs_term = Term.(const process_logs_opts $ quiet $ verbose $ infoopt $ debug)
 
-let comopts = [isla_client; z3; logs_term]
+let comopts = [isla_client; z3; logs_term; config]

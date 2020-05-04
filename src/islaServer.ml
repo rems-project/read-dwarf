@@ -10,6 +10,11 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
+module Config = ConfigFile.Arch.Isla
+
+(** The configuration record type *)
+type config = Config.t
+
 (** Bump when updating isla *)
 let required_version = "dev-fa44bef14640e5245593b41e6f75c864ae2f0857"
 
@@ -21,13 +26,23 @@ let server = ref None
 let get_server () =
   match !server with Some serv -> serv | None -> failwith "Isla server was not started"
 
+(** Compute the isla-client command line from the isla configuration *)
+let cmd_of_config (config : config) socket =
+  let cmd =
+    Vector.of_array [|!CommonOpt.isla_client_ref; "--socket"; socket; "--arch"; config.arch_file|]
+  in
+  List.iter
+    (fun s ->
+      Vector.add_one cmd "-L";
+      Vector.add_one cmd s)
+    config.linearize;
+  List.iter (fun s -> Vector.add_one cmd s) config.other_opts;
+  Vector.to_array cmd
+
 (** Start the server with the specified architecture, do not attempt any checks *)
-let raw_start arch : unit =
+let raw_start config : unit =
   if !server != None then failwith "Isla server starting when there is already a server online";
-  server :=
-    Some
-      (Cmd.Server.start "isla" (fun socket ->
-           [|!CommonOpt.isla_client_ref; "--socket"; socket; "--arch"; arch|]))
+  server := Some (Cmd.Server.start "isla" (cmd_of_config config))
 
 (** Stop the server by cutting the connection. *)
 let raw_stop () =
@@ -144,8 +159,8 @@ let stop () =
   info "Isla stopped"
 
 (** Start isla and check version *)
-let start arch =
-  raw_start arch;
+let start config =
+  raw_start config;
   let version = request VERSION |> expect_version in
   if version = required_version then info "Isla started with version %s" version
   else begin
@@ -157,7 +172,7 @@ let start arch =
 (** Test that isla can start and keep a valid version *)
 let _ =
   Tests.add_test "IslaServer.version" (fun () ->
-      start "aarch64.ir";
+      start (ConfigFile.get_isla_config (ConfigFile.get_arch_name ()));
       stop ();
       true)
 
@@ -170,7 +185,8 @@ module Cmd = struct
   let server_test arch =
     base "Starting";
     Random.self_init ();
-    raw_start arch;
+    let config = ConfigFile.get_isla_config arch in
+    raw_start config;
     try
       while true do
         print_string "> ";
@@ -189,7 +205,7 @@ module Cmd = struct
         stop ();
         raise e
 
-  let term = Term.(func_options [isla_client; logs_term] server_test $ arch)
+  let term = Term.(func_options [isla_client; logs_term; config] server_test $ arch)
 
   let info =
     let doc = "Raw isla server interaction." in

@@ -3,7 +3,7 @@ BINS=test
 
 TOOLCHAIN=aarch64-linux-gnu-
 
-RD=../read-dwarf run-bb -a ../aarch64.ir -s
+RD=../read-dwarf run-bb -c ../config.toml -s
 
 all: $(foreach BIN,$(BINS), build/$(BIN))
 .PHONY: all

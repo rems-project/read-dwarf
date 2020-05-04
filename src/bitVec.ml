@@ -213,23 +213,24 @@ let ( lxor ) = logxor
 (*        Tests                                                              *)
 (*****************************************************************************)
 
-let _ =
-  Tests.add_test "BitVec.concat" (fun () ->
-      let two = of_smt "#b0010" in
-      let tree = of_smt "#b0011" in
-      let res = of_smt "#b00100011" in
-      concat two tree = res)
-
-let _ =
-  Tests.add_test "BitVec.shift_right_arith" (fun () ->
-      shift_right_arith (of_smt "#b1100") 2 = minus_one ~size:4)
-
-let _ =
-  Tests.add_test "BitVec.sdiv" (fun () ->
-      sdiv (of_int ~size:7 10) (of_int ~size:7 (-3)) = of_int ~size:7 (-3))
-
-let _ = Tests.add_test "BitVec.oftosmt" (fun () -> to_smt (of_smt "#b1111") = "#xf")
-
-let _ = Tests.add_test "BitVec.oftosmt2" (fun () -> to_smt (of_smt "#xcafebabe") = "#xcafebabe")
-
-let _ = Tests.add_test "BitVec.oftosmt0" (fun () -> to_smt (of_smt "#x00000000") = "#x00000000")
+(* TODO I need some external inline test system to avoid cyclic dependencies *)
+(* let _ =
+ *   Tests.add_test "BitVec.concat" (fun () ->
+ *       let two = of_smt "#b0010" in
+ *       let tree = of_smt "#b0011" in
+ *       let res = of_smt "#b00100011" in
+ *       concat two tree = res)
+ *
+ * let _ =
+ *   Tests.add_test "BitVec.shift_right_arith" (fun () ->
+ *       shift_right_arith (of_smt "#b1100") 2 = minus_one ~size:4)
+ *
+ * let _ =
+ *   Tests.add_test "BitVec.sdiv" (fun () ->
+ *       sdiv (of_int ~size:7 10) (of_int ~size:7 (-3)) = of_int ~size:7 (-3))
+ *
+ * let _ = Tests.add_test "BitVec.oftosmt" (fun () -> to_smt (of_smt "#b1111") = "#xf")
+ *
+ * let _ = Tests.add_test "BitVec.oftosmt2" (fun () -> to_smt (of_smt "#xcafebabe") = "#xcafebabe")
+ *
+ * let _ = Tests.add_test "BitVec.oftosmt0" (fun () -> to_smt (of_smt "#x00000000") = "#x00000000") *)

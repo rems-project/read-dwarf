@@ -69,8 +69,8 @@ let simp_trace_term = Term.(const ( || ) $ simp_trace $ simp)
 
 let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
-let get_bb arch dump reg_types simp_trace code : BB.t =
-  IslaCache.start arch;
+let get_bb dump reg_types simp_trace code : BB.t =
+  IslaCache.start @@ Arch.get_isla_config ();
   Init.init ();
   let bb = BB.from_binary code in
   if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
@@ -81,7 +81,7 @@ let get_bb arch dump reg_types simp_trace code : BB.t =
   if dump then base "Basic block:\n%t\n" (PP.topi BB.pp bb);
   bb
 
-let bb_term = Term.(const get_bb $ arch $ dump $ reg_types $ simp_trace_term $ code_term)
+let bb_term = Term.(const get_bb $ dump $ reg_types $ simp_trace_term $ code_term)
 
 let run_bb norun simp_state bb =
   if not norun then begin

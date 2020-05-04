@@ -79,11 +79,11 @@ let elf =
   in
   Arg.(value & opt (some non_dir_file) None & info ["e"; "elf"] ~doc)
 
-let get_instr instr elfopt : BytesSeq.t =
+let get_instr arch instr elfopt : BytesSeq.t =
   let (elfname, symname) =
     match elfopt with
     | None ->
-        Arch.ensure_loaded Arch.Type.AARCH64;
+        Arch.ensure_loaded arch;
         (Arch.assemble_to_elf instr, "instr")
     | Some elfname -> (elfname, instr)
   in
@@ -98,21 +98,21 @@ let get_instr instr elfopt : BytesSeq.t =
   let len = 4 (* TODO proper Instruction length system *) in
   BytesSeq.sub sym.data off len
 
-let instr_term = Term.(func_options comopts get_instr $ instr $ elf)
+let instr_term = Term.(func_options comopts get_instr $ arch $ instr $ elf)
 
 let simp_trace_term = Term.(const ( || ) $ simp_trace $ simp)
 
 let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
-let get_traces arch instr isla_run dump_types : traces =
-  IslaCache.start arch;
+let get_traces instr isla_run dump_types : traces =
+  IslaCache.start @@ Arch.get_isla_config ();
   Init.init ();
   let rtraces = IslaCache.get_traces instr in
   List.iter (fun t -> IslaType.type_trc t |> ignore) rtraces;
   if dump_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
   if isla_run then IslaTraces rtraces else Traces (List.map Trace.of_isla rtraces)
 
-let pre_traces_term = Term.(const get_traces $ arch $ instr_term $ isla_run $ reg_types)
+let pre_traces_term = Term.(const get_traces $ instr_term $ isla_run $ reg_types)
 
 let simp_traces simp_traces traces =
   if simp_traces then (

@@ -23,3 +23,12 @@ let pp_api (api : func_api) =
       ("args", api.args |> List.mapi (fun i t -> (int i, Ctype.pp t)) |> mapping "");
       ("ret", Option.fold ~none:!^"none" ~some:Ctype.pp api.ret);
     ]
+
+(** Get the initialized architecture type. Fails ([Failure]) if not architecture was loaded *)
+let get () = match initialized () with Some a -> a | None -> Raise.fail "No architecture loaded"
+
+(** Get the configuration for the initialized architecture *)
+let get_config () = ConfigFile.get_arch_config (get ())
+
+(** Get the Isla configuration for the initialized architecture *)
+let get_isla_config () = ConfigFile.get_isla_config (get ())

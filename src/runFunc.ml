@@ -8,7 +8,7 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let run_func arch elfname name len =
+let run_func elfname name len =
   base "Running %s in %s" name elfname;
   warn "Only ABI start for now";
   base "Loading %s" elfname;
@@ -22,7 +22,7 @@ let run_func arch elfname name len =
   base "Loading ABI";
   let abi = Arch.get_abi api in
   Random.self_init ();
-  IslaCache.start arch;
+  IslaCache.start @@ Arch.get_isla_config ();
   Init.init ();
   base "Loading ABI";
   base "Init state:\n%t" (PP.topi State.pp (Init.state ()));
@@ -58,7 +58,7 @@ let func =
   let doc = "Symbol name of the function to run" in
   Arg.(required & pos 1 (some string) None & info [] ~docv:"FUNCTION" ~doc)
 
-let term = Term.(func_options comopts run_func $ arch $ elf $ func $ len)
+let term = Term.(func_options comopts run_func $ elf $ func $ len)
 
 let info =
   let doc = "Run a symbolically (or not) a single function" in

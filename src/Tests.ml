@@ -10,8 +10,6 @@ end)
 open Cmdliner
 open CommonOpt
 
-let arch_ref = ref "aarch64.ir"
-
 let enable_tests = ConfigPre.enable_tests
 
 (** This type of function can be registered to be called between tests *)
@@ -72,7 +70,7 @@ let test_cmd tests =
   end
   else Error (`Msg "Some test failed")
 
-let test_term = Term.(func_options (setter arch_ref arch :: comopts) test_cmd $ tests_arg)
+let test_term = Term.(func_options comopts test_cmd $ tests_arg)
 
 let term = Term.(term_result test_term)
 

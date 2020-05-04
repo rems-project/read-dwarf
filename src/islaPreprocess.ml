@@ -35,7 +35,7 @@ let expect_processed = function
   | Processed i -> i
   | _ -> Raise.fail "Variables should be processed at this point"
 
-let simplify_trc (Trace events : rtrc) =
+let simplify_trc (Trace events : rtrc) : rtrc =
   (* Phase 1: Discover which variable are actually used *)
   let used = HashVector.empty () in
   let process_used event =
@@ -125,11 +125,11 @@ let simplify_trc (Trace events : rtrc) =
   Trace (List.rev !res)
 
 (** Preprocess a set of traces. *)
-let preprocess trcs =
+let preprocess (config : IslaServer.config) (trcs : (bool * rtrc) list) : rtrc list =
   let preprocess_one (b, trc) =
     if not b then None
     else
-      let trc = IslaManip.filter trc in
+      let trc = trc |> IslaManip.remove_init |> IslaManip.remove_ignored config.ignored_regs in
       let trc = simplify_trc trc in
       Some trc
   in

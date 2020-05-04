@@ -18,7 +18,13 @@ end)
 let nop_int : Int32.t = 0xd503201fl
 
 (** All the internal data that should be loaded *)
-type t = { reg_map : dwarf_reg_map; local_regs : bool Reg.Map.t; nop : BytesSeq.t; pc : Reg.t }
+type t = {
+  config : ConfigFile.Arch.t;
+  reg_map : dwarf_reg_map;
+  local_regs : bool Reg.Map.t;
+  nop : BytesSeq.t;
+  pc : Reg.t;
+}
 
 (** Is the module loaded *)
 let data = ref None
@@ -71,11 +77,12 @@ let gen_pc () = Reg.of_string "_PC"
 
 (** Generate the internal arch data *)
 let gen_t () =
+  let config = ConfigFile.get_arch_config Type.AARCH64 in
   let reg_map = gen_reg_map () in
   let local_regs = gen_local reg_map in
   let nop = gen_nop () in
   let pc = gen_pc () in
-  { reg_map; local_regs; nop; pc }
+  { config; reg_map; local_regs; nop; pc }
 
 (** Initialize the module. Internal function *)
 let actual_init () =
@@ -262,8 +269,10 @@ let get_abi api =
   { init }
 
 let assemble_to_elf instr =
-  let assembler = ConfigPre.aarch64_toolchain ^ "-as" in
-  let linker = ConfigPre.aarch64_toolchain ^ "-ld" in
+  let data = get_data () in
+  let toolchain = data.config.toolchain in
+  let assembler = toolchain ^ "-as" in
+  let linker = toolchain ^ "-ld" in
   let num = Random.bits () in
   let obj_file = Filename.concat (Filename.get_temp_dir_name ()) (Printf.sprintf "%d.o" num) in
   let elf_file = Filename.concat (Filename.get_temp_dir_name ()) (Printf.sprintf "%d.elf" num) in

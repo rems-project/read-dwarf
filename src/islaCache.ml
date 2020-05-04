@@ -13,6 +13,9 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
+(** The type of Isla configuration *)
+type config = IslaServer.config
+
 (** Special encoding of BytesSeq. If it is short enough to fit in the hash, then we do it.
     Otherwise we store in a file.
 
@@ -69,36 +72,7 @@ module Opcode (*: Cache.Key *) = struct
       Some (BytesSeq.of_bytes b)
 end
 
-(** Representation of trace lists on disk.
-    For now, for each elements of the list, the first line is a boolean and then starting on next
-    line, we'll have the corresponding trace. Then the boolean of the next trace.
-*)
-module BoolTraceList (*: Cache.Value *) = struct
-  type t = (bool * Isla.rtrc) list
-
-  let to_file file trcs =
-    let output_trc ochannel trc = PP.fprint ochannel @@ Isla.pp_trc trc in
-    let output_elem ochannel (bool, trc) =
-      if bool then Printf.fprintf ochannel "true\n%a\n" output_trc trc
-      else Printf.fprintf ochannel "false\n%a\n" output_trc trc
-    in
-    let output_trcs = Files.output_list output_elem in
-    Files.write output_trcs file trcs
-
-  let of_file file =
-    let num = ref 0 in
-    let input_trc ichannel =
-      let bstr = input_line ichannel in
-      let b = bstr = "true" in
-      let trc = Files.input_sexp ichannel in
-      let filename = Printf.sprintf "Trace %i of %s" !num file in
-      incr num;
-      (b, Isla.parse_trc_string ~filename trc)
-    in
-    let input_trcs = Files.input_list input_trc in
-    Files.read input_trcs file
-end
-
+(** Representation of trace lists on disk Just a list of traces separated by new lines *)
 module TraceList (*: Cache.Value *) = struct
   type t = Isla.rtrc list
 
@@ -119,20 +93,38 @@ module TraceList (*: Cache.Value *) = struct
     Files.read input_trcs file
 end
 
+(** An epoch independant of the isla version, bump if you change the representation
+    of the traces on disk.
+
+    Reset (or not) when bumping isla version ({!IslaServer.required_version})
+
+    The Epoch also include the digest of the Isla configuration. Any change of configuration
+    will wipe out the cache.
+*)
+let epoch = 1
+
 module Epoch (*: Cache.Epoch*) = struct
-  type t = string * int
+  type t = string * int * string (* config digest *)
 
   let to_file file trcs =
-    let output ochannel (s, i) = Printf.fprintf ochannel "%s\n%d\n" s i in
+    let output ochannel (s, i, d) = Printf.fprintf ochannel "%s\n%d\n%s\n" s i d in
     Files.write output file trcs
 
   let of_file file =
     let input ichannel =
       let version = input_line ichannel in
       let inner_epoch = int_of_string @@ input_line ichannel in
-      (version, inner_epoch)
+      let config =
+        (* Support legacy epochs with 2 fields *)
+        try input_line ichannel with End_of_file -> ""
+      in
+      (version, inner_epoch, config)
     in
     Files.read input file
+
+  (** Build the epoch from the config. This function does the config [Digest] *)
+  let of_config config =
+    (IslaServer.required_version, epoch, IslaServer.Config.digest config |> Digest.to_hex)
 
   let compat = ( = )
 end
@@ -140,41 +132,36 @@ end
 (** The isla cache module *)
 module IC = Cache.Make (Opcode) (TraceList) (Epoch)
 
-(** An epoch independant of the isla version, bump if you change the representation
-    of the traces on disk.
-    Reset (or not) when bumping isla version ({!IslaServer.required_version}) *)
-let epoch = 2
-
 (** This varaible stores the cache RAM representation *)
-let cache : IC.t option ref = ref None
+let cache : (IC.t * config) option ref = ref None
 
 (** If this is set and cache is also set, then the server should
     be started with the architecture inside this variable when required *)
-let archr : string option ref = ref None
+let configr : config option ref = ref None
 
 (** Start the caching system. Do not yet start the server *)
-let start (arch : string) =
-  archr := Some arch;
-  cache := Some (IC.make "isla" (IslaServer.required_version, epoch))
+let start (config : config) =
+  configr := Some config;
+  cache := Some (IC.make "isla" (Epoch.of_config config), config)
 
 (** Stop the caching system, stop the server if it was started *)
 let stop () =
   begin
-    match (!cache, !archr) with
+    match (!cache, !configr) with
     | (Some _, None) -> IslaServer.stop ()
-    | (_, Some arch) -> ()
+    | (_, Some _) -> ()
     | (None, None) -> ()
   end;
   cache := None;
-  archr := None
+  configr := None
 
 (** Start the server if not already started *)
 let ensure_started () =
-  match !archr with
+  match !configr with
   | None -> ()
   | Some arch ->
       IslaServer.start arch;
-      archr := None
+      configr := None
 
 (** Get the cache and fails if the cache wasn't started *)
 let get_cache () =
@@ -182,13 +169,13 @@ let get_cache () =
 
 (** Get the traces of the opcode given. Use {!IslaServer} if the value is not in the cache *)
 let get_traces (opcode : BytesSeq.t) : Isla.rtrc list =
-  let cache = get_cache () in
+  let (cache, config) = get_cache () in
   match IC.get_opt cache (Some opcode) with
   | Some trcs -> trcs
   | None ->
       ensure_started ();
       let trcs = IslaServer.request_bin_parsed opcode in
-      let ptrcs = IslaPreprocess.preprocess trcs in
+      let ptrcs = IslaPreprocess.preprocess config trcs in
       IC.add cache (Some opcode) ptrcs;
       ptrcs
 
@@ -198,7 +185,7 @@ let nop = "nop"
 (** Get the traces of the nop opcode (The initialization code).
     Use {!IslaServer} if the value is not in the cache *)
 let get_nop () : Isla.rtrc =
-  let cache = get_cache () in
+  let (cache, config) = get_cache () in
   match IC.get_opt cache None with
   | Some [trc] -> trc
   | Some _ -> fatal "Corrupted cache, nop hasn't exactly one trace"

@@ -149,20 +149,21 @@ let isla_mode_to_request imode input =
     (if mode is RAW than just return the trace and filename without isla)
 
     If isla return multiple traces, just silently pick the first non-exceptional one *)
-let isla_run isla_mode arch (filename, input) : string * string =
+let isla_run isla_mode arch (filename, input) : string * string * IslaServer.config =
   match isla_mode with
-  | RAW -> (filename, input)
+  | RAW -> (filename, input, ConfigFile.get_isla_config arch)
   | _ ->
       IslaServer.(
         Random.self_init ();
-        start arch;
+        let config = ConfigFile.get_isla_config arch in
+        start config;
         let msg : string =
           match request (isla_mode_to_request isla_mode input) with
           | Traces l -> List.assoc true l
           | _ -> failwith "isla did not send back traces"
         in
         stop ();
-        (filename ^ " through isla-client", msg))
+        (filename ^ " through isla-client", msg, config))
 
 let isla_term = Term.(func_option isla_client isla_run $ isla_mode_term $ arch $ input_term)
 
@@ -177,10 +178,10 @@ let processing_f2m noparse typer run simp =
 let pmode_term = Term.(const processing_f2m $ noparse $ typer $ run $ simp)
 
 (** Does the actual processing of the trace *)
-let processing preprocessing pmode (filename, input) : unit =
+let processing preprocessing pmode (filename, input, (config : IslaServer.config)) : unit =
   let parse input =
     let t = Isla.parse_trc_string ~filename input in
-    let t = IslaManip.remove_ignored t in
+    let t = IslaManip.remove_ignored config.ignored_regs t in
     if preprocessing then begin
       let pre = IslaPreprocess.simplify_trc t in
       base "Preprocessed trace:\n%t\n" (PP.topi Isla.pp_trc pre);
