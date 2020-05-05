@@ -59,6 +59,21 @@ let to_bytes_exact v =
   Bytes.blit_string string 0 res 0 (String.length string);
   res
 
+let bytes_store bytes index v =
+  if v.size mod 8 <> 0 then
+    Raise.inv_arg "Can't store BitVec in bytes if size is not mutiple of 8";
+  let bsize = v.size / 8 in
+  let string = v |> to_uz |> Z.to_bits in
+  let len = String.length string in
+  Bytes.blit_string string 0 bytes index len;
+  if len < bsize then Bytes.fill bytes (index + len) (bsize - len) '\x00'
+
+let bytes_load ~size bytes index =
+  if size mod 8 <> 0 then Raise.inv_arg "Can't load BitVec in bytes if size is not mutiple of 8";
+  let bsize = size / 8 in
+  let string = Bytes.sub_string bytes index bsize in
+  Z.of_bits string |> of_z ~size
+
 let of_bytes ~size b = Z.of_bits (Bytes.unsafe_to_string b) |> of_z ~size
 
 (*****************************************************************************)

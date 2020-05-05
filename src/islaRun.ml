@@ -3,6 +3,10 @@
     The main functions are {!trc} for pure interface and {!trc_mut} for imperative interface.
 
     {!RunError} will be thrown when something goes wrong.
+
+    It is for testing purpose only, otherwise use {!TraceRun}. Typing do not work,
+    and some other expected behavior may not work either.
+
 *)
 
 open Isla

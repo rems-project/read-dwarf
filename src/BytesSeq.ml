@@ -91,6 +91,8 @@ let get64be bs i = gen_get 8 Bytes.get_int64_be bs i
 
 let getintle bs i = gen_get int_bytes bytes_get_intle bs i
 
+let getbvle ~size bs i = gen_get (size / 8) (BitVec.bytes_load ~size) bs i
+
 let gen_get_ze size getter bs i =
   if 0 <= i && i < bs.len then (
     let b = Bytes.make size '\x00' in

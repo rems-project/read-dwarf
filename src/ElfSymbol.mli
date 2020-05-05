@@ -20,6 +20,7 @@ type t = {
   typ : typ;
   addr : int;
   size : int;
+  writable : bool;
   data : BytesSeq.t;
 }
 

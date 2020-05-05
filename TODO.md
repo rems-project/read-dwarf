@@ -57,7 +57,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Handle rodata accesses: Design question, Put them in the trace ?
  - Resolve memory read to obviously non-aliasing addresses directly
 
 ## Memory stack
@@ -122,3 +121,4 @@
  - Add actual control-flow handling to TraceRun (computing the new PC in all cases)
  - Do the run-block command with breakpoints
  - Update the run-func command to use run-block and not run-bb as backend
+ - Handle rodata reads: They stay in the trace for now

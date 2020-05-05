@@ -51,6 +51,24 @@ let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
   | Var (v, a) -> ()
   | Bound (b, a) -> ()
 
+let direct_exp_fold_left_exp (f : 'a -> _ exp -> 'a) (v : 'a) = function
+  | Unop (u, e, l) -> f v e
+  | Binop (b, e, e', l) -> f (f v e) e'
+  | Manyop (m, el, l) -> List.fold_left f v el
+  | Ite (c, e, e', l) -> f (f (f v c) e) e'
+  | Let (b, bs, e, l) -> f (List.fold_left (fun v (_, e) -> f v e) (f v (snd b)) bs) e
+  | Bits (bv, a) -> v
+  | Bool (b, a) -> v
+  | Enum (e, a) -> v
+  | Var (_, a) -> v
+  | Bound (b, a) -> v
+
+let direct_exp_for_all_exp (p : _ exp -> bool) exp =
+  direct_exp_fold_left_exp (fun b e -> b && p e) true exp
+
+let direct_exp_exists_exp (p : _ exp -> bool) exp =
+  direct_exp_fold_left_exp (fun b e -> b || p e) false exp
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)

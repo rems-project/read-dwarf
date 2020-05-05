@@ -51,7 +51,8 @@ val to_uint : t -> int
 (** Of integer. Wrapped modulo [size]. *)
 val of_int : size:int -> int -> t
 
-(** Convert a one size bitvector to bool. Throw {!SizeMismatch} if the bitvector is not one-sized *)
+(** Convert a one size bitvector to bool.
+    Throw {!SizeMismatch} if the bitvector is not one-sized *)
 val to_bool : t -> bool
 
 (** Create a one-sized bitvector representing the boolean *)
@@ -68,8 +69,16 @@ val to_bytes : t -> bytes
 (** Return a bytes representation of mininal length to encompass the whole bitvector size *)
 val to_bytes_exact : t -> bytes
 
+(** Store the bitvector in the bytes at the specified offset.
+    The bitvector size must be a multiple of 8 or [Invalid_argument] is thrown *)
+val bytes_store : bytes -> int -> t -> unit
+
 (** Read a bitvector from a bytes data *)
 val of_bytes : size:int -> bytes -> t
+
+(** Load a bitvector of [size] bits from the bytes at the specified offset.
+    [size] must be a multiple of 8 or [Invalid_argument] is thrown *)
+val bytes_load : size:int -> bytes -> int -> t
 
 (*****************************************************************************)
 (*****************************************************************************)

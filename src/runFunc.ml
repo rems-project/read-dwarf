@@ -25,7 +25,7 @@ let run_func elfname name dump no_run entry len breakpoints =
   IslaCache.start @@ Arch.get_isla_config ();
   Init.init ();
   base "Computing entry state";
-  let start = abi.init @@ Init.state () in
+  let start = Init.state () |> State.copy ~elf |> abi.init in
   if entry then base "Entry state:\n%t" (PP.topi State.pp start);
   begin
     if (not no_run) || dump then

@@ -88,22 +88,23 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop
   in
   IslaCache.start @@ Arch.get_isla_config ();
   let (sym, start) = symoffset in
-  Block.make ~sym ~start ~endpred
+  (elf, Block.make ~sym ~start ~endpred)
 
-let block_term = Term.(const gen_block $ elf_term $ len $ stop_sym $ breakpoints)
+let elfblock_term = Term.(const gen_block $ elf_term $ len $ stop_sym $ breakpoints)
 
-let run_block block no_run dump reg_types =
+let run_block (elf, block) no_run dump reg_types =
   Block.simplify_mut block;
   if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
   if dump then base "Block:\n%t\n" (PP.topi Block.pp block);
   if not no_run then begin
     Init.init ();
-    let init_state = Init.state () in
+    let init_state = Init.state () |> State.copy ~elf in
+    State.lock init_state;
     let tree = Block.run block init_state in
     PP.println @@ StateTree.pp_all PP.shex tree
   end
 
-let term = Term.(const run_block $ block_term $ no_run $ dump $ reg_types)
+let term = Term.(const run_block $ elfblock_term $ no_run $ dump $ reg_types)
 
 let info =
   let doc =

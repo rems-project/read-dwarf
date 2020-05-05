@@ -1,5 +1,5 @@
 (** The goal of this module is to represent a segment as loaded in memory.
-    In particular, all information about file layout is intentionally list
+    In particular, all information about file layout is intentionally lost
     I use basic ints for speed. It it fails for some reason, I'll move to int64s
 *)
 
@@ -42,3 +42,6 @@ let get_addr_list_opt getter segs addr =
   List.fold_left
     (fun res seg -> if is_in seg addr then Some (get_addr getter seg addr) else res)
     None segs
+
+(** Get the segment containing an address or [None] *)
+let get_containing segs addr = List.find_opt (Fun.flip is_in addr) segs

@@ -99,10 +99,16 @@ let rec eval_direct ?(ctxt = fun _ -> failwith "novar") (e : ('a, 'v, Ast.no, As
 (** Evaluate a concrete expression *)
 let eval = eval_direct
 
-let _ =
-  Tests.add_test "ConcreteEval" (fun () ->
-      let two = BitVec.of_int ~size:7 2 in
-      let five = BitVec.of_int ~size:7 5 in
-      let ten = BitVec.of_int ~size:7 10 in
-      let exp = Ast.Op.(sdiv (bits two + bits ten) (bits five) = bits two) in
-      eval_direct exp |> Value.expect_bool)
+(* let _ =
+ *   Tests.add_test "ConcreteEval" (fun () ->
+ *       let two = BitVec.of_int ~size:7 2 in
+ *       let five = BitVec.of_int ~size:7 5 in
+ *       let ten = BitVec.of_int ~size:7 10 in
+ *       let exp = Ast.Op.(sdiv (bits two + bits ten) (bits five) = bits two) in
+ *       eval_direct exp |> Value.expect_bool) *)
+
+let rec is_concrete (exp : _ Ast.exp) : bool =
+  match exp with
+  | Bound _ -> false
+  | Var _ -> false
+  | exp -> AstManip.direct_exp_for_all_exp is_concrete exp

@@ -10,6 +10,7 @@ type t = {
   typ : typ;
   addr : int;
   size : int;
+  writable : bool;
   data : BytesSeq.t;
 }
 
@@ -45,17 +46,15 @@ let of_linksem segs ((name, (typ, size, addr, data, _)) as lsym) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
   let addr = Z.to_int addr in
-  let data =
-    match data with
-    (* Rust's "if let" would be nice here *)
-    | Some data -> data
-    | _ -> (
-        match Segment.get_addr_list_opt (BytesSeq.sub_getter size) segs addr with
-        | Some data -> data
-        | None -> raise (LoadingError (name, addr))
-      )
+  let segment =
+    Opt.value_fail (Segment.get_containing segs addr) "No segment contains symbol %s" name
   in
-  { name; other_names = []; typ; size; addr; data }
+  let writable = segment.write in
+  let data =
+    data
+    |> Opt.value_fun ~default:(fun () -> Segment.get_addr (BytesSeq.sub_getter size) segment addr)
+  in
+  { name; other_names = []; typ; size; addr; data; writable }
 
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
@@ -86,5 +85,6 @@ let pp_raw sym =
            ("typ", pp_typ sym.typ);
            ("addr", ptr sym.addr);
            ("size", ptr sym.size);
+           ("writable", bool sym.writable);
            ("data", BytesSeq.pp32le sym.data);
          ])

@@ -366,11 +366,11 @@ let var_type var =
 (** {1 State memory accessors } *)
 
 (** Create a new Extra symbolic variable by mutating the state *)
-let make_read (s : t) ?ctyp (ty : ty) : var =
+let make_read (s : t) ?ctyp ?exp (ty : ty) : var =
   assert (not @@ is_locked s);
   let len = Vector.length s.read_vars in
   let var = ReadVar (s, len) in
-  Vector.add_one s.read_vars (ty, { ctyp; exp = Var.to_exp var });
+  Vector.add_one s.read_vars (ty, { ctyp; exp = Opt.value exp ~default:(Var.to_exp var) });
   var
 
 (** Read the block designated by mb from the state and return an expression read.
@@ -382,12 +382,24 @@ let make_read (s : t) ?ctyp (ty : ty) : var =
     - a symbolic initial memory variable (when and if those exist)
 
     In practice for now it is always the first case *)
-let read (s : t) (mb : Mem.block) : exp =
+let read ?ctyp (s : t) (mb : Mem.block) : exp =
   assert (not @@ is_locked s);
   let ty = Mem.Size.to_bv mb.size in
-  let nvar = make_read s ty in
+  let exp =
+    match s.elf with
+    | Some elf when ConcreteEval.is_concrete mb.addr ->
+        let int_addr = ConcreteEval.eval mb.addr |> Value.expect_bv |> BitVec.to_int in
+        let size = mb.size |> Ast.Size.to_bits in
+        let (sym, offset) = Elf.SymTbl.of_addr_with_offset elf.symbols int_addr in
+        if sym.writable then None
+        else
+          (* Assume little endian here *)
+          Some (Ast.Op.bits (BytesSeq.getbvle ~size sym.data offset))
+    | _ -> None
+  in
+  let nvar = make_read ?ctyp ?exp s ty in
   Mem.read s.mem mb nvar;
-  Var.to_exp nvar
+  Opt.value exp ~default:(Var.to_exp nvar)
 
 (** Write the provided value in the block. Mutate the state.*)
 let write (s : t) (mb : Mem.block) (value : exp) : unit =
@@ -403,10 +415,7 @@ let typed_read ~env (s : t) ?(ptrtype : Ctype.t option) (mb : Mem.block) : tval 
       let fenv = s.fenv in
       let size = Mem.Size.to_bytes mb.size in
       let ctyp = Fragment.ptr_deref ~env ~fenv ~size fragment offset in
-      let ty = Mem.Size.to_bv mb.size in
-      let nvar = make_read s ?ctyp ty in
-      Mem.read s.mem mb nvar;
-      let exp = Var.to_exp nvar in
+      let exp = read ?ctyp s mb in
       { exp; ctyp }
   | Some _ ->
       warn "Reading from non-ptr unimplemented for now";
