@@ -88,7 +88,7 @@ let get_instr arch instr elfopt : BytesSeq.t =
     | Some elfname -> (elfname, instr)
   in
   let elf = Elf.File.of_file elfname in
-  Elf.File.load_arch elf;
+  Arch.load_elf_arch elf;
   if elfopt = None then Sys.remove elfname;
   let (sym, off) =
     try Elf.SymTbl.of_position_string elf.symbols symname

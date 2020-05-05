@@ -55,9 +55,7 @@ type t = {
   read_vars : (ty * tval) vector;
   mutable asserts : exp list;
   mem : mem;
-  (* elf_file : file option; optionally elf file so that
-     state manipulation dependent on elf things would still work without having to pass
-     the elf file around *)
+  elf : Elf.File.t option;
   fenv : Fragment.env;
 }
 
@@ -245,7 +243,7 @@ let make_reg_cell state ?ctyp p = { exp = Var.to_exp (Register (state, p)); ctyp
     ({!Reg.index}). If new registers are added afterwards, this state won't have them.
     Use {!copy_extend} to fix that.
 *)
-let make () =
+let make ?elf () =
   let id = !next_id in
   let state =
     {
@@ -254,19 +252,12 @@ let make () =
       read_vars = Vector.empty ();
       asserts = [];
       mem = Mem.empty ();
+      elf;
       fenv = Fragment.Env.make ();
     }
   in
   (* Warning: here I'm creating a cyclic reference. Please be aware of that *)
   state.regs <- Reg.Map.init @@ make_reg_cell state;
-  next_id := id + 1;
-  WeakMap.add id2state id state;
-  state
-
-(** Make a state using the argument passed *)
-let make_of regs read_vars asserts mem fenv =
-  let id = !next_id in
-  let state = { id; regs; read_vars; asserts; mem; fenv } in
   next_id := id + 1;
   WeakMap.add id2state id state;
   state
@@ -278,7 +269,7 @@ let make_of regs read_vars asserts mem fenv =
     It will not accommodate register discovered in between
     Use {!copy_extend} to add the new register that are missing
 *)
-let copy state =
+let copy ?elf state =
   let id = !next_id in
   let nstate =
     {
@@ -287,6 +278,7 @@ let copy state =
       read_vars = Vector.empty ();
       asserts = state.asserts;
       mem = Mem.copy state.mem;
+      elf = Opt.(elf ||| state.elf);
       fenv = Fragment.Env.copy state.fenv;
     }
   in
@@ -305,7 +297,7 @@ let extend_mut state =
     All new register that are not present are added with fresh new variables
     as if created by {!make}
  *)
-let copy_extend state =
+let copy_extend ?elf state =
   let id = !next_id in
   let nstate =
     {
@@ -314,6 +306,7 @@ let copy_extend state =
       read_vars = Vector.empty ();
       asserts = state.asserts;
       mem = Mem.copy state.mem;
+      elf = Opt.(elf ||| state.elf);
       fenv = Fragment.Env.copy state.fenv;
     }
   in

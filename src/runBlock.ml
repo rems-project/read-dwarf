@@ -65,7 +65,7 @@ let start =
 
 let get_elf_start elfname startname =
   let elf = Elf.File.of_file elfname in
-  Elf.File.load_arch elf;
+  Arch.load_elf_arch elf;
   let start = Elf.SymTbl.of_position_string elf.symbols startname in
   (elf, start)
 

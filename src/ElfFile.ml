@@ -6,7 +6,7 @@ end)
 
 module SymTbl = ElfSymTable
 
-type machine = Supp of Arch.Type.t | Other of int
+type machine = Supp of ArchType.t | Other of int
 
 let machine_of_linksem lmachine =
   if lmachine = Elf_header.elf_ma_386 then Supp X86
@@ -18,7 +18,7 @@ let machine_of_linksem lmachine =
   else Other (Z.to_int lmachine)
 
 let machine_to_string = function
-  | Supp a -> Arch.Type.to_string a
+  | Supp a -> ArchType.to_string a
   | Other i -> Printf.sprintf "Other(%d)" i
 
 let pp_machine mach = mach |> machine_to_string |> PP.string
@@ -82,8 +82,3 @@ let of_file (filename : string) =
   let symbols = SymTbl.of_linksem segments symbol_map in
   info "ELF file %s has been loaded" filename;
   { filename; symbols; segments; entry; machine; linksem = elf_file }
-
-let load_arch (elf : t) =
-  match elf.machine with
-  | Supp at -> Arch.ensure_loaded at
-  | Other i -> Raise.fail "The ELF architecture %i is not supported by this program" i
