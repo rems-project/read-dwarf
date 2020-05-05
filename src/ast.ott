@@ -17,12 +17,12 @@ metavar bvf ::=     {{ ocaml BitVec.t }}
 
 
 
-% metavar flag ::=     {{ ocaml string }}
-%                     {{ lex alphanum }}
-%                     {{ ocamllex ':'['a'-'z''A'-'Z']+ }}
-%                     {{ ocamllex-of-string (function s -> (String.sub s 1 (String.length s -1))) }}
-%                     {{ pp-raw x = colon ^^ string x  }}
-%                     {{ pp x = colon ^^ string x }}
+metavar flag ::=    {{ ocaml string }}
+                    {{ lex alphanum }}
+                    {{ ocamllex ':'['a'-'z''A'-'Z''_']+ }}
+                    {{ ocamllex-of-string (function s -> (String.sub s 1 (String.length s -1))) }}
+                    {{ pp-raw x = colon ^^ string x  }}
+                    {{ pp x = colon ^^ string x }}
 embed
 {{ menhir
 
@@ -105,6 +105,15 @@ ty :: 'Ty_' ::=                         {{ auxparam 'm }}
 
 %%%%% smt %%%%%
 grammar
+
+fbool :: '' ::=                         {{ ocaml (string * bool) }}
+                                        {{ phantom }}
+                                        {{ pp se = let (f,b) = se in
+                                             group(pp_flag f ^^ blank 1 ^^ pp_bool b) }}
+                                        {{ pp-raw se = let (f,b) = se in
+                                             group(pp_raw_flag f ^^ blank 1 ^^ pp_raw_bool b) }}
+  | flag bool                           :: :: FlagBool {{ ocaml (flag, bool) }}
+
 smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'm) }}
                                         {{ pp-params ppv }}
                                         {{ menhir-start }}
@@ -112,7 +121,7 @@ smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'm) }}
   | ( declare-const var ty )            :: :: DeclareConst
   | ( define-const var exp )            :: :: DefineConst
   | ( assert exp )                      :: :: Assert
-  | ( simplify exp )                    :: :: Simplify
+  | ( simplify exp fbool1 .. fboolj )    :: :: Simplify
   | ( push )                            :: :: Push
   | ( pop )                             :: :: Pop
   | ( get-info :version )               :: :: GetVersion

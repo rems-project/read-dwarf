@@ -31,6 +31,22 @@ type key = Key.t
 
 exception InvalidKey of string * string list
 
+(* Expectors *)
+
+let toml_expect_bool name : value -> bool = function
+  | TBool b -> b
+  | _ -> raise (InvalidKey ("bad type, expected boolean", [name]))
+
+let toml_expect_string name : value -> string = function
+  | TString s -> s
+  | _ -> raise (InvalidKey ("bad type, expected string", [name]))
+
+let toml_expect_int name : value -> int = function
+  | TInt i -> i
+  | _ -> raise (InvalidKey ("bad type, expected string", [name]))
+
+(* Getters *)
+
 let toml_get_string (table : table) (key : key) : string =
   match Table.find_opt key table with
   | None -> raise (InvalidKey ("missing key", [Key.to_string key]))
@@ -46,6 +62,18 @@ let toml_get_by_string_opt (func : string -> 'a) (table : table) (key : key) : '
       in
       Some a
   | Some _ -> raise (InvalidKey ("bad type, expected string or nothing", [Key.to_string key]))
+
+let toml_get_by_int_opt (func : int -> 'a) (table : table) (key : key) : 'a option =
+  match Table.find_opt key table with
+  | None -> None
+  | Some (TInt i) ->
+      let i =
+        try func i with e -> raise (InvalidKey (Printexc.to_string e, [Key.to_string key]))
+      in
+      Some i
+  | Some _ -> raise (InvalidKey ("bad type, expected integer or nothing", [Key.to_string key]))
+
+let toml_get_int_opt = toml_get_by_int_opt Fun.id
 
 let toml_get_string_list (table : table) (key : key) : string list =
   match Table.find_opt key table with
@@ -144,17 +172,57 @@ module Arch = struct
     let isla = toml_get_table (Isla.of_toml ~path) table isla_key in
     { name; toolchain; isla }
 
-  let pp_raw ac =
+  let pp_raw aconf =
     let open PP in
     record "arch-config"
       [
-        ("name", string ac.name); ("toolchain", string ac.toolchain); ("isla", Isla.pp_raw ac.isla);
+        ("name", string aconf.name);
+        ("toolchain", string aconf.toolchain);
+        ("isla", Isla.pp_raw aconf.isla);
+      ]
+end
+
+module Z3 = struct
+  type t = {
+    timeout : int option;  (** Timeout for individual requests in milliseconds *)
+    memory : int option;  (** Maximum memory, in MegaBytes *)
+    simplify_opts : (string * bool) list;  (** List of option for the simplify command *)
+  }
+
+  let timeout_key = Toml.key "timeout"
+
+  let memory_key = Toml.key "memory"
+
+  let simplify_opts_key = Toml.key "simplify-opts"
+
+  let of_toml table =
+    let timeout = toml_get_int_opt table timeout_key in
+    let memory = toml_get_int_opt table memory_key in
+    let simplify_opts_of_toml table =
+      table |> Table.to_seq
+      |> Seq.map (fun (s, b) ->
+             let s = Key.to_string s in
+             (s, toml_expect_bool s b))
+      |> List.of_seq
+    in
+    let simplify_opts = toml_get_table simplify_opts_of_toml table simplify_opts_key in
+    { timeout; memory; simplify_opts }
+
+  let pp_raw z3c =
+    let open PP in
+    record "z3-config"
+      [
+        ("timeout", opt int z3c.timeout);
+        ("memory", opt int z3c.memory);
+        ("simplify-opts", list (pair string bool) z3c.simplify_opts);
       ]
 end
 
 let arch_key = Toml.key "default-arch"
 
 let archs_key = Toml.key "archs"
+
+let z3_key = Toml.key "z3"
 
 type archs_type = (ArchType.t, Arch.t) Hashtbl.t
 
@@ -172,12 +240,13 @@ let archs_of_toml ~path (table : table) : archs_type =
     |> Hashtbl.of_seq
   with Failure s -> raise (InvalidKey (s, []))
 
-type t = { arch : ArchType.t option; archs : archs_type }
+type t = { arch : ArchType.t option; archs : archs_type; z3 : Z3.t }
 
 let of_toml ~path table =
   let arch = toml_get_by_string_opt ArchType.of_string table arch_key in
   let archs = toml_get_table (archs_of_toml ~path) table archs_key in
-  { arch; archs }
+  let z3 = toml_get_table Z3.of_toml table z3_key in
+  { arch; archs; z3 }
 
 let pp_raw conf =
   let open PP in
@@ -185,6 +254,7 @@ let pp_raw conf =
     [
       ("default-arch", opt ArchType.pp conf.arch);
       ("archs", hashtbl ArchType.pp Arch.pp_raw conf.archs);
+      ("z3", Z3.pp_raw conf.z3);
     ]
 
 (*****************************************************************************)
@@ -242,3 +312,5 @@ let get_arch_name () = match (get_data ()).arch with Some a -> a | None -> defau
 let get_arch_config arch = Hashtbl.find (get_data ()).archs arch
 
 let get_isla_config arch = (get_arch_config arch).isla
+
+let get_z3_config () = (get_data ()).z3

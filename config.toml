@@ -24,3 +24,10 @@ toolchain = "aarch64-linux-gnu"
 # [archs.riscv]
 # riscv stuff for example
 
+[z3]
+timeout = 1000 # ms, optional
+# memory = 2000 # MB, optional
+
+    [z3.simplify-opts]
+    # Use the same name as given by (help simplify) in Z3. Only booleans are supported for now
+    pull_cheap_ite = true

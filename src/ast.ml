@@ -138,5 +138,5 @@ module Op = struct
 
   let assert_op e = Assert e
 
-  let simplify e = Simplify e
+  let simplify ?(flags = []) e = Simplify (e, flags)
 end

@@ -36,6 +36,7 @@ let _ = Printexc.record_backtrace Config.enable_backtrace
 
 let _ = assert ("aarch64" = Arch.module_name)
 
+(* TODO allow to set the seed in compile time config for debugging *)
 let _ = Random.self_init ()
 
 (** main *)

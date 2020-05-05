@@ -29,7 +29,7 @@ end)
 (*****************************************************************************)
 (** {1 Raw server management } *)
 
-type server = Cmd.IOServer.t
+type server = { ioserver : Cmd.IOServer.t; config : ConfigFile.Z3.t }
 
 let server : server option ref = ref None
 
@@ -40,14 +40,19 @@ let get_server () =
 (** Start Z3 without any checks and without sending intro or pushing *)
 let raw_start () =
   if !server != None then failwith "Z3 server starting when there is already a server online";
-  server := Some (Cmd.IOServer.start [|!CommonOpt.z3_ref; "-in"|]);
+  let config = ConfigFile.get_z3_config () in
+  let base_cmd = [!CommonOpt.z3_ref; "-in"] in
+  let timeout_cmd = config.timeout |> Opt.map (Printf.sprintf "-t:%d") |> Opt.to_list in
+  let memory_cmd = config.memory |> Opt.map (Printf.sprintf "-memory:%d") |> Opt.to_list in
+  let cmd = Array.of_list (base_cmd @ timeout_cmd @ memory_cmd) in
+  server := Some { ioserver = Cmd.IOServer.start cmd; config };
   ()
 
 (** Stop Z3 without asking politely *)
 let raw_stop () =
   match !server with
-  | Some serv ->
-      Cmd.IOServer.stop serv;
+  | Some { ioserver; _ } ->
+      Cmd.IOServer.stop ioserver;
       server := None
   | None -> ()
 
@@ -100,9 +105,9 @@ let incr_context () =
 
 (** Send a string to the server and increment the declaration number in the context *)
 let send_string (serv : server) s =
-  output_string serv.output s;
-  output_char serv.output '\n';
-  flush serv.output;
+  output_string serv.ioserver.output s;
+  output_char serv.ioserver.output '\n';
+  flush serv.ioserver.output;
   if z3_trace then incr_context ()
 
 (** Send a smt statement to the server and increment the declaration number in the context *)
@@ -110,12 +115,12 @@ let send_smt (serv : server) ?(ppv = PP.erase) smt =
   debug "In context %t, sent smt %t"
     (fun o -> output_string o (get_context_string ()))
     (PP.top (Ast.pp_smt ppv) smt);
-  PP.fprintln serv.output @@ Ast.pp_smt ppv smt;
+  PP.fprintln serv.ioserver.output @@ Ast.pp_smt ppv smt;
   if z3_trace then incr_context ()
 
 (** Read a string from the server (A Z3 answer is always a valid sexp) *)
 let read_string (serv : server) =
-  let sexp = Files.input_sexp serv.input in
+  let sexp = Files.input_sexp serv.ioserver.input in
   debug "In context %t, read %s" (fun o -> output_string o (get_context_string ())) sexp;
   sexp
 
@@ -249,8 +254,10 @@ type 'v out_exp = (Ast.lrng, 'v, Ast.no, Ast.Size.t) Ast.exp
 
 (** Simplify an expression in the context. The context must already have been declared *)
 let simplify_gen ~ppv ~vofs (exp : ('a, 'v) in_exp) : 'v2 out_exp =
-  exp |> AstManip.allow_lets |> Ast.Op.simplify |> request ~ppv |> expect_exp
-  |> AstManip.unfold_lets |> AstManip.exp_conv_var vofs
+  let serv = get_server () in
+  exp |> AstManip.allow_lets
+  |> Ast.Op.simplify ~flags:serv.config.simplify_opts
+  |> request ~ppv |> expect_exp |> AstManip.unfold_lets |> AstManip.exp_conv_var vofs
 
 (** Check the correctness of a property in the current context.
     The context must already have been declared
