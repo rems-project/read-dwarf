@@ -55,7 +55,7 @@ let run_func elfname name dump no_run entry len breakpoints =
             State.unsafe_unlock start;
             State.extend_mut start;
             State.lock start;
-            let tree = Block.run ~env:dwarf.tenv block start in
+            let tree = Block.run ~dwarf block start in
             base "Run tree:\n%t" (PP.top (StateTree.pp_all PP.shex) tree)
           end
   end;

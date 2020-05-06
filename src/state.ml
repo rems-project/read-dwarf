@@ -406,34 +406,6 @@ let write (s : t) (mb : Mem.block) (value : exp) : unit =
   assert (not @@ is_locked s);
   Mem.write s.mem mb value
 
-(** Does the same as read, but additionally take care of reading the type from a fragment
-    and marking the type of the read variable. *)
-let typed_read ~env (s : t) ?(ptrtype : Ctype.t option) (mb : Mem.block) : tval =
-  assert (not @@ is_locked s);
-  match ptrtype with
-  | Some { unqualified = Ptr { fragment; offset }; _ } ->
-      let fenv = s.fenv in
-      let size = Mem.Size.to_bytes mb.size in
-      let ctyp = Fragment.ptr_deref ~env ~fenv ~size fragment offset in
-      let exp = read ?ctyp s mb in
-      { exp; ctyp }
-  | Some _ ->
-      warn "Reading from non-ptr unimplemented for now";
-      read s mb |> make_tval
-  | None -> read s mb |> make_tval
-
-(** Does the same as read, but additionally take care of writing the type if the write is on
-    a {!Ctype.FreeFragment}.*)
-let typed_write ~env (s : t) ?(ptrtype : Ctype.t option) (mb : Mem.block) (value : tval) : unit =
-  assert (not @@ is_locked s);
-  match (ptrtype, value.ctyp) with
-  | (Some { unqualified = Ptr { fragment; offset }; _ }, Some ctyp) ->
-      let fenv = s.fenv in
-      let size = Mem.Size.to_bytes mb.size in
-      let ctyp = Fragment.ptr_write ~env ~fenv ~ctyp fragment offset in
-      write s mb value.exp
-  | _ -> write s mb value.exp
-
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)

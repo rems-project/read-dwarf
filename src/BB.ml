@@ -46,15 +46,15 @@ let simplify_mut (bb : t) = Array.map_mut Trace.simplify bb.main
 
     If [env] is provided, the run is typed.
 *)
-let run_mut ?env state (bb : t) : unit = Array.iter (TraceRun.trace_mut ?env state) bb.main
+let run_mut ?dwarf state (bb : t) : unit = Array.iter (TraceRun.trace_mut ?dwarf state) bb.main
 
 (** Run a linear basic block on a trace and return a new state
 
     If [env] is provided, the run is typed.
 *)
-let run ?env start (bb : t) : state =
+let run ?dwarf start (bb : t) : state =
   let state = State.copy start in
-  run_mut ?env state bb;
+  run_mut ?dwarf state bb;
   State.lock state;
   state
 

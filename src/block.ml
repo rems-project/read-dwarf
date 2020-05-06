@@ -37,7 +37,7 @@ let make ~(sym : Elf.Sym.t) ~start ~endpred =
 let simplify_mut (b : t) = Array.map_mut (List.map Trace.simplify) b.traces
 
 (** Run the block an return a state tree indexed by the addresses of the branches *)
-let run (b : t) ?env (start : State.t) : int StateTree.t =
+let run (b : t) ?dwarf (start : State.t) : int StateTree.t =
   assert (State.is_locked start);
   let rec run_from state =
     let pc_exp = State.get_reg state [Arch.pc ()] |> State.get_exp in
@@ -55,7 +55,7 @@ let run (b : t) ?env (start : State.t) : int StateTree.t =
       match traces with
       | [] -> Raise.fail "reach a exceptional instruction"
       | [trc] ->
-          TraceRun.trace_pc_mut ?env ~next:4 state trc;
+          TraceRun.trace_pc_mut ?dwarf ~next:4 state trc;
           run_from state
       | trcs ->
           State.map_mut_exp Z3.simplify state;
@@ -64,7 +64,7 @@ let run (b : t) ?env (start : State.t) : int StateTree.t =
             List.map
               (fun trc ->
                 let nstate = State.copy state in
-                TraceRun.trace_pc_mut ?env ~next:4 nstate trc;
+                TraceRun.trace_pc_mut ?dwarf ~next:4 nstate trc;
                 run_from nstate)
               trcs
           in
