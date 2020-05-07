@@ -13,7 +13,7 @@ let of_list_map f = function
   | [] -> [||]
   | a :: t as l ->
       let first = f a in
-      let res = create (Stdlib.List.length l) first in
+      let res = make (Stdlib.List.length l) first in
       let rec fill_from i = function
         | [] -> ()
         | a :: l ->
