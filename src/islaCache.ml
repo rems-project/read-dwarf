@@ -177,9 +177,6 @@ let get_traces (opcode : BytesSeq.t) : Isla.rtrc list =
       IC.add cache (Some opcode) ptrcs;
       ptrcs
 
-(* TODO here I assume nop is a nop instruction in all architectures, this may not be true *)
-let nop = "nop"
-
 (** Get the traces of the nop opcode (The initialization code).
     Use {!IslaServer} if the value is not in the cache *)
 let get_nop () : Isla.rtrc =
