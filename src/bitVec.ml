@@ -249,3 +249,7 @@ let ( lxor ) = logxor
  * let _ = Tests.add_test "BitVec.oftosmt2" (fun () -> to_smt (of_smt "#xcafebabe") = "#xcafebabe")
  *
  * let _ = Tests.add_test "BitVec.oftosmt0" (fun () -> to_smt (of_smt "#x00000000") = "#x00000000") *)
+
+(*$T of_int
+    of_int ~size:8 10 |> to_z = Z.of_int 2
+*)

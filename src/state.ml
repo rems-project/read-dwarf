@@ -12,7 +12,7 @@ end)
 (*****************************************************************************)
 (** {1 Support types } *)
 
-type 'a vector = 'a Vector.t
+type 'a vector = 'a Vec.t
 
 (** This type is the standard annotation inside the state stucture.
     For now it is Isla.lrng, but it may change depending on our needs *)
@@ -249,7 +249,7 @@ let make ?elf () =
     {
       id;
       regs = Reg.Map.dummy ();
-      read_vars = Vector.empty ();
+      read_vars = Vec.empty ();
       asserts = [];
       mem = Mem.empty ();
       elf;
@@ -275,7 +275,7 @@ let copy ?elf state =
     {
       id;
       regs = Reg.Map.copy state.regs;
-      read_vars = Vector.empty ();
+      read_vars = Vec.empty ();
       asserts = state.asserts;
       mem = Mem.copy state.mem;
       elf = Opt.(elf ||| state.elf);
@@ -303,7 +303,7 @@ let copy_extend ?elf state =
     {
       id;
       regs = Reg.Map.dummy ();
-      read_vars = Vector.empty ();
+      read_vars = Vec.empty ();
       asserts = state.asserts;
       mem = Mem.copy state.mem;
       elf = Opt.(elf ||| state.elf);
@@ -330,7 +330,7 @@ let map_mut_exp (f : exp -> exp) s : unit =
   assert (not @@ is_locked s);
   let tval_map tv = { tv with exp = f tv.exp } in
   Reg.Map.map_mut tval_map s.regs;
-  Vector.map_mut (Pair.map Fun.id tval_map) s.read_vars;
+  Vec.map_mut (Pair.map Fun.id tval_map) s.read_vars;
   s.asserts <- List.map f s.asserts;
   Mem.map_mut_exp f s.mem
 
@@ -344,7 +344,7 @@ let map_exp (f : exp -> exp) s : t =
 let iter_exp (f : exp -> unit) s =
   let tval_iter tv = f tv.exp in
   Reg.Map.iter tval_iter s.regs;
-  Vector.iter (Pair.iter ignore tval_iter) s.read_vars;
+  Vec.iter (Pair.iter ignore tval_iter) s.read_vars;
   List.iter f s.asserts;
   Mem.iter_exp f s.mem
 
@@ -355,7 +355,7 @@ let iter_var (f : var -> unit) s = iter_exp (AstManip.exp_iter_var f) s
 let var_type var =
   match var with
   | Register (state, p) -> p |> Reg.path_type |> Reg.assert_plain
-  | ReadVar (state, i) -> Vector.get state.read_vars i |> fst
+  | ReadVar (state, i) -> Vec.get state.read_vars i |> fst
   | Arg _ -> Ast.Ty_BitVec 64
   | RetArg -> Ast.Ty_BitVec 64
   | RetAddr -> Ast.Ty_BitVec 64
@@ -368,9 +368,9 @@ let var_type var =
 (** Create a new Extra symbolic variable by mutating the state *)
 let make_read (s : t) ?ctyp ?exp (ty : ty) : var =
   assert (not @@ is_locked s);
-  let len = Vector.length s.read_vars in
+  let len = Vec.length s.read_vars in
   let var = ReadVar (s, len) in
-  Vector.add_one s.read_vars (ty, { ctyp; exp = Opt.value exp ~default:(Var.to_exp var) });
+  Vec.add_one s.read_vars (ty, { ctyp; exp = Opt.value exp ~default:(Var.to_exp var) });
   var
 
 (** Read the block designated by mb from the state and return an expression read.
@@ -476,7 +476,7 @@ let pp s =
         ("id", Id.pp s.id);
         ("regs", Reg.Map.pp pp_tval s.regs);
         ("fenv", Fragment.Env.pp s.fenv);
-        ("read_vars", Vector.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
+        ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
         ("memory", Mem.pp s.mem);
         ( "asserts",
           s.asserts |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_exp e) |> separate hardline

@@ -22,7 +22,7 @@ val pp : t -> PP.document
 module Env : sig
   type frag = t
 
-  type t = { frags : frag Vector.t }
+  type t = { frags : frag Vec.t }
 
   val make : unit -> t
 

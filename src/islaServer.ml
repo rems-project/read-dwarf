@@ -29,15 +29,15 @@ let get_server () =
 (** Compute the isla-client command line from the isla configuration *)
 let cmd_of_config (config : config) socket =
   let cmd =
-    Vector.of_array [|!CommonOpt.isla_client_ref; "--socket"; socket; "--arch"; config.arch_file|]
+    Vec.of_array [|!CommonOpt.isla_client_ref; "--socket"; socket; "--arch"; config.arch_file|]
   in
   List.iter
     (fun s ->
-      Vector.add_one cmd "-L";
-      Vector.add_one cmd s)
+      Vec.add_one cmd "-L";
+      Vec.add_one cmd s)
     config.linearize;
-  List.iter (fun s -> Vector.add_one cmd s) config.other_opts;
-  Vector.to_array cmd
+  List.iter (fun s -> Vec.add_one cmd s) config.other_opts;
+  Vec.to_array cmd
 
 (** Start the server with the specified architecture, do not attempt any checks *)
 let raw_start config : unit =

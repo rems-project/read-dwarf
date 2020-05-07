@@ -8,7 +8,7 @@
 
 include PP
 
-let vector conv v = Vector.pp conv v
+let vector conv v = Vec.pp conv v
 
 let hvector conv hv = HashVector.pp conv hv
 

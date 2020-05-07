@@ -4,7 +4,7 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-type 'a vector = 'a Vector.t
+type 'a vector = 'a Vec.t
 
 type 'a hvector = 'a HashVector.t
 

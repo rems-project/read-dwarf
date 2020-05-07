@@ -39,7 +39,7 @@ let event_mut ~(ctxt : ctxt) (event : Trace.event) =
   debug "Running: %t with typing %s" (PP.top Trace.pp_event event)
     (if Ctxt.typing_enabled ~ctxt then "on" else "off");
   match event with
-  | WriteReg { reg; value } -> Vector.add_one ctxt.reg_writes (reg, expand_tval ~ctxt value)
+  | WriteReg { reg; value } -> Vec.add_one ctxt.reg_writes (reg, expand_tval ~ctxt value)
   | ReadMem { addr; value; size } ->
       let mb : State.Mem.block = { addr = expand ~ctxt addr; size } in
       let tval =
@@ -70,7 +70,7 @@ let trace_mut ?dwarf (state : State.t) (events : Trace.t) : unit =
   info "Running trace with typing %s" (if dwarf <> None then "on" else "off");
   let ctxt = TraceContext.make_context ?dwarf state in
   List.iter (event_mut ~ctxt) events;
-  Vector.iter (fun (reg, tval) -> Reg.Map.set state.regs reg tval) ctxt.reg_writes
+  Vec.iter (fun (reg, tval) -> Reg.Map.set state.regs reg tval) ctxt.reg_writes
 
 (** Run a trace on the provided state by returning an updated copy.*)
 let trace ?dwarf (start : State.t) (events : Trace.t) : State.t =
