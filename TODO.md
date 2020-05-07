@@ -122,3 +122,4 @@
  - Do the run-block command with breakpoints
  - Update the run-func command to use run-block and not run-bb as backend
  - Handle rodata reads: They stay in the trace for now
+ - Handle typing global variable for C type inference.

@@ -438,6 +438,31 @@ let update_reg_exp (s : t) (path : Reg.path) (f : exp -> exp) =
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
+(** {1 Pc manipulation } *)
+
+(** Set the PC to a concrete value and keep it's type appropriate *)
+let set_pc ~(pc : Reg.path) (s : t) (pcval : int) =
+  let exp = Ast.Op.bits_int ~size:64 pcval in
+  let ctyp = Ctype.of_frag Ctype.Global ~offset:pcval ~constexpr:true in
+  set_reg s pc @@ make_tval ~ctyp exp
+
+(** Bump a concrete PC by a concrete bump (generally the size of a non-branching instruction *)
+let bump_pc ~(pc : Reg.path) (s : t) (bump : int) =
+  let pc_exp = get_reg s pc |> get_exp in
+  assert (ConcreteEval.is_concrete pc_exp);
+  let old_pc = ConcreteEval.eval pc_exp |> Value.expect_bv |> BitVec.to_int in
+  let new_pc = old_pc + bump in
+  set_pc ~pc s new_pc
+
+(** Try to evaluate the PC if it is concrete *)
+let concretize_pc ~(pc : Reg.path) (s : t) =
+  let pc_exp = get_reg s pc |> get_exp in
+  try ConcreteEval.eval pc_exp |> Value.expect_bv |> BitVec.to_int |> set_pc ~pc s
+  with ConcreteEval.Symbolic -> ()
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
 (** {1 Pretty printing } *)
 
 let pp_tval { exp; ctyp } =

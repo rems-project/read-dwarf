@@ -5,6 +5,9 @@
 (** A map from variables to concrete values *)
 type 'v context = 'v -> Value.t
 
+(** Thrown when trying to concretely evaluate a symbolic expression *)
+exception Symbolic
+
 (** Evaluate a concrete expression using Z3: TODO
 
     This is mostly for testing purposes.
@@ -80,7 +83,7 @@ let eval_manyop (m : Ast.manyop) vs =
   | Bvmanyarith bvma -> eval_bvmanyarith bvma (List.map Value.expect_bv vs) |> Value.bv
 
 (** Evaluate a concrete expression directly without external tool *)
-let rec eval_direct ?(ctxt = fun _ -> failwith "novar") (e : ('a, 'v, Ast.no, Ast.no) Ast.exp) :
+let rec eval_direct ?(ctxt = fun _ -> raise Symbolic) (e : ('a, 'v, Ast.no, Ast.no) Ast.exp) :
     Value.t =
   match e with
   | Var (v, _) -> ctxt v

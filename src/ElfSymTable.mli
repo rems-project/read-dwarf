@@ -42,6 +42,9 @@ val of_addr_opt : t -> int -> sym option
 (** Get a symbol with the offset that correspond to that address *)
 val of_addr_with_offset : t -> int -> sym_offset
 
+(** Get a symbol with the offset that correspond to that address *)
+val of_addr_with_offset_opt : t -> int -> sym_offset option
+
 (** Get back the raw address from a symbol+offset value *)
 val to_addr_offset : sym_offset -> int
 

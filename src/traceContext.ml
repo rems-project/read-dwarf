@@ -4,7 +4,6 @@
     should be added here
 *)
 
-
 (** The context to run a trace *)
 type t = {
   reg_writes : (Reg.path * State.tval) Vector.t;  (** Stores the delayed register writes *)

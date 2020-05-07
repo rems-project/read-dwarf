@@ -57,6 +57,9 @@ and fragment =
   | Single of t  (** Single object: Only when accessing of a global variable *)
   | DynArray of t  (** Generic C pointer, may point to multiple element of that type *)
   | FreeFragment of int  (** Writable fragment type for memory whose type is changing *)
+  | Global
+      (** The Global fragment that contains all the fixed ELF section
+               .text, .data, .rodata, ... *)
 
 (** The type of an offset in a fragment *)
 and offset = Const of int  (** Constant offset *) | Somewhere
@@ -177,8 +180,12 @@ let add_qual ?const ?volatile ?restrict ?constexpr old =
 let machine ?(constexpr = false) size = Machine size |> qual ~constexpr
 
 (** Create a pointer to fragment with specified offset (0 by default) *)
-let of_frag ?(offset = 0) ?(restrict = false) fragment =
-  Ptr { fragment; offset = Const offset } |> qual ~restrict
+let of_frag ?(offset = 0) ?(constexpr = false) ?(restrict = false) fragment =
+  Ptr { fragment; offset = Const offset } |> qual ~restrict ~constexpr
+
+(** Create a pointer to fragment Somewhere *)
+let of_frag_somewhere ?(constexpr = false) ?(restrict = false) fragment =
+  Ptr { fragment; offset = Somewhere } |> qual ~restrict ~constexpr
 
 (** Build an incomplete struct with a linking name and a size *)
 let incomplete_struct name size = { layout = FieldMap.empty; name; size; complete = false }
@@ -197,6 +204,12 @@ let ptr_update ptr update =
       { ptr with unqualified = Ptr { fragment; offset = offset_update offset update } }
   | _ -> Raise.inv_arg "ptr_update: not a pointer"
 
+let ptr_set ptr noffset =
+  match ptr.unqualified with
+  | Ptr { fragment; offset } ->
+      { ptr with unqualified = Ptr { fragment; offset = Const noffset } }
+  | _ -> Raise.inv_arg "ptr_set: not a pointer"
+
 (** Make a pointer forget it's offset *)
 let ptr_forget ptr =
   match ptr.unqualified with
@@ -212,9 +225,10 @@ let ptr_forget ptr =
 
     Dynamic array have size 0
     until we are able to deal with C99 last member dynamic arrays.
+    This will mess up with {!type_at}. TODO fix it.
 *)
 
-(** Give the size of an {!unqualified} type. Need the environement. *)
+(** Give the size of an {!unqualified} type. Need the environement.*)
 let rec sizeof_unqualified = function
   | Machine i -> i
   | Cint { size; _ } -> size
@@ -223,7 +237,7 @@ let rec sizeof_unqualified = function
   | Struct { size; _ } -> size
   | Enum i -> enum_size
   | Array { elem; dims } ->
-      let num = dims |> List.map (Option.value ~default:0) |> List.fold_left ( * ) 0 in
+      let num = dims |> List.map (Option.value ~default:0) |> List.fold_left ( * ) 1 in
       num * sizeof elem
 
 (** Give the size of an type. Need the environement. *)
@@ -523,6 +537,7 @@ and pp_fragment frag =
   | DynArray t -> pp t ^^ !^"[]"
   | Unknown -> !^"unknown"
   | FreeFragment i -> dprintf "frag %d" i
+  | Global -> !^"global"
 
 and pp_offset = function
   | Const off when off = 0 -> empty

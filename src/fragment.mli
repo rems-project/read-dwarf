@@ -38,21 +38,11 @@ module Env : sig
     [frag] is {!empty} by default. *)
   val add_frag : ?frag:frag -> t -> int
 
+  val get : t -> int -> frag
+
+  val set : t -> int -> frag -> unit
+
   val pp : t -> PP.document
 end
 
 type env = Env.t
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 At } *)
-
-(** Dereference a pointer type with size of [size] and give the pointed to type.
-    Requires a type environment [env] and the dynamic fragment environment [fenv] *)
-val ptr_deref :
-  env:Ctype.env -> fenv:env -> size:int -> Ctype.fragment -> Ctype.offset -> Ctype.t option
-
-(** Dereference a pointer type with size of [size] and write a type to it *)
-val ptr_write :
-  env:Ctype.env -> fenv:env -> ctyp:Ctype.t -> Ctype.fragment -> Ctype.offset -> unit

@@ -17,7 +17,6 @@ module Typer = TraceCtype
 
 type ctxt = Ctxt.t
 
-
 (** Expand a {!Trace} expression to a {!State} expression, using the context *)
 let expand ~(ctxt : ctxt) (exp : Trace.exp) : State.exp =
   AstManip.exp_var_subst (Ctxt.expand_var ~ctxt) exp
@@ -86,17 +85,11 @@ let trace ?dwarf (start : State.t) (events : Trace.t) : State.t =
     TODO reorganize the PC handling better.
 *)
 let trace_pc_mut ?dwarf ~(next : int) (state : State.t) (events : Trace.t) : unit =
-  let pc = Arch.pc () in
+  let pc = [Arch.pc ()] in
   let rec is_touching_pc : Trace.t -> bool = function
     | [] -> false
-    | WriteReg { reg; _ } :: _ when reg = [pc] -> true
+    | WriteReg { reg; _ } :: _ when reg = pc -> true
     | _ :: l -> is_touching_pc l
   in
   trace_mut ?dwarf state events;
-  let updated_pc =
-    if is_touching_pc events then fun exp ->
-      try ConcreteEval.eval exp |> Value.to_exp with Failure _ -> exp (* The PC stays symbolic *)
-    else fun exp ->
-      exp |> Ast.expect_bits |> BitVec.add (BitVec.of_int ~size:64 next) |> Ast.Op.bits
-  in
-  State.update_reg_exp state [pc] updated_pc
+  if is_touching_pc events then State.concretize_pc ~pc state else State.bump_pc ~pc state next

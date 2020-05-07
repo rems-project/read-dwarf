@@ -136,6 +136,8 @@ module Op = struct
 
   let bits_smt s = bits (BitVec.of_smt s)
 
+  let concat l = Manyop (Concat, l, unknown)
+
   let assert_op e = Assert e
 
   let simplify ?(flags = []) e = Simplify (e, flags)

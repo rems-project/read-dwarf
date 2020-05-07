@@ -262,7 +262,8 @@ let get_abi api =
     );
     let stack_frag_id = Fragment.Env.add_frag ~frag:repr.stack_fragment state.fenv in
     State.set_reg_type state sp (Ctype.of_frag @@ FreeFragment stack_frag_id);
-    State.set_reg state r30 (State.make_tval (State.Var.to_exp RetAddr));
+    State.set_reg state r30
+      (State.make_tval ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) (State.Var.to_exp RetAddr));
     State.lock state;
     state
   in

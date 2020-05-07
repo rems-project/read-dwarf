@@ -45,6 +45,8 @@ let of_addr_opt t addr = RMap.at_opt t.by_addr addr
 
 let of_addr_with_offset t addr = RMap.at_off t.by_addr addr
 
+let of_addr_with_offset_opt t addr = RMap.at_off_opt t.by_addr addr
+
 let to_addr_offset (sym, offset) = sym.addr + offset
 
 let string_of_sym_offset ((sym, off) : sym_offset) = sym.name ^ "+" ^ string_of_int off
