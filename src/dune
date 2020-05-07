@@ -3,14 +3,17 @@
 (executable
  (name main)
  (public_name read-dwarf)
- (modules Main)
+ (modules main)
  (libraries rd))
 
 (library
  (name rd)
  (public_name read-dwarf)
  (wrapped false)
- (modules :standard \ Main)
+ (inline_tests
+  (backend qtest.lib)
+  (deps (universe)))
+ (modules :standard \ main dirname)
  (libraries linksem isla-lang cmdliner pprint res ocamlgraph toml))
 
 (env

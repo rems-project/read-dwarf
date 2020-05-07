@@ -7,7 +7,7 @@ maintainer: [
 ]
 authors: ["Peter Sewell" "Thibaut Pérami"]
 depends: [
-  "dune" {>= "1.11"}
+  "dune" {>= "2.0"}
   "pprint" {>= "20171003"}
   "menhir" {build}
   "linksem" {>= "0.6"}
