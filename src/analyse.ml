@@ -1,4 +1,4 @@
-open Logs.Logger (struct
+sopen Logs.Logger (struct
   let str = __MODULE__
 end)
 
@@ -774,11 +774,11 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
         | Some s -> Some (Filename.concat comp_dir'' s)
       )
   in
-  file ^ ":"
+  subprogram_name ^ ":"
   ^ Nat_big_num.to_string lnr.lnr_line
   ^ "."
   ^ Nat_big_num.to_string lnr.lnr_column
-  ^ " (" ^ subprogram_name ^ ")"
+  ^ " (" ^ file ^ ")"
   (*  ^ (if elifi.elifi_start then "S" else "s")*)
   ^ (if lnr.lnr_is_stmt then "S" else "s")
   ^ (if lnr.lnr_basic_block then "B" else "b")
