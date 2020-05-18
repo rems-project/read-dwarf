@@ -1,4 +1,4 @@
-sopen Logs.Logger (struct
+open Logs.Logger (struct
   let str = __MODULE__
 end)
 
