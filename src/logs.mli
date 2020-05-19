@@ -42,6 +42,9 @@ module Logger (S : String) : sig
   (** Override the level of this logger. It may still be overridden by the command line *)
   val set_level : level -> unit
 
+  (** Get the current level *)
+  val get_level : unit -> level
+
   (** Log a specific level using a format string *)
   val log : level -> 'a printf
 
@@ -68,6 +71,9 @@ module Logger (S : String) : sig
 
   (** Print debugging information about what's happening *)
   val debug : 'a printf
+
+  (** Tell if debug logging is enabled *)
+  val has_debug : unit -> bool
 
   (*****************************************************************************)
   (*        PP.document version                                                *)

@@ -105,6 +105,8 @@ module Logger (S : String) = struct
 
   let set_level lvl = IdMap.seti loggers id lvl
 
+  let get_level () = IdMap.geti loggers id
+
   let log lvl fmt = mainlog id lvl fmt
 
   let log_fatal ~code lvl fmt = mainlog_fatal ~code id lvl fmt
@@ -122,6 +124,8 @@ module Logger (S : String) = struct
   let info fmt = log Info fmt
 
   let debug fmt = log Debug fmt
+
+  let has_debug () = get_level () >= Debug
 
   (*****************************************************************************)
   (*        PP.document version                                                *)

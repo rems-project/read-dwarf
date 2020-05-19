@@ -27,3 +27,39 @@ let concat_map_rev f l =
 (* This is defined in OCaml 4.10, TODO find a clean way of doing conditional compilation,
    otherwise this will shadow the official concat_map in 4.10*)
 let concat_map f l = rev @@ concat_map_rev f l
+
+(** Drop the specified number of item from the list.
+    If n is greater than the size of the list, then return the empty list *)
+let rec drop n l =
+    assert (n >= 0);
+    match n,l with
+    | 0, _ -> l
+    | _, [] -> []
+    | _, a :: t -> drop (n - 1) t
+
+(** Take the specified number of items from the list, but reverse
+    If n is greater than the size of the list, then return the list
+
+    Tail-recursive
+
+*)
+let rec take_rev n l =
+  assert (n >= 0);
+  let rec take_rev_acc acc n l =
+      match n,l with
+      | 0, _ -> acc
+      | _, [] -> acc
+      | _, a :: t -> take_rev_acc (a :: acc) (n -1) t
+  in
+  take_rev_acc [] n l
+
+
+(** Take the specified number of items from the list.
+    If n is greater than the size of the list, then return the list
+
+    [l = take n l @ drop n l]
+*)
+let rec take n l = take_rev n l |> rev
+
+(** [sub l pos len] return the sub-list of l starting at pos of length len *)
+let rec sub ~pos ~len l = take len (drop pos l)

@@ -1,5 +1,9 @@
 (* This file is about interacting with isla *)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (*****************************************************************************)
 (*        Aliases                                                            *)
 (*****************************************************************************)
@@ -71,7 +75,23 @@ let parse_trc : ?filename:string -> Lexing.lexbuf -> rtrc = parse Parser.trc_sta
 
 (** Parse an Isla trace from a string *)
 let parse_trc_string ?(filename = "default") (s : string) : rtrc =
-  parse_trc ~filename @@ Lexing.from_string ~with_positions:true s
+  let print_around n =
+    if has_debug () then
+      let lines =
+        s |> String.split_on_char '\n' |> List.sub ~pos:(n - 3) ~len:5 |> String.concat "\n  "
+      in
+      debug "Error at lines:\n  %s" lines
+  in
+
+  let lexbuf = Lexing.from_string ~with_positions:true s in
+  lexbuf.lex_curr_p <- { pos_fname = filename; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+  try Parser.trc_start Lexer.token lexbuf with
+  | Parser.Error ->
+      print_around lexbuf.lex_start_p.pos_lnum;
+      raise (ParseError (lexbuf.lex_start_p, "Syntax error"))
+  | Lexer.Error _ ->
+      print_around lexbuf.lex_start_p.pos_lnum;
+      raise (LexError (lexbuf.lex_start_p, "Unexpected token"))
 
 (** Parse an Isla trace from a channel *)
 let parse_trc_channel ?(filename = "default") (c : in_channel) : rtrc =
