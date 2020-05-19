@@ -78,7 +78,9 @@ let parse_trc_string ?(filename = "default") (s : string) : rtrc =
   let print_around n =
     if has_debug () then
       let lines =
-        s |> String.split_on_char '\n' |> List.sub ~pos:(n - 3) ~len:5 |> String.concat "\n  "
+        s |> String.split_on_char '\n'
+        |> List.sub ~pos:(max 0 (n - 3)) ~len:5
+        |> String.concat "\n  "
       in
       debug "Error at lines:\n  %s" lines
   in
