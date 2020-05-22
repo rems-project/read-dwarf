@@ -86,6 +86,7 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
       try write_to_var l vc i (exp_conv_subst vc e) with RunError _ -> ()
     )
   | Smt (Assert e, l) -> State.push_assert state (exp_conv_subst vc e)
+  | Smt (DefineEnum e, l) -> ()
   | ReadReg (name, al, valu, l) ->
       debug "Reading Reg %s at %t from %t" name PP.(top pp_accessor_list al) PP.(top pp_valu valu);
       let string_path = IslaManip.string_of_accessor_list al in
@@ -125,7 +126,13 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
   | Cycle _ -> () (* Nothing happens here, this is just a marker *)
   | Branch _ -> () (* Nothing happens here, this is just a marker *)
   | BranchAddress _ -> () (* Nothing happens here, this is just a marker *)
-  | DefineEnum _ -> ()
+  | WakeRequest _ -> ()
+  | SleepRequest _ -> ()
+  | MarkReg _ -> ()
+  | Sleeping _ -> ()
+  | Barrier _ -> ()
+  | CacheOp _ -> ()
+  | Instr _ -> ()
 
 (* I don't need that information at that stage *)
 

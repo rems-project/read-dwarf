@@ -88,5 +88,6 @@ let smt_var_conv (vconv : int -> 'v) : 'a Isla.smt -> ('a, 'v, 'b, 'm) Ast.smt =
   | DeclareConst (i, t) -> DeclareConst (vconv i, ty t)
   | DefineConst (i, e) -> DefineConst (vconv i, exp_var_conv vconv e)
   | Assert e -> Assert (exp_var_conv vconv e)
+  | DefineEnum _ -> failwith "unimplemented"
 
 let smt s = smt_var_conv Fun.id s

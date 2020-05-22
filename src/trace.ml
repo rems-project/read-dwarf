@@ -144,6 +144,7 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
       (try HashVector.set vc i (exp_conv_subst vc e) with OfIslaError -> ());
       None
   | Smt (Assert e, l) -> Some (Assert (exp_conv_subst vc e))
+  | Smt (DefineEnum e, l) -> None
   | ReadReg (name, al, valu, l) ->
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
@@ -174,7 +175,13 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
   | Cycle _ -> None
   | Branch _ -> None
   | BranchAddress _ -> None
-  | DefineEnum _ -> None
+  | WakeRequest _ -> None
+  | MarkReg _ -> None
+  | SleepRequest _ -> None
+  | Sleeping _ -> None
+  | Instr _ -> None
+  | Barrier _ -> None
+  | CacheOp _ -> None
 
 (** Top level function to convert an isla trace to one of this module *)
 let of_isla (Trace events : Isla.rtrc) : t =

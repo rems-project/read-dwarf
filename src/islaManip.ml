@@ -31,14 +31,20 @@ let annot_exp : 'a exp -> 'a = function
 (** Get the annotation of an event *)
 let annot_event : 'a event -> 'a = function
   | Smt (_, a) -> a
-  | DefineEnum (_, a) -> a
   | Branch (_, _, a) -> a
   | BranchAddress (_, a) -> a
   | ReadReg (_, _, _, a) -> a
   | WriteReg (_, _, _, a) -> a
   | Cycle a -> a
+  | WakeRequest a -> a
   | ReadMem (_, _, _, _, a) -> a
   | WriteMem (_, _, _, _, _, a) -> a
+  | Barrier (_, a) -> a
+  | CacheOp (_, _, a) -> a
+  | Instr (_, a) -> a
+  | Sleeping (_, a) -> a
+  | SleepRequest a -> a
+  | MarkReg (_, _, a) -> a
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -82,6 +88,7 @@ let direct_smt_map_exp (m : 'a exp -> 'a exp) : 'a smt -> 'a smt = function
   | DefineConst (v, exp) -> DefineConst (v, m exp)
   | Assert exp -> Assert (m exp)
   | DeclareConst _ as d -> d
+  | DefineEnum _ as d -> d
 
 let direct_event_map_exp (m : 'a exp -> 'a exp) : 'a event -> 'a event = function
   | Smt (smt, l) -> Smt (direct_smt_map_exp m smt, l)
@@ -89,12 +96,13 @@ let direct_event_map_exp (m : 'a exp -> 'a exp) : 'a event -> 'a event = functio
 
 let direct_event_iter_valu (i : valu -> unit) : 'a event -> unit = function
   | Smt _ -> ()
-  | DefineEnum _ -> ()
   | Branch _ -> ()
   | BranchAddress (v, _) -> i v
   | ReadReg (_, _, v, _) -> i v
   | WriteReg (_, _, v, _) -> i v
   | Cycle _ -> ()
+  | WakeRequest _ -> ()
+  | SleepRequest _ -> ()
   | ReadMem (v, v', v'', _, _) ->
       i v;
       i v';
@@ -103,6 +111,13 @@ let direct_event_iter_valu (i : valu -> unit) : 'a event -> unit = function
       i v;
       i v';
       i v''
+  | Barrier (v, _) -> i v
+  | CacheOp (v, v', _) ->
+      i v;
+      i v'
+  | MarkReg _ -> ()
+  | Instr (v, _) -> i v
+  | Sleeping _ -> ()
 
 let direct_event_map_valu (m : valu -> valu) : 'a event -> 'a event = function
   | BranchAddress (v, l) -> BranchAddress (m v, l)
@@ -110,6 +125,9 @@ let direct_event_map_valu (m : valu -> valu) : 'a event -> 'a event = function
   | WriteReg (a, b, v, c) -> WriteReg (a, b, m v, c)
   | ReadMem (v, v', v'', a, b) -> ReadMem (m v, m v', m v'', a, b)
   | WriteMem (a, v, v', v'', b, c) -> WriteMem (a, m v, m v', m v'', b, c)
+  | Barrier (v, l) -> Barrier (m v, l)
+  | CacheOp (v, v', l) -> CacheOp (m v, m v', l)
+  | Instr (v, l) -> Instr (m v, l)
   | e -> e
 
 let direct_valu_iter_valu (i : valu -> unit) : valu -> unit = function
@@ -192,23 +210,6 @@ let rec valu_get valu path =
   | (_, []) -> valu
   | (Val_Struct s, a :: l) -> valu_get (List.assoc a s) l
   | _ -> failwith "islaManip.valu_get: Invalid path in IslaManip.valu_get"
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 bvi conversion } *)
-
-(** Convert the bvi constant style like (_ bv42 6) to explicit style #b101010 *)
-let bvi_to_bv (bvi : bvi) (size : int) =
-  if bvi > 0 then
-    if size mod 4 = 0 then
-      let s = Printf.sprintf "%x" bvi in
-      "#x" ^ String.make ((size / 4) - String.length s) '0' ^ s
-    else failwith "TODO in IslaManip.bvi_to_bv"
-  else begin
-    assert (bvi = -1);
-    if size mod 4 = 0 then "#x" ^ String.make (size / 4) 'F' else "#b" ^ String.make size '1'
-  end
 
 (*****************************************************************************)
 (*****************************************************************************)
