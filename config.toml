@@ -18,7 +18,7 @@ toolchain = "aarch64-linux-gnu"
                     "__v84_implemented",
                     "__v85_implemented"]
     arch-file = "aarch64.ir" # relative to the toml file
-    linearize = ["ConditionHolds", "integer_conditional_select"]
+    linearize = ["ConditionHolds", "integer_conditional_select", "InterruptPending"]
     other-opts = []
 
 # [archs.riscv]
