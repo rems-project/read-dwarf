@@ -20,6 +20,8 @@ toolchain = "aarch64-linux-gnu"
     arch-file = "aarch64.ir" # relative to the toml file
     linearize = ["ConditionHolds", "integer_conditional_select", "InterruptPending"]
     other-opts = []
+        [archs.aarch64.isla.config-registers]
+        exclusive_never_fails=true
 
 # [archs.riscv]
 # riscv stuff for example

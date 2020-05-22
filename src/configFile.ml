@@ -107,11 +107,14 @@ let toml_get_table (func : table -> 'a) (table : table) (key : key) : 'a =
 
 module Arch = struct
   module Isla = struct
+    (* TODO At some point it would be good to integrate this with native isla config files *)
+
     type t = {
       ignored_regs : string list;
       arch_file : string;
       arch_file_digest : string;
       linearize : string list;
+      config_registers : (string * bool) list;
       other_opts : string list;
     }
 
@@ -121,11 +124,19 @@ module Arch = struct
         Buffer.add_string b s;
         Buffer.add_char b ' '
       in
+      let add_with_bool (s, bl) =
+        Buffer.add_string b s;
+        Buffer.add_char b ' ';
+        if bl then Buffer.add_string b "true" else Buffer.add_string b "false";
+        Buffer.add_char b ' '
+      in
       List.iter add_with_space t.ignored_regs;
       Buffer.add_char b '\n';
       Buffer.add_string b (Digest.to_hex t.arch_file_digest);
       Buffer.add_char b '\n';
       List.iter add_with_space t.linearize;
+      Buffer.add_char b '\n';
+      List.iter add_with_bool t.config_registers;
       Buffer.add_char b '\n';
       List.iter add_with_space t.other_opts;
       Buffer.add_char b '\n';
@@ -137,6 +148,8 @@ module Arch = struct
 
     let linearize_key = Toml.key "linearize"
 
+    let config_registers_key = Toml.key "config-registers"
+
     let other_opts_key = Toml.key "other-opts"
 
     let of_toml ~path table =
@@ -144,8 +157,16 @@ module Arch = struct
       let linearize = toml_get_string_list table linearize_key in
       let other_opts = toml_get_string_list table other_opts_key in
       let arch_file = toml_get_file ~path table arch_file_key in
+      let config_registers_of_toml table =
+        table |> Table.to_seq
+        |> Seq.map (fun (s, b) ->
+               let s = Key.to_string s in
+               (s, toml_expect_bool s b))
+        |> List.of_seq
+      in
+      let config_registers = toml_get_table config_registers_of_toml table config_registers_key in
       let arch_file_digest = Digest.file arch_file in
-      { ignored_regs; linearize; other_opts; arch_file; arch_file_digest }
+      { ignored_regs; linearize; other_opts; arch_file; arch_file_digest; config_registers }
 
     let pp_raw ic =
       let open PP in
@@ -155,6 +176,7 @@ module Arch = struct
           ("arch-file", string ic.arch_file);
           ("arch-file digest (MD5)", string (Digest.to_hex ic.arch_file_digest));
           ("linearize", list string ic.linearize);
+          ("config_registers", list (pair string bool) ic.config_registers);
           ("other-opts", list string ic.other_opts);
         ]
   end

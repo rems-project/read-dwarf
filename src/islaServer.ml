@@ -36,6 +36,11 @@ let cmd_of_config (config : config) socket =
       Vec.add_one cmd "-L";
       Vec.add_one cmd s)
     config.linearize;
+  List.iter
+    (fun (s, b) ->
+      Vec.add_one cmd "-r";
+      Vec.add_one cmd (Printf.sprintf "%s=%b" s b))
+    config.config_registers;
   List.iter (fun s -> Vec.add_one cmd s) config.other_opts;
   Vec.to_array cmd
 
