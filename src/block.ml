@@ -28,9 +28,9 @@ let make ~(sym : Elf.Sym.t) ~start ~endpred =
   let process index (code : BytesSeq.t) : Trace.t list =
     try
       code |> IslaCache.get_traces |> List.map (tee (IslaType.type_trc %> ignore) %> Trace.of_isla)
-    with Trace.OfIslaError ->
+    with exn ->
       err "Could not convert isla trace of instruction at 0x%x to Trace.t" (sym.addr + (4 * index));
-      Raise.again Trace.OfIslaError
+      Raise.again exn
   in
 
   let traces = sym.data |> BytesSeq.to_list32bs |> Array.of_list_mapi process in
