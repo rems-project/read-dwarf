@@ -24,13 +24,16 @@ type t = {
 (** Build a complex block starting from [start] in [sym] and ending when [endpred] says so.
     [endpred] is a predicate on the symbolic PC expression *)
 let make ~(sym : Elf.Sym.t) ~start ~endpred =
-  let num = BytesSeq.length sym.data / 4 in
   (* TODO fix fixed size instructions *)
-  let process (code : BytesSeq.t) : Trace.t list =
-    code |> IslaCache.get_traces |> List.map (tee (IslaType.type_trc %> ignore) %> Trace.of_isla)
+  let process index (code : BytesSeq.t) : Trace.t list =
+    try
+      code |> IslaCache.get_traces |> List.map (tee (IslaType.type_trc %> ignore) %> Trace.of_isla)
+    with Trace.OfIslaError ->
+      err "Could not convert isla trace of instruction at 0x%x to Trace.t" (sym.addr + (4 * index));
+      Raise.again Trace.OfIslaError
   in
 
-  let traces = sym.data |> BytesSeq.to_list32bs |> Array.of_list_map process in
+  let traces = sym.data |> BytesSeq.to_list32bs |> Array.of_list_mapi process in
   { sym; start; endpred; traces }
 
 (** Simplify the traces in the block *)

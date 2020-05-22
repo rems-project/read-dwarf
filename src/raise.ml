@@ -5,3 +5,6 @@ let inv_arg fmt = Printf.ksprintf invalid_arg fmt
 
 (** Printf like funtion that throws a [Failure] with the formated string *)
 let fail fmt = Printf.ksprintf failwith fmt
+
+(** Raise again an exception without losing the backtrace. *)
+let again exn = Printexc.raise_with_backtrace exn (Printexc.get_raw_backtrace ())

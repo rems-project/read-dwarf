@@ -96,7 +96,11 @@ let pp events = PP.separate_map PP.hardline pp_event events
     a [written_registers] parameter to some function of this section.
 *)
 
-(** throw an error in case of local conversion error.
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
+(** Throw an error in case of local conversion error.
     Normally a type-checked Isla trace should not fail in this section *)
 exception OfIslaError
 
@@ -106,7 +110,11 @@ type value_context = exp HashVector.t
 (** Get the exression of the variable at the index.
     Throw {!OfIslaError} if the variable is not bound *)
 let get_var vc i =
-  match HashVector.get_opt vc i with Some exp -> exp | None -> raise OfIslaError
+  match HashVector.get_opt vc i with
+  | Some exp -> exp
+  | None ->
+      warn "Could not find the variable v%d" i;
+      raise OfIslaError
 
 (** Convert an Isla expression to a [Trace] expression by replacing all Isla variable
     by their value in the context. Throw {!OfIslaError} if the substitution fails *)
