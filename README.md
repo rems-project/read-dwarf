@@ -17,19 +17,24 @@ with `opam install .`
 Warning for non-Rust users: You need to add ~/.cargo/bin to your PATH
 or specify the position of `isla-client` in `ISLA_CLIENT_PATH`
 
-Finally you need `cmdliner`, `pprint`, `res` and `ocamlgraph` from opam:
+Finally you need `cmdliner`, `pprint`, `res`, `ocamlgraph` and `toml` from opam:
 
-`opam install cmdliner pprint res ocamlgraph`
+```
+opam install cmdliner pprint res ocamlgraph toml
+```
 
 ## Configuration
 
-There is no configure script. To edit the compile time configuration, 
+There is no configure script. To edit the compile time configuration,
 copy `default_config.ml` into `config.ml` and edit the variables you wish
 to change from the default. If `config.ml` is not found, the build system
 will use `default_config.ml` instead.
 
-In particular you can change the supported architecture for the build by editing 
+In particular you can change the supported architecture for the build by editing
 the `module Arch` variable to point to the module you want in `src/archs`.
+
+The run time configuration is in `config.toml`, but for now during development
+it is checked out in the repository.
 
 ## Building
 
@@ -73,6 +78,11 @@ the subcommand
 ## Testing
 
 You can run `make test` for self testing.
+The libraries `ounit` and `qtest` are additionally required from opam:
+
+```
+opam install qtest ounit
+```
 
 ## Folder structure
 
