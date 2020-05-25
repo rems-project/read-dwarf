@@ -8,8 +8,9 @@ C type information. The project will only work for binaries generated from C.
 
 ## Dependencies
 
-You need a specific `linksem` commit installed (See LINKSEM_COMMIT var in Makefile).
-The simplest way is to check it out and then pin it with opam (`opam install .`)
+You need the latest `linksem` and `ott`. Install them with opam
+by checking out the latest master on GitHub and doing `opam install .` in
+the repositories.
 
 You also need to install `isla` and `isla-lang` from the `read-dwarf` branch.
 `make install` will work in both, but isla-lang can also be install via `opam`
