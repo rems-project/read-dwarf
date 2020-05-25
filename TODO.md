@@ -10,9 +10,8 @@
  - Try to have read-dwarf automatically create/cache the objdump instead
    of asking it as a command line parameter.
  - Add prefix to external output or error coming from servers like isla or z3 with sed
- - Add test dependencies and ordering to Tests.ml
- - Add slow-test/fast test distinction (isla version is a slow test)
- - Add regexp test filtering
+ - Scrap Tests.ml completely and do an actual OUnit test suit that 
+   checks more that just "read-dwarf do not crash" on some inputs.
  - Think about removing PPrint and using StdLib.Format (and Fmt) instead
    - Need to test performance,
    - Need to swap ott pp generation to StdLib.Format, which is good for portability
@@ -44,26 +43,20 @@
  - isla
    - Move the initial state from isla to readDwarf (Peter's qemu work)
 
-# Content
-
-## Matching
- - Finding the simulation relation on global variables.
- - First try : Just match elf symbols with size and index lower stack with start sp
-   and handle all the rest symbolically.
-
-## Control-flow management
- - Start by handling that the exponential way and wait until it blows up
- - Don't deal with loops for now
-
 # Current task stacks for Thibaut. This is the short term task list
 
+ - Do a proper fetch and execute with global ELF and DWARF and multiple cached functions
+ - Use that to allow "out of function" branches.
+ - Add a new block end condition about running over a PC multiple times.
+ - Add a concept of state diffs.
+ - Add a new printer that print read-dwarf like output but with state diffs in
+   between each instruction.
  - Resolve memory read to obviously non-aliasing addresses directly
 
 ## Memory stack
 
  - Add support for concrete to symbol offset rewrite
    if concrete value is <sym+off> then it is replaced by (bvadd sym off)
- - Add support for rodata detection
  - Continue support for memory manipulation in Z3.
    includes support for more Z3 syntax, including custom types.
 
@@ -81,14 +74,11 @@
  - LONG: Do Ctype propagation with fallback
    - if propagation fails, fallback on dwarf information: Requires location indexing system
 
-## Control flow stack
-
- - "run-block" and "run-func" commands
-
 ## Inlining and special instructions stack
 
- - Think about how to handle fake calls and special instruction like "smc"
- - Think about how to flag all "bl" about whether they are normal or special or alternatively create a fake instruction flow stream.
+ - Think about how to handle fake calls and special instructions like "smc"
+ - Think about how to flag all "bl" about whether they are normal or special
+   or alternatively create a fake instruction flow stream.
 
 # Done list
 
