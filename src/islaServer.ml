@@ -168,11 +168,11 @@ let start config =
   raw_start config;
   let version = request VERSION |> expect_version in
   if version = required_version then info "Isla started with version %s" version
-  else begin
-    stop ();
-    Raise.fail "Isla started with API version %s but version %s was required" version
-      required_version
-  end
+  else
+    warn
+      "Isla started with API version %s\n\
+      \        but version %s was required.\n\
+      \        This may crash the communication protocol in unknown ways" version required_version
 
 (** Test that isla can start and keep a valid version *)
 let _ =
