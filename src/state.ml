@@ -354,7 +354,7 @@ let iter_var (f : var -> unit) s = iter_exp (AstManip.exp_iter_var f) s
 (** Return the type of a state variable *)
 let var_type var =
   match var with
-  | Register (state, p) -> p |> Reg.path_type |> Reg.assert_plain
+  | Register (state, p) -> p |> Reg.path_type |> Reg.expect_plain
   | ReadVar (state, i) -> Vec.get state.read_vars i |> fst
   | Arg _ -> Ast.Ty_BitVec 64
   | RetArg -> Ast.Ty_BitVec 64

@@ -28,7 +28,7 @@ val make_struct : unit -> reg_struct
 
 (** Assert that a type is plain and return the underlying type.
     Throw [Failure] if the type is not plain *)
-val assert_plain : typ -> ty
+val expect_plain : typ -> ty
 
 (** The global register index. Any top level register is a field of this structure *)
 val index : reg_struct
@@ -154,6 +154,9 @@ val pp_path : path -> PP.document
 (** Iterate a function through all the register by path *)
 val iter_path : (path -> ty -> unit) -> unit
 
+(** Add this new path with this type. Create all necessary intermediate structs *)
+val add_path : string list -> ty -> unit
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -217,6 +220,8 @@ end
 (** {1 Pretty printing } *)
 
 val pp : t -> PP.document
+
+val pp_ty : ty -> PP.document
 
 val pp_field : reg_struct -> t -> PP.document
 

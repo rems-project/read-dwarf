@@ -26,8 +26,7 @@ type t = {
 let make ~(sym : Elf.Sym.t) ~start ~endpred =
   (* TODO fix fixed size instructions *)
   let process index (code : BytesSeq.t) : Trace.t list =
-    try
-      code |> IslaCache.get_traces |> List.map (tee (IslaType.type_trc %> ignore) %> Trace.of_isla)
+    try TraceCache.get_traces code
     with exn ->
       err "Could not convert isla trace of instruction at 0x%x to Trace.t" (sym.addr + (4 * index));
       Raise.again exn

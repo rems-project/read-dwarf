@@ -10,7 +10,7 @@ and reg_struct = (string, typ) IdMap.t
 
 let make_struct () = IdMap.make ()
 
-let assert_plain : typ -> ty = function
+let expect_plain : typ -> ty = function
   | Plain t -> t
   | Struct _ -> failwith "assert_plain failed"
 
@@ -166,6 +166,31 @@ let iter_path (f : path -> ty -> unit) =
     IdMap.iter (fun name id typ -> iter_path_typ f (root @ [id]) typ) rs
   in
   iter_path_rstruct f [] index
+
+let rec add_partial_path rs sl ty : unit =
+  match sl with
+  | [] -> Raise.fail "add_partial_path: path is existing struct"
+  | a :: l -> (
+      match IdMap.getk_opt rs a with
+      | Some (Plain ty') ->
+          if not (l = []) then Raise.fail "Reached plain type before end of path";
+          if not (ty' = ty) then
+            Raise.fail "add_partial_path: register exists with different type"
+      | Some (Struct rs) -> add_partial_path rs l ty
+      | None ->
+          let rec make_struct_deep sl ty : typ =
+            match sl with
+            | [] -> Plain ty
+            | a :: l ->
+                let nrs = make_struct_deep l ty in
+                let res = IdMap.make () in
+                IdMap.adds res a nrs;
+                Struct res
+          in
+          IdMap.adds rs a (make_struct_deep l ty)
+    )
+
+let add_path = add_partial_path index
 
 (*****************************************************************************)
 (*        Register indexed mapping                                           *)

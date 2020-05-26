@@ -22,7 +22,7 @@ let run_func elfname name dump no_run entry len breakpoints =
   base "API %t" (PP.top Arch.pp_api api);
   base "Loading ABI";
   let abi = Arch.get_abi api in
-  IslaCache.start @@ Arch.get_isla_config ();
+  TraceCache.start @@ Arch.get_isla_config ();
   Init.init ();
   base "Computing entry state";
   let start = Init.state () |> State.copy ~elf |> abi.init in
@@ -49,7 +49,6 @@ let run_func elfname name dump no_run entry len breakpoints =
             | _ -> true
           in
           let block = Block.make ~sym ~start:0 ~endpred in
-          Block.simplify_mut block;
           if dump then base "Instructions:\n%t\n" (PP.topi Block.pp block);
           if not no_run then begin
             State.unsafe_unlock start;

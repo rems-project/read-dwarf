@@ -86,14 +86,13 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop
       )
     | _ -> stop_sym
   in
-  IslaCache.start @@ Arch.get_isla_config ();
+  TraceCache.start @@ Arch.get_isla_config ();
   let (sym, start) = symoffset in
   (elf, Block.make ~sym ~start ~endpred)
 
 let elfblock_term = Term.(const gen_block $ elf_term $ len $ stop_sym $ breakpoints)
 
 let run_block (elf, block) no_run dump reg_types =
-  Block.simplify_mut block;
   if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
   if dump then base "Block:\n%t\n" (PP.topi Block.pp block);
   if not no_run then begin

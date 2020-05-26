@@ -92,17 +92,8 @@ let rec exp_iter_var (f : 'v -> unit) : ('a, 'v, 'b, 'm) exp -> unit = function
   | Var (v, a) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
 
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-
-(** {1 Variable type conversion }
-
-    All of those function convert the underlying variable type through the AST.
-    They cannot be the usual map function because they change the type
-*)
-let rec exp_conv_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'vb', 'b, 'm) exp =
-  let ec = exp_conv_var conv in
+let rec exp_map_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'vb', 'b, 'm) exp =
+  let ec = exp_map_var conv in
   match exp with
   | Var (v, a) -> Var (conv v, a)
   | Bound _ as b -> b
@@ -114,6 +105,18 @@ let rec exp_conv_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'v
   | Manyop (m, el, a) -> Manyop (m, List.map ec el, a)
   | Ite (c, e, e', a) -> Ite (ec c, ec e, ec e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id ec b, List.map (Pair.map Fun.id ec) bs, ec e, l)
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Variable type conversion }
+
+    All of those function convert the underlying variable type through the AST.
+    They cannot be the usual map function because they change the type
+*)
+
+(** Old alias to make conversion explicit *)
+let exp_conv_var = exp_map_var
 
 (** Substitute variable with expression according to substitution function *)
 let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, 'va, 'b, 'm) exp) :

@@ -181,6 +181,16 @@ module UnitEpoch = struct
   let compat () () = true
 end
 
+module IntEpoch = struct
+  type t = int
+
+  let to_file file i = Files.write_bin output_binary_int file i
+
+  let of_file file = Files.read_bin input_binary_int file
+
+  let compat = ( = )
+end
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
