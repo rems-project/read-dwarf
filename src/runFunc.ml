@@ -48,11 +48,15 @@ let run_func elfname name dump no_run entry len breakpoints =
               )
             | _ -> true
           in
-          let block = Block.make ~sym ~start:0 ~endpred in
-          if dump then base "Instructions:\n%t\n" (PP.topi Block.pp block);
+          let runner = Runner.of_dwarf dwarf in
+          let block = Block.make ~runner ~start:sym.addr ~endpred in
+          if dump then begin
+            Runner.load_sym runner sym;
+            base "Instructions:\n%t\n" (PP.topi Runner.pp_instr runner)
+          end;
           if not no_run then
-            let tree = Block.run ~dwarf block start in
-            base "Run tree:\n%t" (PP.top (StateTree.pp_all PP.shex) tree)
+            let tree = Block.run block start in
+            base "Run tree:\n%t" (PP.top (StateTree.pp_all Block.pp_label) tree)
   end;
   IslaCache.stop ()
 

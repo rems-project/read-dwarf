@@ -10,86 +10,48 @@ open Logs.Logger (struct
 end)
 
 (** [endpred pc_exp] gives when to stop *)
-type t = {
-  sym : Elf.Sym.t;
-  start : int;
-  endpred : State.exp -> bool;
-  traces : Trace.t list array;
-}
+type t = { runner : Runner.t; start : int; endpred : State.exp -> bool }
 
 (* TODO support variable length instruction *)
 
 (** Build a complex block starting from [start] in [sym] and ending when [endpred] says so.
     [endpred] is a predicate on the symbolic PC expression *)
-let make ~(sym : Elf.Sym.t) ~start ~endpred =
-  (* TODO fix fixed size instructions *)
-  let process index (code : BytesSeq.t) : Trace.t list =
-    try TraceCache.get_traces code
-    with exn ->
-      err "Could not convert isla trace of instruction at 0x%x to Trace.t" (sym.addr + (4 * index));
-      Raise.again exn
-  in
+let make ~runner ~start ~endpred = { runner; start; endpred }
 
-  let traces = sym.data |> BytesSeq.to_list32bs |> Array.of_list_mapi process in
-  { sym; start; endpred; traces }
+type label = Start | End | BranchAt of int
 
-(** Simplify the traces in the block *)
-let simplify_mut (b : t) = Array.map_mut (List.map Trace.simplify) b.traces
+let label_to_string = function
+  | Start -> "Start"
+  | End -> "End"
+  | BranchAt pc -> Printf.sprintf "Branch at 0x%x" pc
+
+let pp_label label = label |> label_to_string |> PP.string
 
 (** Run the block an return a state tree indexed by the addresses of the branches *)
-let run (b : t) ?dwarf (start : State.t) : int StateTree.t =
+let run (b : t) (start : State.t) : label StateTree.t =
+  let pcreg = Arch.pc () in
   assert (State.is_locked start);
   let rec run_from state =
-    let pc_exp = State.get_reg state (Arch.pc ()) |> State.get_exp in
+    let pc_exp = State.get_reg state pcreg |> State.get_exp in
     if b.endpred pc_exp then begin
       info "Stopped at pc %t" (PP.top State.pp_exp pc_exp);
       State.map_mut_exp Z3.simplify state;
       State.lock state;
-      StateTree.{ state; data = -1; rest = [] }
+      StateTree.{ state; data = End; rest = [] }
     end
     else begin
       info "Running pc %t" (PP.top State.pp_exp pc_exp);
-      let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
-      if not @@ Elf.Sym.is_in b.sym pc then Raise.fail "out of function jump";
-      let traces = b.traces.((pc - b.sym.addr) / 4) in
-      match traces with
-      | [] -> Raise.fail "reach a exceptional instruction"
-      | [trc] ->
-          TraceRun.trace_pc_mut ?dwarf ~next:4 state trc;
-          run_from state
-      | trcs ->
-          State.map_mut_exp Z3.simplify state;
-          State.lock state;
-          let rest =
-            List.map
-              (fun trc ->
-                let nstate = State.copy state in
-                TraceRun.trace_pc_mut ?dwarf ~next:4 nstate trc;
-                run_from nstate)
-              trcs
-          in
-          StateTree.{ state; data = pc; rest }
+      let prelock state = State.map_mut_exp Z3.simplify state in
+      let states = Runner.run ~prelock b.runner state in
+      match states with
+      | [] -> Raise.fail "Reached a exceptional instruction"
+      | [state] -> run_from state
+      | states ->
+          let rest = List.map run_from states in
+          StateTree.{ state; data = BranchAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
     end
   in
   let state = State.copy start in
-  State.set_reg state (Arch.pc ())
-    (State.make_tval (Ast.Op.bits_int ~size:64 (b.sym.addr + b.start)));
+  State.set_pc ~pc:pcreg state b.start;
   let rest = [run_from state] in
-  (* My attempt to write "start" in hexadecimal leet speak: *)
-  StateTree.{ state = start; data = 0x57a27; rest }
-
-let pp (b : t) =
-  let open PP in
-  let line = dprintf "Block in %s at %d. Intructions of symbol:" b.sym.name b.start in
-  let instructions =
-    concat_array_mapi
-      (fun i trcs ->
-        prefix 2 1
-          (dprintf "Intruction 0x%x:" (i * 4))
-          (separate_mapi hardline
-             (fun i trc -> prefix 2 1 (dprintf "Trace %d:" i) (Trace.pp trc))
-             trcs)
-        ^^ hardline)
-      b.traces
-  in
-  line ^^ hardline ^^ instructions
+  StateTree.{ state = start; data = Start; rest }

@@ -29,9 +29,9 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let dump =
-  let doc = "Dump the traces of all the instructions in the symbol" in
-  Arg.(value & flag & info ["d"; "dump"] ~doc)
+(* let dump =
+ *   let doc = "Dump the traces of all the instructions in the symbol" in
+ *   Arg.(value & flag & info ["d"; "dump"] ~doc) *)
 
 let no_run =
   let doc = "Prevents the block from being run (To get the traces or reg type" in
@@ -75,11 +75,11 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop
   let brks =
     List.map (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset) breakpoints
   in
+  let start = Elf.SymTbl.to_addr_offset symoffset in
   let endpred (exp : State.exp) =
     match exp with
     | Bits (bv, _) -> (
         let addr = BitVec.to_int bv in
-        let start = Elf.SymTbl.to_addr_offset symoffset in
         match len with
         | Some l when start > addr || addr >= start + l -> true
         | _ -> List.exists (( = ) addr) brks
@@ -87,23 +87,22 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop
     | _ -> stop_sym
   in
   TraceCache.start @@ Arch.get_isla_config ();
-  let (sym, start) = symoffset in
-  (elf, Block.make ~sym ~start ~endpred)
+  let runner = Runner.of_elf elf in
+  (elf, Block.make ~runner ~start ~endpred)
 
 let elfblock_term = Term.(const gen_block $ elf_term $ len $ stop_sym $ breakpoints)
 
-let run_block (elf, block) no_run dump reg_types =
+let run_block (elf, block) no_run reg_types =
   if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
-  if dump then base "Block:\n%t\n" (PP.topi Block.pp block);
   if not no_run then begin
     Init.init ();
     let init_state = Init.state () |> State.copy ~elf in
     State.lock init_state;
     let tree = Block.run block init_state in
-    PP.println @@ StateTree.pp_all PP.shex tree
+    PP.println @@ StateTree.pp_all Block.pp_label tree
   end
 
-let term = Term.(const run_block $ elfblock_term $ no_run $ dump $ reg_types)
+let term = Term.(const run_block $ elfblock_term $ no_run $ reg_types)
 
 let info =
   let doc =

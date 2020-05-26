@@ -134,9 +134,15 @@ let mapping (name : string) (mappings : (document * document) list) : document =
     !^"}"
 
 let hashtbl ?(name = "") key value ht =
-  let res = ref [] in
-  Hashtbl.iter (fun i v -> res := (key i, value v) :: !res) ht;
-  mapping name (List.rev !res)
+  let bindings = Hashtbl.fold (fun i v l -> (key i, value v) :: l) ht [] in
+  mapping name bindings
+
+let hashtbl_sorted ~compare ?(name = "") key value ht =
+  let bindings = Hashtbl.fold (fun i v l -> (i, v) :: l) ht [] in
+  let sbindings =
+    List.fast_sort (Pair.compare ~fst:compare ~snd:Fun.(const @@ const 0)) bindings
+  in
+  mapping name (List.map (Pair.map key value) sbindings)
 
 let record name fields : document = !^name ^^ OCaml.record name fields
 

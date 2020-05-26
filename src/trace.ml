@@ -82,6 +82,11 @@ let pp_event =
 (** Pretty print a trace *)
 let pp events = PP.separate_map PP.hardline pp_event events
 
+(** Pretty print multiple traces *)
+let pp_multiple trcs =
+  let open PP in
+  separate_mapi hardline (fun i trc -> prefix 4 1 (dprintf "Trace %d:" i) (pp trc)) trcs
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
