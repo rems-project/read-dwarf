@@ -195,7 +195,7 @@ let processing preprocessing pmode (filename, input, (config : IslaServer.config
   let typer t =
     let c = IslaType.type_trc t in
     base "Isla vars typing context:\n%t\n" (PP.topi IslaType.pp_tcontext c);
-    base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
+    base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
     t
   in
   let run trace =

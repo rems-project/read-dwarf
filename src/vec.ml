@@ -26,7 +26,40 @@ let mapi = mapi
 
 let iter = iter
 
+let iteri = iteri
+
+let iter_until ~limit f vec =
+  let limit = min limit (length vec) in
+  for i = 0 to limit - 1 do
+    unsafe_get vec i |> f
+  done
+
+let iteri_until ~limit f vec =
+  let limit = min limit (length vec) in
+  for i = 0 to limit - 1 do
+    unsafe_get vec i |> f i
+  done
+
+let iteri_rev f vec =
+  for i = length vec - 1 downto 0 do
+    f i (unsafe_get vec i)
+  done
+
 let to_list = to_list
+
+let fold_right = fold_right
+
+let foldi_left f v a =
+  let acc = ref a in
+  iteri (fun i v -> acc := f i !acc v) v;
+  !acc
+
+let foldi_right f v a =
+  let acc = ref a in
+  iteri_rev (fun i v -> acc := f i v !acc) v;
+  !acc
+
+let to_listi v = foldi_right (fun i v a -> (i, v) :: a) v []
 
 let fold_left = fold_left
 
@@ -49,6 +82,12 @@ let ensure vec size v =
     done
   else ()
 
+let keep vec size =
+  if size = 0 then clear vec
+  else
+    let len = length vec in
+    if size < len then remove_n vec (len - size) else ()
+
 let resize vec size v =
   let len = length vec in
   if size < len then remove_n vec (len - size) else ensure vec size v
@@ -61,6 +100,12 @@ let map2 f veca vecb =
 let map_mut f vec =
   let len = length vec in
   for i = 0 to len - 1 do
+    unsafe_get vec i |> f |> unsafe_set vec i
+  done
+
+let map_mut_until ~limit f vec =
+  let limit = min limit (length vec) in
+  for i = 0 to limit - 1 do
     unsafe_get vec i |> f |> unsafe_set vec i
   done
 

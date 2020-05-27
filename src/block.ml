@@ -9,8 +9,6 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-open Fun
-
 (** [endpred pc_exp] gives when to stop *)
 type t = {
   sym : Elf.Sym.t;
@@ -42,7 +40,7 @@ let simplify_mut (b : t) = Array.map_mut (List.map Trace.simplify) b.traces
 let run (b : t) ?dwarf (start : State.t) : int StateTree.t =
   assert (State.is_locked start);
   let rec run_from state =
-    let pc_exp = State.get_reg state [Arch.pc ()] |> State.get_exp in
+    let pc_exp = State.get_reg state (Arch.pc ()) |> State.get_exp in
     if b.endpred pc_exp then begin
       info "Stopped at pc %t" (PP.top State.pp_exp pc_exp);
       State.map_mut_exp Z3.simplify state;
@@ -74,7 +72,7 @@ let run (b : t) ?dwarf (start : State.t) : int StateTree.t =
     end
   in
   let state = State.copy start in
-  State.set_reg state [Arch.pc ()]
+  State.set_reg state (Arch.pc ())
     (State.make_tval (Ast.Op.bits_int ~size:64 (b.sym.addr + b.start)));
   let rest = [run_from state] in
   (* My attempt to write "start" in hexadecimal leet speak: *)

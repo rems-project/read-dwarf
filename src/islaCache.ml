@@ -99,7 +99,7 @@ end
     The Epoch also include the digest of the Isla configuration. Any change of configuration
     will wipe out the cache.
 *)
-let epoch = 1
+let epoch = 2
 
 module Epoch (*: Cache.Epoch*) = struct
   type t = string * int * string (* config digest *)

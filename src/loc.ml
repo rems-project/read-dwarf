@@ -11,8 +11,8 @@ type dwop = Dwarf.operation
 
 (** The type of a location, as static as possible *)
 type t =
-  | Register of Reg.path  (** In the register *)
-  | RegisterOffset of Reg.path * int  (** At register + offset address *)
+  | Register of Reg.t  (** In the register *)
+  | RegisterOffset of Reg.t * int  (** At register + offset address *)
   | StackFrame of int  (** On the stackFrame with offset *)
   | Global of Elf.SymTbl.sym_offset  (** Global variable *)
   | Dwarf of dwop list  (** Uninterpreted dwarf location *)
@@ -75,8 +75,8 @@ let of_linksem ?(amap = Arch.dwarf_reg_map ()) (elf : Elf.File.t) : linksem_t ->
 
 (** Convert the location to a string. This is not reversible *)
 let to_string = function
-  | Register reg -> Reg.path_to_string reg
-  | RegisterOffset (reg, off) -> Printf.sprintf "[%s+%x]" (Reg.path_to_string reg) off
+  | Register reg -> Reg.to_string reg
+  | RegisterOffset (reg, off) -> Printf.sprintf "[%s+%x]" (Reg.to_string reg) off
   | StackFrame off -> Printf.sprintf "[frame+%x]" off
   | Global symoff -> Elf.SymTbl.string_of_sym_offset symoff
   | Dwarf ops -> Dwarf.pp_operations ops

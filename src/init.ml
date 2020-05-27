@@ -12,14 +12,7 @@ let load_init_trc (trc : Isla.rtrc) : unit =
   init_state := Some state
 
 (** Make a new initial state but add symbolically all registers not initialized by isla *)
-let state () =
-  match !init_state with
-  | None -> failwith "Init has not been loaded"
-  | Some s ->
-      State.unsafe_unlock s;
-      State.extend_mut s;
-      State.lock s;
-      s
+let state () = match !init_state with None -> failwith "Init has not been loaded" | Some s -> s
 
 (** Intialize this module by calling isla on {!nop} to get initial machine state *)
 let init () =

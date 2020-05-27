@@ -20,19 +20,19 @@
 module Var = struct
   (** A trace variable *)
   type t =
-    | Register of Reg.path  (** The value of the register at the beginning of the trace *)
+    | Register of Reg.t  (** The value of the register at the beginning of the trace *)
     | Read of int  (** The result of that memory reading operation *)
 
   (** Convert the variable to the string encoding. For parsing infractructure reason,
       the encoding must always contain at least one [:]. *)
   let to_string = function
-    | Register r -> Printf.sprintf "reg:%s" (Reg.path_to_string r)
+    | Register r -> Printf.sprintf "reg:%s" (Reg.to_string r)
     | Read i -> Printf.sprintf "read:%d" i
 
   (** Inverse of {!to_string} *)
   let of_string s =
     match String.split_on_char ':' s with
-    | ["reg"; reg] -> Register (Reg.path_of_string reg)
+    | ["reg"; reg] -> Register (Reg.of_string reg)
     | ["read"; num] -> Read (int_of_string num)
     | _ -> Raise.inv_arg "%s is not a Trace.Var.t" s
 
@@ -44,7 +44,7 @@ end
 type exp = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
 
 type event =
-  | WriteReg of { reg : Reg.path; value : exp }
+  | WriteReg of { reg : Reg.t; value : exp }
   | ReadMem of { addr : exp; value : int; size : Ast.Size.t }
   | WriteMem of { addr : exp; value : exp; size : Ast.Size.t }
   | Assert of exp
@@ -70,7 +70,7 @@ let pp_event =
   let open PP in
   function
   | WriteReg { reg; value } ->
-      dprintf "Write |reg:%s| with " (Reg.path_to_string reg) ^^ nest 4 (pp_exp value)
+      dprintf "Write |reg:%s| with " (Reg.to_string reg) ^^ nest 4 (pp_exp value)
   | ReadMem { addr; value; size } ->
       dprintf "Read |read:%d| of %dbits from " value (Ast.Size.to_bits size)
       ^^ nest 4 (pp_exp addr)
@@ -148,19 +148,21 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
   | ReadReg (name, al, valu, l) ->
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
-      let path = Reg.path_of_string_list (name :: string_path) in
-      ( match Hashtbl.find_opt written_registers path with
+      let reg = Reg.of_path (name :: string_path) in
+      (* If the register was already written, we use that value, otherwise, we read a
+         symbolic variable *)
+      ( match Hashtbl.find_opt written_registers reg with
       | Some exp -> write_to_valu vc valu exp
-      | None -> write_to_valu vc valu (Var (Register path, l))
+      | None -> write_to_valu vc valu (Var (Register reg, l))
       );
       None
   | WriteReg (name, al, valu, l) ->
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
-      let path = Reg.path_of_string_list (name :: string_path) in
-      let new_exp = exp_of_valu l vc valu in
-      Hashtbl.add written_registers path new_exp;
-      Some (WriteReg { reg = path; value = new_exp })
+      let reg = Reg.of_path (name :: string_path) in
+      let value = exp_of_valu l vc valu in
+      Hashtbl.add written_registers reg value;
+      Some (WriteReg { reg; value })
   | ReadMem (result, kind, addr, size, l) ->
       let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
       let size = Ast.Size.of_bytes size in
@@ -224,8 +226,8 @@ let simplify events =
   in
   let declare_regs () =
     let serv = Z3.get_server () in
-    Reg.iter_path (fun path ty ->
-        Z3.send_smt serv ~ppv:Var.pp (DeclareConst (Register path, ty |> AstManip.ty_allow_mem)))
+    Reg.iter (fun _ reg ty ->
+        Z3.send_smt serv ~ppv:Var.pp (DeclareConst (Register reg, ty |> AstManip.ty_allow_mem)))
   in
   TraceSimpContext.openc ();
   declare_regs ();

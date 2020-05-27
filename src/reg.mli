@@ -1,230 +1,176 @@
 (** This module handle the register abstraction:
-    - map string to identifiers
-    - remember register characteristics (for now only machine types)
-    - remember structure of register (like PSTATE)
 
-    It also provide {!Reg.Map}, a map indexed by registers
+    A register is defined by a path (in {!Path}) i.e a string list.
+
+    TODO Support sail vectors (A path will be of type (string + int) list)
+
+    Those paths are indexed by integer through a global {!IdMap} named {!index}.
+    This map also fix the types of registers.
+
+    The module also provides {!Map} and {!PMap} a respectively full and partial maps
+    over registers.
 *)
-
-(** The type representing a register. *)
-type t = private int
-
-(** The type of a plain register. This is isomorphic to {!ty}. Use {!IslaConv.ty} to convert *)
-type ty = Ast.no Ast.ty
-
-(** The type of a register
-    (This is the machine type and has nothing to do with any C type inference)
-
-    TODO: Support Sail vectors.
-*)
-type typ = Plain of ty | Struct of reg_struct
-
-(** The type of register structure, i.s a map from field to sub-registers.
-    This type is mutable *)
-and reg_struct
-
-(** Build a new register structure *)
-val make_struct : unit -> reg_struct
-
-(** Assert that a type is plain and return the underlying type.
-    Throw [Failure] if the type is not plain *)
-val expect_plain : typ -> ty
-
-(** The global register index. Any top level register is a field of this structure *)
-val index : reg_struct
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Accessors } *)
-
-val field_to_string : reg_struct -> t -> string
-
-val to_string : t -> string
-
-val field_of_string : reg_struct -> string -> t
-
-val of_string : string -> t
-
-val mem : t -> bool
-
-val mem_string : string -> bool
-
-val num_field : reg_struct -> int
-
-val num_reg : unit -> int
-
-val field_type : reg_struct -> t -> typ
-
-val reg_type : t -> typ
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Weak equality }
-
-    Check that all the field match and have the same types.
-    (The integer indexing may be different).
-
-    The same type means the same properties recursively on sub structures.
-*)
-
-(** Check that all element of the first struct are in the second with the same types *)
-val struct_weak_inc : reg_struct -> reg_struct -> bool
-
-(** Same as {!struct_weak_inc} but at register type level.
-    If both types are plain, then they must be equal.*)
-val type_weak_inc : typ -> typ -> bool
-
-(** Check that all field in s and s' match and have same types (ids may differ) *)
-val struct_weak_eq : reg_struct -> reg_struct -> bool
-
-(** Same as {!struct_weak_eq} but at register type level *)
-val type_weak_eq : typ -> typ -> bool
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Adding elements } *)
-
-(** Add a filed to a structure. Return the field *)
-val add_field : reg_struct -> string -> typ -> t
-
-(** Add a filed to a structure. Do not return the field *)
-val adds_field : reg_struct -> string -> typ -> unit
-
-(** Add a new register by name and throws Bimap.Exists if it already exists.
-    Return the internal representation of the register*)
-val add : string -> typ -> t
-
-(** Same as add but do not return the register *)
-val adds : string -> typ -> unit
-
-(** {!struct_weak_inc} must hold. Add all register of the
-    second struct to the first one in a imperative update.
-    Ids might differ *)
-val struct_merge_add : reg_struct -> reg_struct -> unit
-
-(** {!type_weak_inc} must hold. Same as {!struct_merge_add} but at register type level *)
-val type_merge_add : typ -> typ -> unit
 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
 (** {1 Paths }
 
-    A path is an ordered list of fields. that represent a precise field in a sub structure.
-
-    A path of length one is just a plain register.
+    Representation of register path. The string reprensentation is with dots.
+    A name may not contain dots, but this is not checked.
 *)
 
-(** The type of a path *)
-type path = t list
+module Path : sig
+  type t = string list
 
-(** A fancy name for the empty list *)
-val empty_path : path
+  val to_string : t -> string
 
-(** Convert a path in a structure to dot separated string *)
-val partial_path_to_string : reg_struct -> path -> string
+  val of_string : string -> t
 
-(** Convert a path to a dot separated string. Basically {!partial_path_to_string}{!index} *)
-val path_to_string : path -> string
-
-(** Convert a path to a list of field names *)
-val path_to_string_list : path -> string list
-
-(** Parse a dot separated string in the context of a given structure *)
-val partial_path_of_string : reg_struct -> string -> path
-
-(** Parse a dot separated string in the top level context *)
-val path_of_string : string -> path
-
-(** Build a path from a list of field names *)
-val path_of_string_list : string list -> path
-
-(** Get the type of a field in struture *)
-val partial_path_type : reg_struct -> path -> typ
-
-(** Get the type of a register field with a absolute path *)
-val path_type : path -> typ
-
-(** Pretty print a path *)
-val pp_path : path -> PP.document
-
-(** Iterate a function through all the register by path *)
-val iter_path : (path -> ty -> unit) -> unit
-
-(** Add this new path with this type. Create all necessary intermediate structs *)
-val add_path : string list -> ty -> unit
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Register indexed map } *)
-
-(** This sub module defines a register map that associate a value to all
-    architectural registers. This is a mutable data structure.
-
-    If this map is created and then some register are added, the map will be incomplete.
-    You can deal with this problem by extending it with {!copy_extend} or by
-    doing partial accesses with {!get_opt} or {!get_or}.
-*)
-module Map : sig
-  (** The type of a map that bind one 'a to each register *)
-  type 'a t
-
-  (** Dummy value, UNSAFE : UB to use this value *)
-  val dummy : unit -> 'a t
-
-  (** Initialize by setting each value using the init function on the path *)
-  val init : (path -> 'a) -> 'a t
-
-  (** Get the value associated to a register *)
-  val get : 'a t -> path -> 'a
-
-  (** Set the value associated to a register *)
-  val set : 'a t -> path -> 'a -> unit
-
-  (** Get the value associated to a register or [None] if path is not bound in the map*)
-  val get_opt : 'a t -> path -> 'a option
-
-  (** Get the value associated to a register or [value] if path is not bound in the map*)
-  val get_or : value:'a -> 'a t -> path -> 'a
-
-  (** Map on the data structure, return a new instance *)
-  val map : ('a -> 'b) -> 'a t -> 'b t
-
-  (** Map on the data structure, mutating the given instance *)
-  val map_mut : ('a -> 'a) -> 'a t -> unit
-
-  (** Copy the data structure, return an new independent instance *)
-  val copy : 'a t -> 'a t
-
-  (** Run the function on each value stored in the map *)
-  val iter : ('a -> unit) -> 'a t -> unit
-
-  (** Run the function on each value stored in the map. Also give the path as a parameter *)
-  val iteri : (path -> 'a -> unit) -> 'a t -> unit
-
-  (** Do a copy of the map but add value for all register that have been added
-      since the creation of the previous register map. Values are initialized using init *)
-  val copy_extend : init:(path -> 'a) -> 'a t -> 'a t
-
-  (** Pretty print the map *)
-  val pp : ('a -> PP.document) -> 'a t -> PP.document
+  val pp : t -> PP.document
 end
 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Pretty printing } *)
+(** {1 Registers }
 
+    Global register properties and accessors
+*)
+
+(** The type representing a register. The module invariant is that this type always contains
+    a value bound in the global index *)
+type t = private int
+
+(** The type of a register. This is isomorphic to {!Isla.ty}. Use {!IslaConv.ty} to convert *)
+type ty = Ast.no Ast.ty
+
+val mem : t -> bool
+
+val mem_path : Path.t -> bool
+
+val mem_string : string -> bool
+
+val of_path : Path.t -> t
+
+val to_path : t -> Path.t
+
+val of_string : string -> t
+
+val to_string : t -> string
+
+(** Give the current number of registers *)
+val num : unit -> int
+
+val reg_type : t -> ty
+
+val path_type : Path.t -> ty
+
+(** Add a new register to the global {!index}. Return it's representation *)
+val add : Path.t -> ty -> t
+
+(** Ensure that a register with that path exists with that type,
+    by adding it or checking it already exists with that type.
+    Return the corresponding register *)
+val ensure_add : Path.t -> ty -> t
+
+(** Same as {!add} but returns unit *)
+val adds : Path.t -> ty -> unit
+
+(** Ensure that a register with that path exists with that type,
+    by adding it or checking it already exists with that type. *)
+val ensure_adds : Path.t -> ty -> unit
+
+(** Run a function over all registers *)
+val iter : (Path.t -> t -> ty -> unit) -> unit
+
+(** Pretty prints the register (Just use {!to_string}) *)
 val pp : t -> PP.document
 
 val pp_ty : ty -> PP.document
 
-val pp_field : reg_struct -> t -> PP.document
+(** Prints the register index *)
+val pp_index : unit -> PP.document
 
-val pp_rstruct : reg_struct -> PP.document
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Register maps } *)
 
-val pp_rtype : typ -> PP.document
+(** This is a port of {!HashVector} to use registers. Go to the documentation of {!HashVector}.*)
+module PMap : sig
+  type reg = t
+
+  type 'a t
+
+  val empty : unit -> 'a t
+
+  exception Exists
+
+  val add : 'a t -> reg -> 'a -> unit
+
+  val mem : 'a t -> reg -> bool
+
+  val set : 'a t -> reg -> 'a -> unit
+
+  val get_opt : 'a t -> reg -> 'a option
+
+  (** Throw [Invalid_argument] if the register is not bound *)
+  val get : 'a t -> reg -> 'a
+
+  val pp : ('a -> PP.document) -> 'a t -> PP.document
+end
+
+(** This is a port of {!FullVec} to use registers. Go to the documentation of {!FullVec}
+
+    However, because the domain of register is finite, some extra function are available
+    like {!iter} and {!iteri}.
+
+    If register are added with {!add}, they are automatically implicitely added to the {!Map}
+    and the generator must accept those new values. The generator will never be called
+    on invalid register values (i.e. when the generator is called on a register,
+    the former can get the latter's type and name)
+*)
+module Map : sig
+  type reg = t
+
+  type 'a t
+
+  (** Dummy value that will fail as soon as it is used *)
+  val dummy : unit -> 'a t
+
+  (** Initialize the map with a generator *)
+  val init : (reg -> 'a) -> 'a t
+
+  (** Clear the map and restart with this generator *)
+  val reinit : 'a t -> (reg -> 'a) -> unit
+
+  (** Make a copy of the map *)
+  val copy : 'a t -> 'a t
+
+  (** Set the value of a register *)
+  val set : 'a t -> reg -> 'a -> unit
+
+  (** Get the value of a register *)
+  val get : 'a t -> reg -> 'a
+
+  (** Map the function all the registers (including future, not yet added ones) *)
+  val map : ('a -> 'b) -> 'a t -> 'b t
+
+  (** Map the function on all the register by mutation (including future ones) *)
+  val map_mut : ('a -> 'a) -> 'a t -> unit
+
+  (** Map the function on all current register. Future registers are unchanged *)
+  val map_mut_current : ('a -> 'a) -> 'a t -> unit
+
+  val iter : ('a -> unit) -> 'a t -> unit
+
+  val iteri : (reg -> 'a -> unit) -> 'a t -> unit
+
+  (** Give all the registers bindings *)
+  val bindings : 'a t -> (reg * 'a) list
+
+  (** Contrary to {!FullVector.pp}, this one will print the binding of all registers,
+      and may call the generator to do that *)
+  val pp : ('a -> PP.document) -> 'a t -> PP.document
+end

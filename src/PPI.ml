@@ -16,8 +16,6 @@ let reg = Reg.pp
 
 let rmap conv map = Reg.Map.pp conv map
 
-let rstruct = Reg.pp_rstruct
-
 let sid = State.Id.pp
 
 let byteseq = BytesSeq.pp

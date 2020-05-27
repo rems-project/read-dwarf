@@ -28,6 +28,9 @@ let concat_map_rev f l =
    otherwise this will shadow the official concat_map in 4.10*)
 let concat_map f l = rev @@ concat_map_rev f l
 
+(** Monadic bind. It's just {!concat_map} *)
+let bind l f = concat_map f l
+
 (** Drop the specified number of item from the list.
     If n is greater than the size of the list, then return the empty list *)
 let rec drop n l =
@@ -40,7 +43,7 @@ let rec drop n l =
     Tail-recursive
 
 *)
-let rec take_rev n l =
+let take_rev n l =
   assert (n >= 0);
   let rec take_rev_acc acc n l =
     match (n, l) with
@@ -55,7 +58,44 @@ let rec take_rev n l =
 
     [l = take n l @ drop n l]
 *)
-let rec take n l = take_rev n l |> rev
+let take n l = take_rev n l |> rev
 
 (** [sub l pos len] return the sub-list of l starting at pos of length len *)
-let rec sub ~pos ~len l = take len (drop pos l)
+let sub ~pos ~len l = take len (drop pos l)
+
+(** Same as [combine] but if a list is shorter then the element of the longest
+    list are discarded *)
+let rec short_combine l1 l2 =
+  match (l1, l2) with (a1 :: t1, a2 :: t2) -> (a1, a2) :: short_combine t1 t2 | _ -> []
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 List monad } *)
+
+(** Applicative let binding. [let+ x = xl in e = let* x = xl in e] *)
+let ( let+ ) o f = map f o
+
+(** Not strict applicative merge ({!short_combine}) *)
+let ( and+ ) = short_combine
+
+(** Iterative let binding (The expression in the in must be unit). This replace
+    implicitly a unit member of the monad that is assumed to be uninteresting to a true unit.
+    In other words, It's an [iter]
+*)
+let ( let+! ) o f = iter f o
+
+(** Strict applicative merge ([combine]). Will throw if list have different length *)
+let ( and+! ) = combine
+
+(** Monadic let binding *)
+let ( let* ) o b = bind o b
+
+(** Do the Cartesian product of the two list *)
+let prod l1 l2 =
+  let* x1 = l1 in
+  let+ x2 = l2 in
+  (x1, x2)
+
+(** Monadic merge. [let* x = xl and* y = yl in ... = let* x= xl in let* y = yl in ...] *)
+let ( and* ) = prod

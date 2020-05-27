@@ -63,7 +63,7 @@ and tval = { ctyp : Ctype.t option; exp : exp }
 
 and exp = (Ast.lrng, var, Ast.no, Ast.no) Ast.exp
 
-and var = Register of t * Reg.path | ReadVar of t * int | Arg of int | RetArg | RetAddr
+and var = Register of t * Reg.t | ReadVar of t * int | Arg of int | RetArg | RetAddr
 
 and mem_block = { addr : exp; size : mem_size }
 
@@ -107,8 +107,8 @@ module Var = struct
   (** Convert the variable to the string encoding. For parsing infrastructure reason,
       the encoding must always contain at least one [:]. *)
   let to_string = function
-    | Register (state, path) ->
-        Printf.sprintf "reg:%s:%s" (state |> to_id |> Id.to_string) (Reg.path_to_string path)
+    | Register (state, reg) ->
+        Printf.sprintf "reg:%s:%s" (state |> to_id |> Id.to_string) (Reg.to_string reg)
     | ReadVar (state, num) -> Printf.sprintf "read:%s:%i" (state |> to_id |> Id.to_string) num
     | Arg num -> Printf.sprintf "arg:%i" num
     | RetArg -> "retarg:"
@@ -118,7 +118,7 @@ module Var = struct
     match String.split_on_char ':' s with
     | ["reg"; state; reg] ->
         let state : state = state |> Id.of_string |> of_id in
-        let reg = Reg.path_of_string reg in
+        let reg = Reg.of_string reg in
         Register (state, reg)
     | ["read"; state; num] ->
         let state : state = state |> Id.of_string |> of_id in
@@ -286,34 +286,9 @@ let copy ?elf state =
   WeakMap.add id2state id nstate;
   nstate
 
-(** Add all missing register that are not present as fresh new variables
-*)
-let extend_mut state =
-  assert (not @@ is_locked state);
-  state.regs <- Reg.Map.copy_extend ~init:(make_reg_cell state) state.regs
-
-(** Do a deep copy of all the mutable part of the state,
-    so it can be mutated without retro-action.
-    All new register that are not present are added with fresh new variables
-    as if created by {!make}
- *)
-let copy_extend ?elf state =
-  let id = !next_id in
-  let nstate =
-    {
-      id;
-      regs = Reg.Map.dummy ();
-      read_vars = Vec.empty ();
-      asserts = state.asserts;
-      mem = Mem.copy state.mem;
-      elf = Opt.(elf ||| state.elf);
-      fenv = Fragment.Env.copy state.fenv;
-    }
-  in
-  nstate.regs <- Reg.Map.copy_extend ~init:(make_reg_cell state) state.regs;
-  next_id := id + 1;
-  WeakMap.add id2state id nstate;
-  nstate
+(** Copy the state with {!copy} iff it is locked.
+    The returned state is always unlocked *)
+let copy_if_locked ?elf state = if is_locked state then copy ?elf state else state
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -354,7 +329,7 @@ let iter_var (f : var -> unit) s = iter_exp (AstManip.exp_iter_var f) s
 (** Return the type of a state variable *)
 let var_type var =
   match var with
-  | Register (state, p) -> p |> Reg.path_type |> Reg.expect_plain
+  | Register (state, r) -> Reg.reg_type r
   | ReadVar (state, i) -> Vec.get state.read_vars i |> fst
   | Arg _ -> Ast.Ty_BitVec 64
   | RetArg -> Ast.Ty_BitVec 64
@@ -411,29 +386,29 @@ let write (s : t) (mb : Mem.block) (value : exp) : unit =
 (*****************************************************************************)
 (** {1 State register accessors } *)
 
-(** Reset the register in given path to a symbolic value,
+(** Reset the register to a symbolic value,
     and resets the type to the provided type (or no type if not provided)*)
-let reset_reg (s : t) ?(ctyp : Ctype.t option) (path : Reg.path) : unit =
+let reset_reg (s : t) ?(ctyp : Ctype.t option) (reg : Reg.t) : unit =
   assert (not @@ is_locked s);
-  Reg.Map.set s.regs path @@ make_reg_cell s ?ctyp path
+  Reg.Map.set s.regs reg @@ make_reg_cell s ?ctyp reg
 
 (** Sets the content of register *)
-let set_reg (s : t) (path : Reg.path) (tval : tval) : unit =
+let set_reg (s : t) (reg : Reg.t) (tval : tval) : unit =
   assert (not @@ is_locked s);
-  Reg.Map.set s.regs path @@ tval
+  Reg.Map.set s.regs reg @@ tval
 
 (** Sets the type of the register, leaves the value unchanged *)
-let set_reg_type (s : t) (path : Reg.path) (ctyp : Ctype.t) : unit =
+let set_reg_type (s : t) (reg : Reg.t) (ctyp : Ctype.t) : unit =
   assert (not @@ is_locked s);
-  let { exp; _ } = Reg.Map.get s.regs path in
+  let { exp; _ } = Reg.Map.get s.regs reg in
   let ntval = { exp; ctyp = Some ctyp } in
-  Reg.Map.set s.regs path ntval
+  Reg.Map.set s.regs reg ntval
 
 (** Get the content of the register *)
-let get_reg (s : t) (path : Reg.path) : tval = Reg.Map.get s.regs path
+let get_reg (s : t) (reg : Reg.t) : tval = Reg.Map.get s.regs reg
 
-let update_reg_exp (s : t) (path : Reg.path) (f : exp -> exp) =
-  Reg.Map.get s.regs path |> tval_map_exp f |> Reg.Map.set s.regs path
+let update_reg_exp (s : t) (reg : Reg.t) (f : exp -> exp) =
+  Reg.Map.get s.regs reg |> tval_map_exp f |> Reg.Map.set s.regs reg
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -441,13 +416,13 @@ let update_reg_exp (s : t) (path : Reg.path) (f : exp -> exp) =
 (** {1 Pc manipulation } *)
 
 (** Set the PC to a concrete value and keep it's type appropriate *)
-let set_pc ~(pc : Reg.path) (s : t) (pcval : int) =
+let set_pc ~(pc : Reg.t) (s : t) (pcval : int) =
   let exp = Ast.Op.bits_int ~size:64 pcval in
   let ctyp = Ctype.of_frag Ctype.Global ~offset:pcval ~constexpr:true in
   set_reg s pc @@ make_tval ~ctyp exp
 
 (** Bump a concrete PC by a concrete bump (generally the size of a non-branching instruction *)
-let bump_pc ~(pc : Reg.path) (s : t) (bump : int) =
+let bump_pc ~(pc : Reg.t) (s : t) (bump : int) =
   let pc_exp = get_reg s pc |> get_exp in
   assert (ConcreteEval.is_concrete pc_exp);
   let old_pc = ConcreteEval.eval pc_exp |> Value.expect_bv |> BitVec.to_int in
@@ -455,7 +430,7 @@ let bump_pc ~(pc : Reg.path) (s : t) (bump : int) =
   set_pc ~pc s new_pc
 
 (** Try to evaluate the PC if it is concrete *)
-let concretize_pc ~(pc : Reg.path) (s : t) =
+let concretize_pc ~(pc : Reg.t) (s : t) =
   let pc_exp = get_reg s pc |> get_exp in
   try ConcreteEval.eval pc_exp |> Value.expect_bv |> BitVec.to_int |> set_pc ~pc s
   with ConcreteEval.Symbolic -> ()

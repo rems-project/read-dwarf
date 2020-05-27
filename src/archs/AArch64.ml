@@ -37,35 +37,29 @@ let get_data () =
 
 (** Generates the register map *)
 let gen_reg_map () =
-  let res = Array.make 32 Reg.empty_path in
-  for i = 0 to 30 do
-    res.(i) <- [Reg.add (Printf.sprintf "R%d" i) (Reg.Plain (Ast.Ty_BitVec 64))]
-  done;
-  (* TODO find a way of make the EL2 part of the config *)
-  res.(31) <- [Reg.add "SP_EL2" (Reg.Plain (Ast.Ty_BitVec 64))];
+  let res = Array.init 32 (fun i -> Reg.ensure_add [Printf.sprintf "R%d" i] (Ast.Ty_BitVec 64)) in
+  res.(31) <- Reg.ensure_add ["SP_EL2"] (Ast.Ty_BitVec 64);
   res
 
 (** Generates the Register map of local registers *)
 let gen_local (dwarfregs : dwarf_reg_map) : bool Reg.Map.t =
   (* The PC is local in a certain sense, I don't want to match it in any way *)
-  let pc = Reg.add "_PC" (Reg.Plain (Ast.Ty_BitVec 64)) in
+  let pc = Reg.ensure_add ["_PC"] (Ast.Ty_BitVec 64) in
   (* According to section 5.1, if we exclude any FP registers,
      the only local register seem to be R0-R30, SP and
      flags N,Z,C,V of PSTATE *)
-  let pstate = Reg.make_struct () in
-  let n = Reg.add_field pstate "N" (Reg.Plain (Ast.Ty_BitVec 1)) in
-  let z = Reg.add_field pstate "Z" (Reg.Plain (Ast.Ty_BitVec 1)) in
-  let c = Reg.add_field pstate "C" (Reg.Plain (Ast.Ty_BitVec 1)) in
-  let v = Reg.add_field pstate "V" (Reg.Plain (Ast.Ty_BitVec 1)) in
-  let pstate = Reg.add "PSTATE" (Reg.Struct pstate) in
-  let res = Reg.Map.init (fun _ -> false) in
-  Array.iter (fun path -> Reg.Map.set res path true) dwarfregs;
-  Reg.Map.set res [pc] true;
-  Reg.Map.set res [pstate; n] true;
-  Reg.Map.set res [pstate; z] true;
-  Reg.Map.set res [pstate; c] true;
-  Reg.Map.set res [pstate; v] true;
-  res
+  let n = Reg.ensure_add ["PSTATE"; "N"] (Ast.Ty_BitVec 1) in
+  let z = Reg.ensure_add ["PSTATE"; "Z"] (Ast.Ty_BitVec 1) in
+  let c = Reg.ensure_add ["PSTATE"; "C"] (Ast.Ty_BitVec 1) in
+  let v = Reg.ensure_add ["PSTATE"; "V"] (Ast.Ty_BitVec 1) in
+  let local = Reg.Map.init (fun _ -> false) in
+  Array.iter (fun reg -> Reg.Map.set local reg true) dwarfregs;
+  Reg.Map.set local pc true;
+  Reg.Map.set local n true;
+  Reg.Map.set local z true;
+  Reg.Map.set local c true;
+  Reg.Map.set local v true;
+  local
 
 (** Generate the nop instruction *)
 let gen_nop () =
@@ -96,11 +90,11 @@ let actual_init () =
 
 (** The internal ABI representation *)
 type abi_repr = {
-  reg_num : int;
-  reg_types : Ctype.t array;
-  stack_length : int;
-  stack_fragment : Fragment.t;
-  ret_pointer : Ctype.t option;
+  reg_num : int;  (** The number of register used as regular arguments *)
+  reg_types : Ctype.t array;  (** The types of those register (length reg_type = reg_num *)
+  stack_length : int;  (** The number of stack bytes used to store arguments *)
+  stack_fragment : Fragment.t;  (** The fragment with their types *)
+  ret_pointer : Ctype.t option;  (** The optional return pointer type *)
 }
 
 (** TODO move that elsewhere *)
@@ -227,9 +221,9 @@ let address_size = 52
 
 let dwarf_reg_map () = (get_data ()).reg_map
 
-let is_local (reg : Reg.path) =
+let is_local (reg : Reg.t) =
   let data = get_data () in
-  Reg.Map.get_or ~value:false data.local_regs reg
+  Reg.Map.get data.local_regs reg
 
 let nop () = (get_data ()).nop
 
@@ -243,13 +237,14 @@ let get_abi api =
   let r30 = data.reg_map.(30) in
   let ret_pointer_reg = data.reg_map.(8) in
   let init (state : State.t) =
-    let state = State.copy_extend state in
+    let state = State.copy_if_locked state in
     debug "Map:\n%t" (PP.topi (Reg.Map.pp PP.bool) data.local_regs);
-
     Reg.Map.iteri
-      (fun path b ->
-        if b then debug "path to be reset %t" (PP.topi Reg.pp_path path);
-        State.reset_reg state path)
+      (fun reg b ->
+        if b then begin
+          debug "register to be reset %t" (PP.top Reg.pp reg);
+          State.reset_reg state reg
+        end)
       data.local_regs;
     for i = 0 to repr.reg_num - 1 do
       let tval = State.make_tval ~ctyp:repr.reg_types.(i) (State.Var.to_exp @@ Arg i) in

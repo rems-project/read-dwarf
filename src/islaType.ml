@@ -91,22 +91,25 @@ let type_manyop l (m : manyop) ltl : ty =
       let sizes = List.map (expect_bv PP.(sprintc $ !^"inside " ^^ pp_manyop m)) ltl in
       Ty_BitVec (List.fold_left ( + ) 0 sizes)
 
-let rec type_valu loc (cont : type_context) : valu -> Reg.typ = function
+let rec type_valu loc (cont : type_context) : valu -> (Reg.Path.t * Reg.ty) list =
+  let plain ty = [([], IslaConv.ty ty)] in
+  function
   | Val_Symbolic var -> (
-      try Plain (IslaConv.ty @@ HashVector.get cont var)
+      try plain @@ HashVector.get cont var
       with Invalid_argument _ ->
         raise (TypeError (loc, Printf.sprintf "Variable v%d is used but never defined" var))
     )
-  | Val_Bool _ -> Plain Ty_Bool
-  | Val_I (_, size) -> Plain (Ty_BitVec size)
+  | Val_Bool _ -> plain Ty_Bool
+  | Val_I (_, size) -> plain (Ty_BitVec size)
   | Val_Bits str ->
-      Plain
+      plain
         (Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2))
   | Val_Struct l ->
-      let rs = Reg.make_struct () in
-      List.iter (fun (name, v) -> ignore @@ Reg.add_field rs name (type_valu loc cont v)) l;
-      Struct rs
-  | Val_Enum (n, _) -> Plain (Ty_Enum n)
+      let open List in
+      let* (name, value) = l in
+      let+ (path, ty) = type_valu loc cont value in
+      (name :: path, ty)
+  | Val_Enum (n, _) -> plain (Ty_Enum n)
   | Val_List _ -> fatal "valu list not implemented"
   | Val_Vector _ -> fatal "valu list not implemented"
   | Val_Unit -> fatal "valu unit not implemented"
@@ -139,14 +142,9 @@ let type_trc ?(tc = HashVector.empty ()) (isla_trace : rtrc) =
     | Smt (DefineConst (var, exp), _) -> HashVector.add tc var @@ type_expr tc exp
     | Smt (Assert exp, l) -> tassert l "Assertion type must be Bool" (type_expr tc exp = Ty_Bool)
     | ReadReg (name, _, v, l) | WriteReg (name, _, v, l) ->
-        let tv = type_valu l tc v in
-        if Reg.mem_string name then begin
-          let reg = Reg.of_string name in
-          let t0 = Reg.reg_type reg in
-          tassert l "Register structure cannot change" @@ Reg.type_weak_inc t0 tv;
-          if Reg.type_weak_inc tv t0 then () else Reg.type_merge_add t0 tv
-        end
-        else Reg.adds name tv
+        let open List in
+        let+! (path, ty) = type_valu l tc v in
+        Reg.ensure_adds (name :: path) ty
     | _ -> ()
   in
   List.iter process events;

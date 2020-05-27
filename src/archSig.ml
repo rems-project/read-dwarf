@@ -22,7 +22,7 @@ type func_abi = {
 }
 
 (** The map of dwarf register: Which register number map to which ISA register *)
-type dwarf_reg_map = Reg.path array
+type dwarf_reg_map = Reg.t array
 
 module type S = sig
   (** Tells if this Arch module supports this architecture *)
@@ -49,7 +49,7 @@ module type S = sig
   val dwarf_reg_map : unit -> dwarf_reg_map
 
   (** Tell if a register is local for the ABI *)
-  val is_local : Reg.path -> bool
+  val is_local : Reg.t -> bool
 
   (** Give the opcode of the nop instruction (For Sail/Isla initialisation *)
   val nop : unit -> BytesSeq.t

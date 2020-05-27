@@ -109,7 +109,7 @@ let get_traces instr isla_run dump_types : traces =
   Init.init ();
   let rtraces = IslaCache.get_traces instr in
   List.iter (fun t -> IslaType.type_trc t |> ignore) rtraces;
-  if dump_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
+  if dump_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
   if isla_run then IslaTraces rtraces else Traces (List.map Trace.of_isla rtraces)
 
 let pre_traces_term = Term.(const get_traces $ instr_term $ isla_run $ reg_types)

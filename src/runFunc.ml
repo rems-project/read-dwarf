@@ -50,13 +50,9 @@ let run_func elfname name dump no_run entry len breakpoints =
           in
           let block = Block.make ~sym ~start:0 ~endpred in
           if dump then base "Instructions:\n%t\n" (PP.topi Block.pp block);
-          if not no_run then begin
-            State.unsafe_unlock start;
-            State.extend_mut start;
-            State.lock start;
+          if not no_run then
             let tree = Block.run ~dwarf block start in
             base "Run tree:\n%t" (PP.top (StateTree.pp_all PP.shex) tree)
-          end
   end;
   IslaCache.stop ()
 

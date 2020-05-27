@@ -29,5 +29,8 @@ val get : 'a t -> int -> 'a
 (** Create an empty hashVector.t *)
 val empty : unit -> 'a t
 
+(** Returns a list of bindings in the hash vector *)
+val bindings : 'a t -> (int * 'a) list
+
 (** Pretty print a hashVector *)
 val pp : ('a -> PP.document) -> 'a t -> PP.document

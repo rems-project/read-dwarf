@@ -23,15 +23,7 @@ let get hv k = match get_opt hv k with None -> raise Not_found | Some v -> v
 
 let empty () : 'a t = Vec.empty ()
 
-let pp conv hv =
-  PP.(
-    surround 2 0 !^"hv{"
-      (hv
-      |> Vec.mapi (fun i x -> (i, x))
-      |> Vec.fold_left
-           (fun l (i, x) ->
-             match x with None -> l | Some a -> prefix 2 1 (int i ^^ !^" ->") (conv a) :: l)
-           []
-      |> separate (semi ^^ space)
-      )
-      !^"}")
+let bindings hv =
+  Vec.foldi_right (fun i v l -> match v with Some vv -> (i, vv) :: l | None -> l) hv []
+
+let pp conv hv = hv |> bindings |> List.map (Pair.map PP.int conv) |> PP.mapping "hv"

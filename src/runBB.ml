@@ -73,7 +73,7 @@ let get_bb dump reg_types simp_trace code : BB.t =
   IslaCache.start @@ Arch.get_isla_config ();
   Init.init ();
   let bb = BB.from_binary code in
-  if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
+  if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
   if simp_trace then begin
     Z3.ensure_started ();
     BB.simplify_mut bb

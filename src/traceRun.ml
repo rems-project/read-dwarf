@@ -85,7 +85,7 @@ let trace ?dwarf (start : State.t) (events : Trace.t) : State.t =
     TODO reorganize the PC handling better.
 *)
 let trace_pc_mut ?dwarf ~(next : int) (state : State.t) (events : Trace.t) : unit =
-  let pc = [Arch.pc ()] in
+  let pc = Arch.pc () in
   let rec is_touching_pc : Trace.t -> bool = function
     | [] -> false
     | WriteReg { reg; _ } :: _ when reg = pc -> true

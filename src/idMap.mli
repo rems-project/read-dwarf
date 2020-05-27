@@ -31,6 +31,7 @@ exception Exists
 (** Create a new idmap from scratch *)
 val make : unit -> ('a, 'b) t
 
+(** Add a binding, and throw {!Exists} if the binding already exists *)
 val add : ('a, 'b) t -> 'a -> 'b -> int
 
 (** Silent version of {!add} that ignore the result *)

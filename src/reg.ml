@@ -1,329 +1,117 @@
 (* The documentation is in the mli file *)
 
+open Fun
+
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
+(*****************************************************************************)
+(*        Paths                                                              *)
+(*****************************************************************************)
+
+module Path = struct
+  type t = string list
+
+  let to_string = String.concat "."
+
+  let of_string = String.split_on_char '.'
+
+  let pp = to_string %> PP.string
+end
+
+(*****************************************************************************)
+(*        Registers                                                          *)
+(*****************************************************************************)
+
 type t = int
 
 type ty = Ast.no Ast.ty
 
-type typ = Plain of ty | Struct of reg_struct
+let pp_ty ty = ty |> AstManip.ty_allow_mem |> Ast.pp_ty
 
-and reg_struct = (string, typ) IdMap.t
+let index : (Path.t, ty) IdMap.t = IdMap.make ()
 
-let make_struct () = IdMap.make ()
-
-let expect_plain : typ -> ty = function
-  | Plain t -> t
-  | Struct _ -> failwith "assert_plain failed"
-
-let index = make_struct ()
-
-(*****************************************************************************)
-(*        Accessors                                                          *)
-(*****************************************************************************)
-
-let field_to_string = IdMap.of_ident
-
-let to_string = IdMap.of_ident index
-
-let field_of_string = IdMap.to_ident
-
-let of_string = IdMap.to_ident index
+let pp_index () = IdMap.pp ~keys:Path.pp ~vals:pp_ty index
 
 let mem = IdMap.mem_id index
 
-let mem_string = IdMap.mem index
+let mem_path = IdMap.mem index
 
-let num_field = IdMap.length
+let mem_string = Path.of_string %> mem_path
 
-let num_reg () = num_field index
+let of_path = IdMap.to_ident index
 
-let field_type = IdMap.geti
+let to_path = IdMap.of_ident index
 
-let reg_type = field_type index
+let of_string = Path.of_string %> of_path
 
-(*****************************************************************************)
-(*        Equality                                                           *)
-(*****************************************************************************)
+let to_string = to_path %> Path.to_string
 
-(** Just an internal exception for control-flow purposes *)
-exception Nope
+let num () = IdMap.length index
 
-let rec struct_weak_inc_Nope s s' =
-  let field name _ typ =
-    let typ' = Opt.value_fun ~default:(fun _ -> raise Nope) @@ IdMap.getk_opt s' name in
-    type_weak_inc_Nope typ typ'
-  in
-  IdMap.iter field s
+let reg_type = IdMap.geti index
 
-and type_weak_inc_Nope t t' =
-  match (t, t') with
-  | (Plain i, Plain j) when i = j -> ()
-  | (Struct rs, Struct rs') -> struct_weak_inc_Nope rs rs'
-  | _ -> raise Nope
+let path_type = IdMap.getk index
 
-let struct_weak_inc s s' =
-  try
-    struct_weak_inc_Nope s s';
-    true
-  with Nope -> false
+let add = IdMap.add index
 
-let type_weak_inc t t' =
-  try
-    type_weak_inc_Nope t t';
-    true
-  with Nope -> false
+let ensure_add path ty =
+  match IdMap.to_ident_opt index path with
+  | Some reg ->
+      let ty' = IdMap.unsafe_geti index reg in
+      if ty <> ty' then
+        Raise.fail
+          "Reg.ensure_adds: Trying to add %s with type %t but it is already in with type %t"
+          (Path.to_string path)
+          PP.(tos pp_ty ty)
+          PP.(tos pp_ty ty')
+      else reg
+  | None -> add path ty
 
-let struct_weak_eq s s' = struct_weak_inc s s' && struct_weak_inc s' s
+let adds = IdMap.adds index
 
-let type_weak_eq t t' = type_weak_inc t t' && type_weak_inc t' t
+let ensure_adds path ty = ensure_add path ty |> ignore
 
-(*****************************************************************************)
-(*        Adding                                                             *)
-(*****************************************************************************)
-
-let add_field = IdMap.add
-
-let adds_field = IdMap.adds
-
-let add name typ = add_field index name typ
-
-let adds name typ = adds_field index name typ
-
-let rec struct_merge_add rs rs' =
-  assert (struct_weak_inc rs rs');
-  IdMap.iter
-    (fun name _ typ ->
-      match IdMap.getk_opt rs name with
-      | Some typ0 -> type_merge_add typ0 typ
-      | None -> IdMap.adds rs name typ)
-    rs'
-
-and type_merge_add t t' =
-  assert (type_weak_inc t t');
-  if type_weak_eq t t' then ()
-  else
-    match (t, t') with
-    | (Struct rs, Struct rs') -> struct_merge_add rs rs'
-    | _ -> failwith "broken invariant"
-
-(*****************************************************************************)
-(*        Path manipulation                                                  *)
-(*****************************************************************************)
-
-(* TODO Put path in Reg.Path *)
-
-type path = t list
-
-let empty_path = []
-
-let rec partial_path_to_string_list rs = function
-  | [] -> []
-  | f :: l -> (
-      let fname = field_to_string rs f in
-      match field_type rs f with
-      | Plain _ -> [fname]
-      | Struct rs' -> fname :: partial_path_to_string_list rs' l
-    )
-
-let partial_path_to_string rs path = String.concat "." @@ partial_path_to_string_list rs path
-
-let path_to_string_list = partial_path_to_string_list index
-
-let path_to_string = partial_path_to_string index
-
-let rec partial_path_of_string_list rs = function
-  | [] -> []
-  | f :: l -> (
-      let fid = field_of_string rs f in
-      match field_type rs fid with
-      | Plain _ -> [fid]
-      | Struct rs' -> fid :: partial_path_of_string_list rs' l
-    )
-
-let partial_path_of_string rs s = partial_path_of_string_list rs @@ String.split_on_char '.' s
-
-let path_of_string = partial_path_of_string index
-
-let path_of_string_list = partial_path_of_string_list index
-
-let rec partial_path_type rs = function
-  | [] -> failwith "partial_path_type: empty list"
-  | [f] -> field_type rs f
-  | f :: l -> (
-      match field_type rs f with
-      | Plain _ -> failwith "partial_path_type: invalid path"
-      | Struct rs' -> partial_path_type rs' l
-    )
-
-let path_type = partial_path_type index
-
-let pp_path path = path |> path_to_string |> PP.string
-
-let iter_path (f : path -> ty -> unit) =
-  let rec iter_path_typ f root = function
-    | Plain ty -> f root ty
-    | Struct rs -> iter_path_rstruct f root rs
-  and iter_path_rstruct f root rs =
-    IdMap.iter (fun name id typ -> iter_path_typ f (root @ [id]) typ) rs
-  in
-  iter_path_rstruct f [] index
-
-let rec add_partial_path rs sl ty : unit =
-  match sl with
-  | [] -> Raise.fail "add_partial_path: path is existing struct"
-  | a :: l -> (
-      match IdMap.getk_opt rs a with
-      | Some (Plain ty') ->
-          if not (l = []) then Raise.fail "Reached plain type before end of path";
-          if not (ty' = ty) then
-            Raise.fail "add_partial_path: register exists with different type"
-      | Some (Struct rs) -> add_partial_path rs l ty
-      | None ->
-          let rec make_struct_deep sl ty : typ =
-            match sl with
-            | [] -> Plain ty
-            | a :: l ->
-                let nrs = make_struct_deep l ty in
-                let res = IdMap.make () in
-                IdMap.adds res a nrs;
-                Struct res
-          in
-          IdMap.adds rs a (make_struct_deep l ty)
-    )
-
-let add_path = add_partial_path index
-
-(*****************************************************************************)
-(*        Register indexed mapping                                           *)
-(*****************************************************************************)
-
-(* Doc for Reg.Map in the mli file *)
-module Map = struct
-  type 'a cell = MPlain of 'a | MStruct of 'a t
-
-  and 'a t = 'a cell array
-
-  let is_plain = function MPlain _ -> true | _ -> false
-
-  let dummy () = Array.make 0 (Obj.magic ())
-
-  let init f =
-    let rec initc root f = function
-      | Plain _ -> MPlain (f root)
-      | Struct rs -> MStruct (initm root f rs)
-    and initm root f rs =
-      Array.init (num_field rs) (fun i -> initc (root @ [i]) f (field_type rs i))
-    in
-    initm [] f index
-
-  let rec get_mut_cell map (path : path) =
-    let gcellc cell path =
-      match cell with
-      | MPlain _ -> failwith "get_cell error, path too long"
-      | MStruct map -> get_mut_cell map path
-    in
-    match path with
-    | [a] -> ArrayCell.make map a
-    | a :: l -> gcellc map.(a) l
-    | [] -> failwith "get_cell error, path too short"
-
-  let get_cell map path = get_mut_cell map path |> ArrayCell.get
-
-  let get map path =
-    match get_cell map path with
-    | MPlain a -> a
-    | MStruct _ -> failwith "Reg.Map.get : path too short"
-
-  let set map path a =
-    let cell = get_mut_cell map path in
-    assert (is_plain @@ ArrayCell.get cell);
-    ArrayCell.set cell (MPlain a)
-
-  (* TODO try not to use exceptions in normal control flow paths *)
-  let get_opt map path = try Some (get map path) with Failure _ -> None
-
-  let get_or ~value map path = match get_opt map path with Some a -> a | None -> value
-
-  let rec map f m =
-    let mapcell = function MPlain a -> MPlain (f a) | MStruct m -> MStruct (map f m) in
-    Array.map mapcell m
-
-  (* TODO move that into a proper array extension *)
-  let array_map_mut f a =
-    let len = Array.length a in
-    for i = 0 to len - 1 do
-      Array.unsafe_get a i |> f |> Array.unsafe_set a i
-    done
-
-  let rec map_mut f m =
-    let map_mut_cell = function
-      | MPlain a -> MPlain (f a)
-      | MStruct m as ms ->
-          map_mut f m;
-          ms
-    in
-    array_map_mut map_mut_cell m
-
-  let copy m = map Fun.id m
-
-  let rec iter f m =
-    let mapcell = function MPlain a -> f a | MStruct m -> iter f m in
-    Array.iter mapcell m
-
-  let iteri f m =
-    let rec iteri_aux f path m =
-      let mapcell i = function
-        | MPlain a -> f (path @ [i]) a
-        | MStruct m -> iteri_aux f (path @ [i]) m
-      in
-      Array.iteri mapcell m
-    in
-    iteri_aux f [] m
-
-  let copy_extend ~init m =
-    let rec cecell (ty : typ) ?prev (root : path) =
-      match (ty, prev) with
-      | (Plain _, Some (MPlain v)) -> MPlain v
-      | (Plain _, None) -> MPlain (init root)
-      | (Struct rs, Some (MStruct prev)) -> MStruct (cestruct rs ~prev root)
-      | (Struct rs, None) -> MStruct (cestruct rs root)
-      | _ -> failwith "copy_extend: corrupted Reg.Map"
-    and cestruct rs ?prev (root : path) =
-      let new_init prev index = cecell (field_type rs index) ?prev (root @ [index]) in
-      let init : int -> 'a =
-        match prev with
-        | None -> new_init None
-        | Some arr ->
-            let old_len = Array.length arr in
-            fun i -> if i < old_len then new_init (Some arr.(i)) i else new_init None i
-      in
-      Array.init (num_field rs) init
-    in
-    cestruct index ~prev:m []
-
-  let rec pp_struct rs conv rm : PP.document =
-    rm
-    |> Array.mapi (fun i c -> (field_to_string rs i, pp_plain (field_type rs i) conv c))
-    |> Array.to_list |> PP.OCaml.record ""
-
-  and pp_plain rt conv cell =
-    match (rt, cell) with
-    | (Plain _, MPlain a) -> conv a
-    | (Struct rs, MStruct s) -> pp_struct rs conv s
-    | _ -> failwith "Reg.Map corruption"
-
-  let pp conv cell = pp_struct index conv cell
-end
-
-(*****************************************************************************)
-(*        Pretty Printing                                                    *)
-(*****************************************************************************)
+let iter f = IdMap.iter f index
 
 let pp reg = reg |> to_string |> PP.string
 
-let pp_ty ty = ty |> AstManip.ty_allow_mem |> Ast.pp_ty
+(*****************************************************************************)
+(*        Register maps                                                      *)
+(*****************************************************************************)
 
-let pp_field rs reg = reg |> field_to_string rs |> PP.string
+module PMap = struct
+  type reg = t
 
-let rec pp_rstruct rs = IdMap.pp ~name:"struct" ~keys:PP.string ~vals:pp_rtype rs
+  let pp_reg = pp
 
-and pp_rtype = function Plain i -> pp_ty i | Struct s -> pp_rstruct s
+  include HashVector
+
+  let pp conv pm =
+    pm |> HashVector.bindings |> List.map (Pair.map pp_reg conv) |> PP.mapping "regpmap"
+end
+
+module Map = struct
+  type reg = t
+
+  let pp_reg = pp
+
+  include FullVec
+
+  let dummy () = make (fun _ -> failwith "Reg.Map.dummy used")
+
+  let init = make
+
+  let reinit map gen = set_after map 0 gen
+
+  let map_mut_current f map = map_mut_until ~limit:(num ()) f map
+
+  let iter f map = iter_until ~limit:(num ()) f map
+
+  let iteri f map = iteri_until ~limit:(num ()) f map
+
+  let bindings map = get_vec_until map (num ()) |> Vec.to_listi
+
+  let pp conv map = map |> bindings |> List.map (Pair.map pp_reg conv) |> PP.mapping "regmap"
+end

@@ -93,7 +93,7 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop
 let elfblock_term = Term.(const gen_block $ elf_term $ len $ stop_sym $ breakpoints)
 
 let run_block (elf, block) no_run dump reg_types =
-  if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_rstruct Reg.index);
+  if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
   if dump then base "Block:\n%t\n" (PP.topi Block.pp block);
   if not no_run then begin
     Init.init ();

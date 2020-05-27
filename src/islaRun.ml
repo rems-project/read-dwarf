@@ -91,17 +91,16 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
       debug "Reading Reg %s at %t from %t" name PP.(top pp_accessor_list al) PP.(top pp_valu valu);
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
-      let path = Reg.path_of_string_list (name :: string_path) in
-      let e : State.exp = (Reg.Map.get state.regs path).exp in
+      let reg = Reg.of_path (name :: string_path) in
+      let e : State.exp = (Reg.Map.get state.regs reg).exp in
       write_to_valu l vc valu e
   | WriteReg (name, al, valu, l) ->
       debug "Writing Reg %s at %t from %t" name PP.(top pp_accessor_list al) PP.(top pp_valu valu);
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
-      let path = Reg.path_of_string_list (name :: string_path) in
-      (* The new expression to put in the register *)
-      let new_exp : State.exp = exp_of_valu l vc valu in
-      Reg.Map.set state.regs path { ctyp = None; exp = new_exp }
+      let reg = Reg.of_path (name :: string_path) in
+      let exp : State.exp = exp_of_valu l vc valu in
+      Reg.Map.set state.regs reg (State.make_tval exp)
   | ReadMem (result, kind, addr, size, l) ->
       debug "Reading Mem";
       (* TODO stop ignoring kind *)
