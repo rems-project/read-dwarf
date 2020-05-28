@@ -45,10 +45,6 @@ let len =
   let doc = "Stop condition: Stop as soon as the pc out of range [start, start + len) " in
   Arg.(value & opt (some int) None & info ["len"] ~docv:"BYTES" ~doc)
 
-let stop_sym =
-  let doc = "Stop condition: Stop as soon as the pc is symbolic" in
-  Arg.(value & flag & info ["s"; "stop-sym"] ~docv:"BYTES" ~doc)
-
 let breakpoints =
   let doc =
     "Stop condition: Stop as soon as the pc reach the position (symbol + offset or raw)"
@@ -71,7 +67,7 @@ let get_elf_start elfname startname =
 
 let elf_term = Term.(func_options comopts get_elf_start $ elf $ start)
 
-let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop_sym breakpoints =
+let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len breakpoints =
   let brks =
     List.map (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset) breakpoints
   in
@@ -90,7 +86,7 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop
   let runner = Runner.of_elf elf in
   (elf, Block.make ~runner ~start ~endpred)
 
-let elfblock_term = Term.(const gen_block $ elf_term $ len $ stop_sym $ breakpoints)
+let elfblock_term = Term.(const gen_block $ elf_term $ len $ breakpoints)
 
 let run_block (elf, block) no_run reg_types =
   if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
