@@ -45,9 +45,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Do a proper fetch and execute with global ELF and DWARF and multiple cached functions
- - Use that to allow "out of function" branches.
- - Add a new block end condition about running over a PC multiple times.
  - Add a concept of state diffs.
  - Add a new printer that print read-dwarf like output but with state diffs in
    between each instruction.
@@ -113,3 +110,7 @@
  - Update the run-func command to use run-block and not run-bb as backend
  - Handle rodata reads: They stay in the trace for now
  - Handle typing global variable for C type inference.
+ - Do a proper fetch and execute with global ELF and DWARF and multiple cached functions
+ - Use that to allow "out of function" branches.
+ - Add a new block end condition about running over a PC multiple times.
+

@@ -75,17 +75,17 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len stop
   let brks =
     List.map (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset) breakpoints
   in
+  let open Opt in
   let start = Elf.SymTbl.to_addr_offset symoffset in
-  let endpred (exp : State.exp) =
-    match exp with
-    | Bits (bv, _) -> (
-        let addr = BitVec.to_int bv in
-        match len with
-        | Some l when start > addr || addr >= start + l -> true
-        | _ -> List.exists (( = ) addr) brks
-      )
-    | _ -> stop_sym
+  let min =
+    let+ l = len in
+    start
   in
+  let max =
+    let+ l = len in
+    start + l
+  in
+  let endpred = Block.gen_endpred ?min ?max ~brks in
   TraceCache.start @@ Arch.get_isla_config ();
   let runner = Runner.of_elf elf in
   (elf, Block.make ~runner ~start ~endpred)

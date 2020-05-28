@@ -9,7 +9,7 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let run_func elfname name dump no_run entry len breakpoints =
+let run_func elfname name dump no_run entry len breakpoints loop =
   base "Running %s in %s" name elfname;
   base "Loading %s" elfname;
   let dwarf = Dw.of_file elfname in
@@ -32,31 +32,31 @@ let run_func elfname name dump no_run entry len breakpoints =
       match func.sym with
       | None -> fail "Function %s exists in DWARF data but do not have any code" name
       | Some sym ->
-          base "Loading Instructions";
+          let open Opt in
           let brks =
             List.map
               (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset)
               breakpoints
           in
-          let endpred (exp : State.exp) =
-            match exp with
-            | Bits (bv, _) -> (
-                let addr = BitVec.to_int bv in
-                match len with
-                | Some l when sym.addr > addr || addr >= sym.addr + l -> true
-                | _ -> List.exists (( = ) addr) brks
-              )
-            | _ -> true
+          let min =
+            let+ l = len in
+            sym.addr
           in
+          let max =
+            let+ l = len in
+            sym.addr + l
+          in
+          let endpred = Block.gen_endpred ?min ?max ?loop ~brks in
           let runner = Runner.of_dwarf dwarf in
           let block = Block.make ~runner ~start:sym.addr ~endpred in
           if dump then begin
+            base "Preloading Instructions for dump";
             Runner.load_sym runner sym;
             base "Instructions:\n%t\n" (PP.topi Runner.pp_instr runner)
           end;
-          if not no_run then
-            let tree = Block.run block start in
-            base "Run tree:\n%t" (PP.top (StateTree.pp_all Block.pp_label) tree)
+          if not no_run then base "Start running";
+          let tree = Block.run block start in
+          base "Run tree:\n%t" (PP.top (StateTree.pp_all Block.pp_label) tree)
   end;
   IslaCache.stop ()
 
@@ -80,6 +80,10 @@ let entry =
   let doc = "Still dump the entry state if -n/--no-run is selected" in
   Arg.(value & flag & info ["e"; "entry"] ~doc)
 
+let loop =
+  let doc = "Number of times to run loop, i.e number of time going over a PC is allowed" in
+  Arg.(value & opt (some int) None & info ["l"; "loop"] ~doc)
+
 let len =
   let doc = "Stop condition: Stop as soon as the pc out of range [start, start + len) " in
   Arg.(value & opt (some int) None & info ["len"] ~docv:"BYTES" ~doc)
@@ -91,7 +95,8 @@ let breakpoints =
   Arg.(value & opt_all string [] & info ["b"; "break"] ~docv:"POSITION" ~doc)
 
 let term =
-  Term.(func_options comopts run_func $ elf $ func $ dump $ no_run $ entry $ len $ breakpoints)
+  Term.(
+    func_options comopts run_func $ elf $ func $ dump $ no_run $ entry $ len $ breakpoints $ loop)
 
 let info =
   let doc =
