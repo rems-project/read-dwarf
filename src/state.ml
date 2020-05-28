@@ -362,14 +362,19 @@ let read ?ctyp (s : t) (mb : Mem.block) : exp =
   let ty = Mem.Size.to_bv mb.size in
   let exp =
     match s.elf with
-    | Some elf when ConcreteEval.is_concrete mb.addr ->
+    | Some elf when ConcreteEval.is_concrete mb.addr -> (
         let int_addr = ConcreteEval.eval mb.addr |> Value.expect_bv |> BitVec.to_int in
         let size = mb.size |> Ast.Size.to_bits in
-        let (sym, offset) = Elf.SymTbl.of_addr_with_offset elf.symbols int_addr in
-        if sym.writable then None
-        else
-          (* Assume little endian here *)
-          Some (Ast.Op.bits (BytesSeq.getbvle ~size sym.data offset))
+        try
+          let (sym, offset) = Elf.SymTbl.of_addr_with_offset elf.symbols int_addr in
+          if sym.writable then None
+          else
+            (* Assume little endian here *)
+            Some (Ast.Op.bits (BytesSeq.getbvle ~size sym.data offset))
+        with Not_found ->
+          warn "Reading global at 0x%x which is not in a global symbol" int_addr;
+          None
+      )
     | _ -> None
   in
   let nvar = make_read ?ctyp ?exp s ty in
