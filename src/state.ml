@@ -132,6 +132,8 @@ module Var = struct
   let to_exp (v : t) : exp = Ast.Var (v, dummy_annot)
 
   let pp sv = sv |> to_string |> PP.string
+
+  let pp_bar sv = PP.(bar ^^ pp sv ^^ bar)
 end
 
 (*****************************************************************************)
@@ -147,7 +149,9 @@ let get_exp tval = tval.exp
 
 let get_ctyp tval = tval.ctyp
 
-let pp_exp (exp : exp) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
+let pp_exp_smt (exp : exp) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
+
+let pp_exp (exp : exp) = PPExp.pp_exp Var.pp_bar exp
 
 let pp_smt (smt : smt) = Ast.pp_smt Var.pp (AstManip.smt_allow_lets @@ AstManip.smt_allow_mem smt)
 

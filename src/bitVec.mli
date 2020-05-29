@@ -99,8 +99,10 @@ val of_substring : ?base:int -> size:int -> pos:int -> len:int -> string -> t
     Set [unsigned] to true to have unisigned values (signed by default).
 
     Set [prefix] to true to have the [0x/0o/0b] prefix (no prefix by default)
+
+    Set [force_width] to false to not have a digit length matching the bitvector length
 *)
-val to_string : ?base:int -> ?unsigned:bool -> ?prefix:bool -> t -> string
+val to_string : ?base:int -> ?unsigned:bool -> ?force_width:bool -> ?prefix:bool -> t -> string
 
 (** Convert a bitvector in the SMTLib format to a {!t} *)
 val of_smt : string -> t

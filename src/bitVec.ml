@@ -97,7 +97,7 @@ let of_string ?(base = 10) ~size s = of_z ~size (Z.of_string_base base s)
 let of_substring ?(base = 10) ~size ~pos ~len s =
   of_z ~size (Z.of_substring_base ~pos ~len base s)
 
-let to_string ?(base = 2) ?(unsigned = false) ?(prefix = false) v =
+let to_string ?(base = 2) ?(unsigned = false) ?(force_width = true) ?(prefix = false) v =
   let z = if unsigned then to_uz v else to_z v in
   if base = 10 then Z.to_string z
   else
@@ -111,8 +111,11 @@ let to_string ?(base = 2) ?(unsigned = false) ?(prefix = false) v =
     in
     let width = (v.size + base_width - 1) / base_width in
     let format_string =
-      if prefix then Printf.sprintf "%%0#%d%c" (width + 2) base_char
-      else Printf.sprintf "%%0%d%c" width base_char
+      match (force_width, prefix) with
+      | (true, true) -> Printf.sprintf "%%0#%d%c" (width + 2) base_char
+      | (true, false) -> Printf.sprintf "%%0%d%c" width base_char
+      | (false, true) -> Printf.sprintf "%%0#%c" base_char
+      | (false, false) -> Printf.sprintf "%%0%c" base_char
     in
     Z.format format_string z
 
