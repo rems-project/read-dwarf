@@ -23,9 +23,9 @@
   (toml (>= 5.0.0))
   isla-lang
   (ott :build)
-  (qtest :test)
-  (ounit :test)
-  (odoc :doc)
+  (qtest :with-test)
+  (ounit :with-test)
+  (odoc :with-doc)
  )
 
 )
