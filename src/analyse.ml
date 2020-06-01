@@ -3453,7 +3453,31 @@ let mk_analysis test filename_objdump_d filename_branch_table =
 (*        css output                                                         *)
 (*****************************************************************************)
 
-let css m clss s =
+type render_kind =
+  | Render_symbol_star
+  | Render_symbol_nostar
+  | Render_source
+  | Render_frame
+  | Render_instruction
+  | Render_vars
+  | Render_vars_new
+  | Render_vars_old
+  | Render_inlining
+  | Render_ctrlflow
+
+let render_colour = function
+  | Render_symbol_star -> "gold"
+  | Render_symbol_nostar -> "moccasin"
+  | Render_source -> "darkorange"
+  | Render_frame -> "cyan"
+  | Render_instruction -> "white"
+  | Render_vars -> "mediumaquamarine"
+  | Render_vars_new -> "mediumaquamarine"
+  | Render_vars_old -> "grey"
+  | Render_inlining -> "red"
+  | Render_ctrlflow -> "white"
+
+let css m (rk : render_kind) s =
   match m with
   | Ascii -> s
   | Html ->
@@ -3462,7 +3486,15 @@ let css m clss s =
       String.concat "\n"
         (List.map
            (function
-             | line -> "<span class=\"" ^ clss ^ "\">" ^ html_escape line ^ "</" ^ clss ^ ">")
+             | line ->
+                 (* try with a span for each unit *)
+                 (*               "<span class=\"" ^ clss ^ "\">" ^ html_escape line ^ "</" ^ clss ^ ">"*)
+                 (* try with a pre for each unit *)
+                 (*               "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"*)
+                 (* try with a classless span for each unit *)
+                 (*               "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"*)
+                 (* try with an html font for each unit (NOT HTML5) - best so far - ok on firefox; too slow on chromium*)
+                 "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")
            lines)
 
 (*****************************************************************************)
@@ -3498,24 +3530,25 @@ let pp_instruction m test an k i =
   (* is this the start of a basic block? *)
   ( if come_froms' <> [] || elf_symbols <> [] then
     an.pp_inlining_label_prefix ""
-    ^ css m "ctrlflow" an.rendered_control_flow_inbetweens.(k)
+    ^ css m Render_ctrlflow an.rendered_control_flow_inbetweens.(k)
     ^ "\n"
   else ""
   )
   ^ String.concat ""
-      (List.mapi
-         (fun (j : int) (s : string) ->
-           let sym = (if j = 0 then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:" in
-           let ctrl = an.pp_inlining_label_prefix "" ^ an.rendered_control_flow_inbetweens.(k) in
-           let non_overlapped_ctrl =
-             let n = String.length ctrl - String.length sym in
-             if n <= 0 then "" else String.sub ctrl (String.length sym) n
-           in
-           css m "symbols" sym ^ css m "ctrlflow" non_overlapped_ctrl ^ "\n")
-         (let (syms_nostar, syms_star) =
-            List.partition (fun s -> not (String.contains s '$')) elf_symbols
-          in
-          syms_nostar @ syms_star))
+      (let pp_symb (rk : render_kind) (addstar : bool) (s : string) =
+         let sym = (if addstar then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:" in
+         let ctrl = an.pp_inlining_label_prefix "" ^ an.rendered_control_flow_inbetweens.(k) in
+         let non_overlapped_ctrl =
+           let n = String.length ctrl - String.length sym in
+           if n <= 0 then "" else String.sub ctrl (String.length sym) n
+         in
+         css m rk sym ^ css m Render_ctrlflow non_overlapped_ctrl ^ "\n"
+       in
+       let (syms_nodollar, syms_dollar) =
+         List.partition (fun s -> not (String.contains s '$')) elf_symbols
+       in
+       List.map (pp_symb Render_symbol_star true) syms_nodollar
+       @ List.map (pp_symb Render_symbol_nostar false) syms_dollar)
   (* function parameters at this address *)
   ^
   let pp_params addr params =
@@ -3532,9 +3565,9 @@ let pp_instruction m test an k i =
                 (List.map (pp_sdt_concise_variable_or_formal_parameter 0 true) vars)
       )
   in
-  css m "vars" (pp_params addr an.ranged_vars_at_instructions.rvai_params)
+  css m Render_vars (pp_params addr an.ranged_vars_at_instructions.rvai_params)
   (* the new inlining info for this address *)
-  ^ css m "inlining" ppd_new_inlining
+  ^ css m Render_inlining ppd_new_inlining
   (* the source file lines (if any) associated to this address *)
   (* OLD VERSION *)
   (*  ^ begin
@@ -3559,10 +3592,10 @@ let pp_instruction m test an k i =
   (* NEW VERSION *)
   ^ begin
       let pp_line multiple elifi =
-        css m "inlining" (an.pp_inlining_label_prefix ppd_labels)
-        ^ css m "ctrlflow" an.rendered_control_flow_inbetweens.(k)
+        css m Render_inlining (an.pp_inlining_label_prefix ppd_labels)
+        ^ css m Render_ctrlflow an.rendered_control_flow_inbetweens.(k)
         ^ ""
-        ^ css m "source"
+        ^ css m Render_source
             (pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source multiple elifi)
         ^ "\n"
       in
@@ -3584,9 +3617,9 @@ let pp_instruction m test an k i =
         else (
           last_frame_info := frame_info;
           (* the inlining label prefix *)
-          css m "inlining" (an.pp_inlining_label_prefix ppd_labels)
-          ^ css m "ctrlflow" an.rendered_control_flow_inbetweens.(k)
-          ^ css m "frame" frame_info
+          css m Render_inlining (an.pp_inlining_label_prefix ppd_labels)
+          ^ css m Render_ctrlflow an.rendered_control_flow_inbetweens.(k)
+          ^ css m Render_frame frame_info
         )
       else ""
     end
@@ -3605,17 +3638,17 @@ let pp_instruction m test an k i =
   (* the variables whose location ranges include this address - new version*)
   ^ begin
       if !Globals.show_vars then
-        css m "vars-new" (pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k))
+        css m Render_vars_new (pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k))
         (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
         (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
       else ""
     end
   (* the inlining label prefix *)
-  ^ css m "inlining" (an.pp_inlining_label_prefix ppd_labels)
+  ^ css m Render_inlining (an.pp_inlining_label_prefix ppd_labels)
   (* the rendered control flow *)
-  ^ css m "ctrlflow" an.rendered_control_flow.(k)
+  ^ css m Render_ctrlflow an.rendered_control_flow.(k)
   (* the address and (hex) instruction *)
-  ^ css m "instruction"
+  ^ css m Render_instruction
       (pp_addr addr ^ ":  "
       ^ pp_opcode_bytes test.arch i.i_opcode
       (* the dissassembly from objdump *)
@@ -3623,7 +3656,7 @@ let pp_instruction m test an k i =
       ^ i.i_mnemonic ^ "\t" ^ i.i_operands
       )
   (* any indirect-branch control flow from this instruction *)
-  ^ css m "ctrlflow"
+  ^ css m Render_ctrlflow
       (begin
          match i.i_control_flow with
          | C_branch_register _ ->
@@ -3644,7 +3677,7 @@ let pp_instruction m test an k i =
   ^
   if (*true*) !Globals.show_vars then
     if k < Array.length an.instructions - 1 then
-      css m "vars-old" (pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1))
+      css m Render_vars_old (pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1))
     else ""
   else ""
 
