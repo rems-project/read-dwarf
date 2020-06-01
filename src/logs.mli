@@ -17,14 +17,23 @@ type level =
 
 val pp_level : level -> PP.document
 
-(** Convert level to string (Base is the empty string) *)
+(** Convert level to string *)
 val level_to_string : level -> string
+
+(** Convert level to string header like ["\[Error\]"]. {!Base} is the empty string *)
+val level_to_header : level -> string
 
 (** Set a default level to all the module. Erase local customized levels *)
 val set_default_level : level -> unit
 
 (** Set level of a module by name *)
 val set_level : string -> level -> unit
+
+(** Parser for log level on command line *)
+val level_conv : level Cmdliner.Arg.conv
+
+(** Set level below which the output goes to stdout *)
+val set_stdout_level : level -> unit
 
 (** Functors can't take string as parameters but they can take a module of this type *)
 module type String = sig

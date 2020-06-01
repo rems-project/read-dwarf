@@ -133,7 +133,11 @@ let debug =
   let doc = "Set a precise OCaml module in debug-logging mode" in
   Arg.(value & opt_all string [] & info ["debug"] ~doc ~docv:"MODULE")
 
-let process_logs_opts quiet verbose info debug =
+let stdout_level =
+  let doc = "Set the log level below which the message go on stdout" in
+  Arg.(value & opt Logs.level_conv Base & info ["stdout-level"] ~doc ~docv:"LEVEL")
+
+let process_logs_opts quiet verbose info debug stdout_level =
   if quiet then Logs.set_default_level Base;
   if quiet then quiet_ref := true;
   begin
@@ -143,9 +147,10 @@ let process_logs_opts quiet verbose info debug =
     | _ -> Logs.set_default_level Debug
   end;
   List.iter (fun name -> Logs.set_level name Info) info;
-  List.iter (fun name -> Logs.set_level name Debug) debug
+  List.iter (fun name -> Logs.set_level name Debug) debug;
+  Logs.set_stdout_level stdout_level
 
-let logs_term = Term.(const process_logs_opts $ quiet $ verbose $ infoopt $ debug)
+let logs_term = Term.(const process_logs_opts $ quiet $ verbose $ infoopt $ debug $ stdout_level)
 
 (*****************************************************************************)
 (*****************************************************************************)

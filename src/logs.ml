@@ -18,17 +18,56 @@ let pp_level = function
   | Debug -> !^"[Debug]"
 
 let level_to_string = function
+  | Base -> "Base"
+  | Err -> "Error"
+  | Warn -> "Warn"
+  | Info -> "Info"
+  | Debug -> "Debug"
+
+let level_of_string = function
+  | "Base" -> Base
+  | "Error" -> Err
+  | "Warn" -> Warn
+  | "Info" -> Info
+  | "Debug" -> Debug
+  | s -> Raise.inv_arg "%s is not a valid log level" s
+
+let level_to_header = function
   | Base -> ""
   | Err -> "[Error]"
   | Warn -> "[Warn]"
   | Info -> "[Info]"
   | Debug -> "[Debug]"
 
-let channel = function Base -> stdout | _ -> stderr
+let level_fmt f t = t |> level_to_string |> Format.pp_print_string f
+
+let level_conv =
+  let docv = "Log level: Base, Error, Warn, Info or Debug" in
+  let parser a = try Ok (level_of_string a) with Invalid_argument s -> Error (`Msg s) in
+  Cmdliner.Arg.conv ~docv (parser, level_fmt)
+
+let lvl_list = [Base; Err; Warn; Info; Debug]
+
+let outputs = Hashtbl.create 5
+
+let _ =
+  Hashtbl.add outputs Base stdout;
+  Hashtbl.add outputs Err stderr;
+  Hashtbl.add outputs Warn stderr;
+  Hashtbl.add outputs Info stderr;
+  Hashtbl.add outputs Debug stderr
+
+let channel = Hashtbl.find outputs
+
+let set_stdout_level lvl =
+  List.iter
+    (fun l ->
+      if l <= lvl then Hashtbl.replace outputs l stdout else Hashtbl.replace outputs l stderr)
+    lvl_list
 
 let baselog name lvl fmt =
   let out = channel lvl in
-  Printf.fprintf out "[%s]%s: " name (level_to_string lvl);
+  Printf.fprintf out "[%s]%s: " name (level_to_header lvl);
   Printf.kfprintf
     (fun o ->
       Printf.fprintf o "\n";
@@ -38,7 +77,7 @@ let baselog name lvl fmt =
 let baselog_fatal ~code name lvl fmt =
   let stack = Printexc.get_callstack 50 in
   let out = channel lvl in
-  Printf.fprintf out "[%s]%s Fatal: " name (level_to_string lvl);
+  Printf.fprintf out "[%s]%s Fatal: " name (level_to_header lvl);
   Printf.kfprintf
     (fun o ->
       Printf.fprintf o "\n";
