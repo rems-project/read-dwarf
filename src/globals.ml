@@ -29,3 +29,7 @@ let show_vars = ref true
 let show_cfa = ref true
 
 let show_source = ref true
+
+let ppmode = ref Types.Ascii
+
+(*let ppmode = ref Types.Html*)

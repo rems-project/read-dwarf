@@ -3,6 +3,7 @@ open Logs.Logger (struct
 end)
 
 open Printf
+open Types
 
 type natural = Nat_big_num.num
 
@@ -875,7 +876,7 @@ let mk_frame_info test instructions :
     (addr (*addr*) * string (*cfa*) * (string (*rname*) * string) (*rinfo*) list) option array =
   Array.map (function i -> f aof i.i_addr None test.dwarf_semi_pp_frame_info) instructions
 
-let pp_frame_info frame_info k : string =
+let pp_frame_info m frame_info k : string =
   (* assuming the dwarf_semi_pp_frame_info has monotonically increasing addresses - always true? *)
   match frame_info.(k) with
   | None -> "<no frame info for this address>\n"
@@ -3449,6 +3450,22 @@ let mk_analysis test filename_objdump_d filename_branch_table =
   an
 
 (*****************************************************************************)
+(*        css output                                                         *)
+(*****************************************************************************)
+
+let css m clss s =
+  match m with
+  | Ascii -> s
+  | Html ->
+      (* seeing if putting the newlines outside the spans avoids the browser rendering performance problem.  Not so far... *)
+      let lines = String.split_on_char '\n' s in
+      String.concat "\n"
+        (List.map
+           (function
+             | line -> "<span class=\"" ^ clss ^ "\">" ^ html_escape line ^ "</" ^ clss ^ ">")
+           lines)
+
+(*****************************************************************************)
 (*        pretty-print one instruction                                       *)
 (*****************************************************************************)
 
@@ -3464,7 +3481,7 @@ let pp_instruction_init () =
   last_var_info := ([] : string list);
   last_source_info := ""
 
-let pp_instruction test an k i =
+let pp_instruction m test an k i =
   (* the come_froms for this instruction, calculated first to determine whether this is the start of a basic block *)
   let addr = i.i_addr in
   let come_froms' =
@@ -3480,13 +3497,21 @@ let pp_instruction test an k i =
 
   (* is this the start of a basic block? *)
   ( if come_froms' <> [] || elf_symbols <> [] then
-    an.pp_inlining_label_prefix "" ^ an.rendered_control_flow_inbetweens.(k) ^ "\n"
+    an.pp_inlining_label_prefix ""
+    ^ css m "ctrlflow" an.rendered_control_flow_inbetweens.(k)
+    ^ "\n"
   else ""
   )
   ^ String.concat ""
       (List.mapi
          (fun (j : int) (s : string) ->
-           (if j = 0 then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:\n")
+           let sym = (if j = 0 then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:" in
+           let ctrl = an.pp_inlining_label_prefix "" ^ an.rendered_control_flow_inbetweens.(k) in
+           let non_overlapped_ctrl =
+             let n = String.length ctrl - String.length sym in
+             if n <= 0 then "" else String.sub ctrl (String.length sym) n
+           in
+           css m "symbols" sym ^ css m "ctrlflow" non_overlapped_ctrl ^ "\n")
          (let (syms_nostar, syms_star) =
             List.partition (fun s -> not (String.contains s '$')) elf_symbols
           in
@@ -3507,9 +3532,9 @@ let pp_instruction test an k i =
                 (List.map (pp_sdt_concise_variable_or_formal_parameter 0 true) vars)
       )
   in
-  pp_params addr an.ranged_vars_at_instructions.rvai_params
+  css m "vars" (pp_params addr an.ranged_vars_at_instructions.rvai_params)
   (* the new inlining info for this address *)
-  ^ ppd_new_inlining
+  ^ css m "inlining" ppd_new_inlining
   (* the source file lines (if any) associated to this address *)
   (* OLD VERSION *)
   (*  ^ begin
@@ -3534,29 +3559,34 @@ let pp_instruction test an k i =
   (* NEW VERSION *)
   ^ begin
       let pp_line multiple elifi =
-        an.pp_inlining_label_prefix ppd_labels
-        ^ an.rendered_control_flow_inbetweens.(k)
+        css m "inlining" (an.pp_inlining_label_prefix ppd_labels)
+        ^ css m "ctrlflow" an.rendered_control_flow_inbetweens.(k)
         ^ ""
-        ^ pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source multiple elifi
+        ^ css m "source"
+            (pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source multiple elifi)
         ^ "\n"
       in
       (* if there's just a single entry, suppress iff it's a non-start entry, but if there are (confusingly) multiple, show all *)
-      match an.line_info.(k) with
-      | [] -> ""
-      | [elifi] -> if elifi.elifi_start then pp_line false elifi else ""
-      | elifis -> String.concat "" (List.map (pp_line true) elifis)
+      let lines =
+        match an.line_info.(k) with
+        | [] -> ""
+        | [elifi] -> if elifi.elifi_start then pp_line false elifi else ""
+        | elifis -> String.concat "" (List.map (pp_line true) elifis)
+      in
+      lines
     end
   (* the frame info for this address *)
+  (*TODO: precompute the diffs to make this pure *)
   ^ begin
       if !Globals.show_cfa then
-        let frame_info = pp_frame_info an.frame_info k in
+        let frame_info = pp_frame_info m an.frame_info k in
         if frame_info = !last_frame_info then "" (*"CFA: unchanged\n"*)
         else (
           last_frame_info := frame_info;
           (* the inlining label prefix *)
-          an.pp_inlining_label_prefix ppd_labels
-          ^ an.rendered_control_flow_inbetweens.(k)
-          ^ frame_info
+          css m "inlining" (an.pp_inlining_label_prefix ppd_labels)
+          ^ css m "ctrlflow" an.rendered_control_flow_inbetweens.(k)
+          ^ css m "frame" frame_info
         )
       else ""
     end
@@ -3574,42 +3604,47 @@ let pp_instruction test an k i =
  *)
   (* the variables whose location ranges include this address - new version*)
   ^ begin
-      if !Globals.show_vars then pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k)
+      if !Globals.show_vars then
+        css m "vars-new" (pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k))
         (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
         (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
       else ""
     end
   (* the inlining label prefix *)
-  ^ an.pp_inlining_label_prefix ppd_labels
+  ^ css m "inlining" (an.pp_inlining_label_prefix ppd_labels)
   (* the rendered control flow *)
-  ^ an.rendered_control_flow.(k)
+  ^ css m "ctrlflow" an.rendered_control_flow.(k)
   (* the address and (hex) instruction *)
-  ^ pp_addr addr
-  ^ ":  "
-  ^ pp_opcode_bytes test.arch i.i_opcode
-  (* the dissassembly from objdump *)
-  ^ "  "
-  ^ i.i_mnemonic ^ "\t" ^ i.i_operands
+  ^ css m "instruction"
+      (pp_addr addr ^ ":  "
+      ^ pp_opcode_bytes test.arch i.i_opcode
+      (* the dissassembly from objdump *)
+      ^ "  "
+      ^ i.i_mnemonic ^ "\t" ^ i.i_operands
+      )
   (* any indirect-branch control flow from this instruction *)
-  ^ begin
-      match i.i_control_flow with
-      | C_branch_register _ ->
-          " -> "
-          ^ String.concat ","
-              (List.map
-                 (function
-                   | (tk, a', k', s) -> pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
-                 i.i_targets)
-          ^ " "
-      | _ -> ""
-    end
-  (* any control flow to this instruction *)
-  ^ pp_come_froms addr come_froms'
-  ^ "\n"
+  ^ css m "ctrlflow"
+      (begin
+         match i.i_control_flow with
+         | C_branch_register _ ->
+             " -> "
+             ^ String.concat ","
+                 (List.map
+                    (function
+                      | (tk, a', k', s) ->
+                          pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
+                    i.i_targets)
+             ^ " "
+         | _ -> ""
+       end
+      (* any control flow to this instruction *)
+      ^ pp_come_froms addr come_froms'
+      ^ "\n"
+      )
   ^
   if (*true*) !Globals.show_vars then
     if k < Array.length an.instructions - 1 then
-      pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1)
+      css m "vars-old" (pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1))
     else ""
   else ""
 
@@ -3617,35 +3652,41 @@ let pp_instruction test an k i =
 (*        pretty-print test analysis                                         *)
 (*****************************************************************************)
 
-let pp_test_analysis test an =
-  "* ************* instruction count *****************\n"
-  ^ string_of_int (Array.length an.instructions)
-  ^ " instructions\n" ^ "* ************* globals *****************\n"
-  ^ pp_vars an.ranged_vars_at_instructions.rvai_globals
-  (*  ^ "************** locals *****************\n"
+let pp_test_analysis m test an =
+  match m with
+  | Ascii ->
+      "* ************* instruction count *****************\n"
+      ^ string_of_int (Array.length an.instructions)
+      ^ " instructions\n" ^ "* ************* globals *****************\n"
+      ^ pp_vars an.ranged_vars_at_instructions.rvai_globals
+      (*  ^ "************** locals *****************\n"
   ^ pp_ranged_vars
  *)
-  ^ "\n* ************* instructions *****************\n"
-  ^ ( pp_instruction_init ();
-      String.concat "" (Array.to_list (Array.mapi (pp_instruction test an) an.instructions))
-    )
-  ^ "* ************* struct/union/enum type definitions *****************\n"
-  ^ (let d = test.dwarf_static.ds_dwarf in
+      ^ "\n* ************* instructions *****************\n"
+      ^ ( pp_instruction_init ();
+          String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an) an.instructions))
+        )
+      ^ "* ************* struct/union/enum type definitions *****************\n"
+      ^ (let d = test.dwarf_static.ds_dwarf in
 
-     (*     let c = Dwarf.p_context_of_d d in
+         (*     let c = Dwarf.p_context_of_d d in
      Dwarf.pp_all_aggregate_types c d*)
-     (*     Dwarf.pp_all_struct_union_enum_types' d)*)
-     let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
-     String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps))
-  (*  ^ "\n* ************* branch targets *****************\n"*)
-  (*  ^ pp_branch_targets instructions*)
-  ^ "\n* ************* call graph *****************\n"
-  ^ pp_call_graph test
-      ( (*instructions,*)
-        an.instructions,
-        an.index_of_address,
-        an.address_of_index,
-        an.indirect_branches )
+         (*     Dwarf.pp_all_struct_union_enum_types' d)*)
+         let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
+         String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps))
+      (*  ^ "\n* ************* branch targets *****************\n"*)
+      (*  ^ pp_branch_targets instructions*)
+      ^ "\n* ************* call graph *****************\n"
+      ^ pp_call_graph test
+          ( (*instructions,*)
+            an.instructions,
+            an.index_of_address,
+            an.address_of_index,
+            an.indirect_branches )
+  | Html ->
+      (* "\n* ************* instructions *****************\n" *)
+      pp_instruction_init ();
+      String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an) an.instructions))
 
 (*****************************************************************************)
 (*        top-level                                                          *)
@@ -3653,6 +3694,7 @@ let pp_test_analysis test an =
 
 let process_file () : unit =
   (*filename_objdump_d filename_branch_tables (filename_elf : string) : unit =*)
+  let m = !Globals.ppmode in
 
   (* todo: make idiomatic Cmdliner :-(  *)
   let filename_elf =
@@ -3669,7 +3711,11 @@ let process_file () : unit =
     | None -> Warn.fatal "no --branch-tables option\n"
   in
 
-  let filename_out_file_option = !Globals.out_file in
+  let filename_out_file_option =
+    match m with
+    | Ascii -> !Globals.out_file
+    | Html -> Option.map (function s -> s ^ ".html") !Globals.out_file
+  in
 
   (* try caching linksem output - though linksem only takes 5s, so scarcely worth the possible confusion. It's recomputing the variable info that takes the time *)
   (*
@@ -3717,12 +3763,38 @@ let process_file () : unit =
 
       (* copy emacs syntax highlighting blob to output. todo: sometime de-hard-code the filename*)
       begin
-        match read_file_lines "emacs-highlighting" with
-        | MyFail _ -> ()
-        | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
+        match m with
+        | Ascii -> (
+            match read_file_lines "emacs-highlighting" with
+            | MyFail _ -> ()
+            | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
+          )
+        | Html -> ()
       end;
 
-      Printf.fprintf c "%s" (time "pp_test_analysis" pp_test_analysis test an);
+      (* copy html preamble blob to output. todo: sometime de-hard-code the filename*)
+      begin
+        match m with
+        | Ascii -> ()
+        | Html -> (
+            match read_file_lines "html-preamble.html" with
+            | MyFail _ -> ()
+            | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
+          )
+      end;
+
+      Printf.fprintf c "%s" (time "pp_test_analysis" pp_test_analysis m test an);
+
+      (* copy html postamble blob to output. todo: sometime de-hard-code the filename*)
+      begin
+        match m with
+        | Ascii -> ()
+        | Html -> (
+            match read_file_lines "html-postamble.html" with
+            | MyFail _ -> ()
+            | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
+          )
+      end;
 
       match filename_out_file_option with Some f -> close_out c | None -> ()
     )
