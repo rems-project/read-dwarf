@@ -3783,8 +3783,9 @@ let process_file () : unit =
     | None -> Warn.fatal "no --branch-tables option\n"
   in
 
-  let filename_out_file_option = !Globals.out_file
-(*    match m with
+  let filename_out_file_option =
+    !Globals.out_file
+    (*    match m with
     | Ascii -> !Globals.out_file
     | Html -> Option.map (function s -> s ^ ".html") !Globals.out_file*)
   in
