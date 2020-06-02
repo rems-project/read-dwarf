@@ -89,6 +89,13 @@ let cfg_source_nodes2 =
     Arg.(
       value & opt (some string) None & info ["cfg_source_nodes2"] ~docv:"CFG_SOURCE_NODES2" ~doc)
 
+let html =
+  let doc = "Enables html output" in
+  setter Globals.ppmode
+    Term.(
+      const (fun b -> if b then Types.Html else Types.Ascii)
+      $ Arg.(value & flag & info ["h"; "html"] ~doc))
+
 let options =
   [
     comp_dir;
@@ -107,6 +114,7 @@ let options =
     cfg_dot_file;
     cfg_source_nodes;
     cfg_source_nodes2;
+    html;
     CommonOpt.logs_term;
   ]
 
