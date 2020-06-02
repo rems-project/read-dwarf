@@ -3477,6 +3477,18 @@ let render_colour = function
   | Render_inlining -> "red"
   | Render_ctrlflow -> "white"
 
+let render_class_name = function
+  | Render_symbol_star -> "symbol_star"
+  | Render_symbol_nostar -> "symbol_nostar"
+  | Render_source -> "source"
+  | Render_frame -> "frame"
+  | Render_instruction -> "instruction"
+  | Render_vars -> "vars"
+  | Render_vars_new -> "vars_new"
+  | Render_vars_old -> "vars_old"
+  | Render_inlining -> "inlining"
+  | Render_ctrlflow -> "ctrlflow"
+
 let css m (rk : render_kind) s =
   match m with
   | Ascii -> s
@@ -3488,13 +3500,14 @@ let css m (rk : render_kind) s =
            (function
              | line ->
                  (* try with a span for each unit *)
-                 (*               "<span class=\"" ^ clss ^ "\">" ^ html_escape line ^ "</" ^ clss ^ ">"*)
+                "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</" ^ render_class_name rk ^ ">"
+           )
                  (* try with a pre for each unit *)
                  (*               "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"*)
                  (* try with a classless span for each unit *)
                  (*               "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"*)
                  (* try with an html font for each unit (NOT HTML5) - best so far - ok on firefox; too slow on chromium*)
-                 "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")
+                                                                                                     (*                 "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")*)
            lines)
 
 (*****************************************************************************)
