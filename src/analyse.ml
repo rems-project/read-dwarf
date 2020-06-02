@@ -3500,14 +3500,14 @@ let css m (rk : render_kind) s =
            (function
              | line ->
                  (* try with a span for each unit *)
-                "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</" ^ render_class_name rk ^ ">"
-           )
+(*                "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</" ^ render_class_name rk ^ ">"
+)*)
                  (* try with a pre for each unit *)
                  (*               "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"*)
                  (* try with a classless span for each unit *)
                  (*               "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"*)
                  (* try with an html font for each unit (NOT HTML5) - best so far - ok on firefox; too slow on chromium*)
-                                                                                                     (*                 "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")*)
+                                                                                                                      "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")
            lines)
 
 (*****************************************************************************)
