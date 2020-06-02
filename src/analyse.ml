@@ -3538,9 +3538,27 @@ let pp_instruction m test an k i =
       (let pp_symb (rk : render_kind) (addstar : bool) (s : string) =
          let sym = (if addstar then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:" in
          let ctrl = an.pp_inlining_label_prefix "" ^ an.rendered_control_flow_inbetweens.(k) in
-         let non_overlapped_ctrl =
-           let n = String.length ctrl - String.length sym in
-           if n <= 0 then "" else String.sub ctrl (String.length sym) n
+         let (_, non_overlapped_ctrl) =
+           (* ctrl here can contain interesting UTF8 unicode, while sym is a plain string; hence the following UTF8-aware code *)
+           let utf8_drop (n : int) (s : string) =
+             let folder
+                 (*: (int*string) Uutf.String.folder*)
+                   ( (n : int (*number of prefix chars still to drop*)),
+                     (s : string (*accumulated string*)) ) (pos : int) um =
+               if n > 0 then (n - 1, "")
+               else
+                 match um with
+                 | `Uchar u ->
+                     (* yuck *)
+                     let b = Buffer.create 4 in
+                     Uutf.Buffer.add_utf_8 b u;
+                     let s' = Bytes.to_string (Buffer.to_bytes b) in
+                     (0, s ^ s')
+                 | `Malformed s' -> (0, s ^ s')
+             in
+             Uutf.String.fold_utf_8 folder (n, "") s
+           in
+           utf8_drop (String.length sym) ctrl
          in
          css m rk sym ^ css m Render_ctrlflow non_overlapped_ctrl ^ "\n"
        in
