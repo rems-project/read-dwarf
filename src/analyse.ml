@@ -3783,10 +3783,10 @@ let process_file () : unit =
     | None -> Warn.fatal "no --branch-tables option\n"
   in
 
-  let filename_out_file_option =
-    match m with
+  let filename_out_file_option = !Globals.out_file
+(*    match m with
     | Ascii -> !Globals.out_file
-    | Html -> Option.map (function s -> s ^ ".html") !Globals.out_file
+    | Html -> Option.map (function s -> s ^ ".html") !Globals.out_file*)
   in
 
   (* try caching linksem output - though linksem only takes 5s, so scarcely worth the possible confusion. It's recomputing the variable info that takes the time *)
