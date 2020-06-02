@@ -3494,21 +3494,23 @@ let css m (rk : render_kind) s =
   | Ascii -> s
   | Html ->
       (* seeing if putting the newlines outside the spans avoids the browser rendering performance problem.  Not so far... *)
-      let lines = String.split_on_char '\n' s in
-      String.concat "\n"
-        (List.map
-           (function
-             | line ->
-                 (* try with a span for each unit *)
-(*                "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</" ^ render_class_name rk ^ ">"
+      if s = "" then ""
+      else
+        let lines = String.split_on_char '\n' s in
+        String.concat "\n"
+          (List.map
+             (function
+               | line ->
+                   (* try with a span for each unit *)
+                   (*                "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</" ^ render_class_name rk ^ ">"
 )*)
-                 (* try with a pre for each unit *)
-                 (*               "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"*)
-                 (* try with a classless span for each unit *)
-                 (*               "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"*)
-                 (* try with an html font for each unit (NOT HTML5) - best so far - ok on firefox; too slow on chromium*)
-                                                                                                                      "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")
-           lines)
+                   (* try with a pre for each unit *)
+                   (*               "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"*)
+                   (* try with a classless span for each unit *)
+                   (*               "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"*)
+                   (* try with an html font for each unit (NOT HTML5) - best so far - ok on firefox; too slow on chromium*)
+                   "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")
+             lines)
 
 (*****************************************************************************)
 (*        pretty-print one instruction                                       *)
@@ -3547,6 +3549,12 @@ let pp_instruction m test an k i =
     ^ "\n"
   else ""
   )
+  (* link target *)
+  ^ ( match m with
+    | Ascii -> ""
+    | Html -> "<span id=\"" ^ pp_addr addr ^ " display=\"none\"></span>"
+    )
+  (* symbols *)
   ^ String.concat ""
       (let pp_symb (rk : render_kind) (addstar : bool) (s : string) =
          let sym = (if addstar then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:" in
