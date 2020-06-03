@@ -28,6 +28,14 @@ let concat_map_rev f l =
    otherwise this will shadow the official concat_map in 4.10*)
 let concat_map f l = rev @@ concat_map_rev f l
 
+(* This is defined in OCaml 4.10, TODO find a clean way of doing conditional compilation,
+   otherwise this will shadow the official find_map in 4.10*)
+let rec find_map f = function
+  | [] -> None
+  | x :: l -> (
+      match f x with Some _ as result -> result | None -> find_map f l
+    )
+
 (** Monadic bind. It's just {!concat_map} *)
 let bind l f = concat_map f l
 
@@ -67,6 +75,32 @@ let sub ~pos ~len l = take len (drop pos l)
     list are discarded *)
 let rec short_combine l1 l2 =
   match (l1, l2) with (a1 :: t1, a2 :: t2) -> (a1, a2) :: short_combine t1 t2 | _ -> []
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Equality and comparison } *)
+
+let rec equal eq l1 l2 =
+  match (l1, l2) with
+  | ([], []) -> true
+  | (a1 :: t1, a2 :: t2) when eq a1 a2 -> equal eq t1 t2
+  | _ -> false
+
+(** If the list have the same length this a lexicographic compare.
+    If one list is shorter, then the missing value a considered smaller than any actual values.
+
+    A mental model could to view list as infinite sequence of options that are [None] after the end of the list.
+    Then it would be proper lexicographic ordering with [Option.compare]
+*)
+let rec compare cmp l1 l2 =
+  match (l1, l2) with
+  | ([], []) -> 0
+  | (a1 :: t1, a2 :: t2) ->
+      let c = cmp a1 a2 in
+      if c <> 0 then c else compare cmp t1 t2
+  | (_, []) -> 1
+  | ([], _) -> -1
 
 (*****************************************************************************)
 (*****************************************************************************)

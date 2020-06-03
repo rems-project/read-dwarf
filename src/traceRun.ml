@@ -81,8 +81,6 @@ let trace ?dwarf (start : State.t) (events : Trace.t) : State.t =
 
 (** Run a trace by mutating the provided state including it's PC.
     If the trace modified the PC then nothing is done otherwise [next] is added to it.
-
-    TODO reorganize the PC handling better.
 *)
 let trace_pc_mut ?dwarf ~(next : int) (state : State.t) (events : Trace.t) : unit =
   let pc = Arch.pc () in

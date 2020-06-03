@@ -64,7 +64,7 @@ let run (b : t) (start : State.t) : label StateTree.t =
     - pc has be seen more than [loop]
 *)
 
-let gen_endpred ?min ?max ?loop ?(brks = []) : State.exp -> string option =
+let gen_endpred ?min ?max ?loop ?(brks = []) () : State.exp -> string option =
   let endnow fmt = Printf.ksprintf Opt.some fmt in
   let pchtbl = Hashtbl.create 10 in
   let loop_str =
@@ -78,6 +78,7 @@ let gen_endpred ?min ?max ?loop ?(brks = []) : State.exp -> string option =
   function
   | Ast.Bits (bv, _) -> (
       let pc = BitVec.to_int bv in
+      debug "enpred: Evaluating PC 0x%x" pc;
       match (min, max, loop) with
       | (Some min, _, _) when pc < min -> endnow "PC 0x%x was below min 0x%x" pc min
       | (_, Some max, _) when pc >= max -> endnow "PC 0x%x was above max 0x%x" pc max

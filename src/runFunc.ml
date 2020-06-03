@@ -46,7 +46,7 @@ let run_func elfname name dump no_run entry len breakpoints loop =
             let+ l = len in
             sym.addr + l
           in
-          let endpred = Block.gen_endpred ?min ?max ?loop ~brks in
+          let endpred = Block.gen_endpred ?min ?max ?loop ~brks () in
           let runner = Runner.of_dwarf dwarf in
           let block = Block.make ~runner ~start:sym.addr ~endpred in
           if dump then begin
@@ -100,9 +100,10 @@ let term =
 
 let info =
   let doc =
-    "Run a symbolically (or not) a single function. From the start until some end condition is \
+    "Run symbolically (or not) a single function. From the start until some end condition is \
      reached. If no other end condition if specified it will run until some symbolic PC is \
-     encountered which generally means a return (The return address is symbolic)"
+     encountered which generally means a return (The return address is symbolic). If any loop is \
+     present termination is not ensured unless option -l/--loop is used"
   in
   Term.(info "run-func" ~doc ~exits)
 

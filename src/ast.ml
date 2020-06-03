@@ -1,3 +1,5 @@
+(** The main module to use the AST of expression and SMT operation *)
+
 include AstDef
 
 (*****************************************************************************)
@@ -103,7 +105,11 @@ let expect_bits : _ exp -> BitVec.t = function
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Operators } *)
+(** {1 Operators }
+    Those are operators to construct expression, not do any evaluation.
+    In particular the equal in there builds an equality expression, and do not
+    test for expression equality (To do that use {!equal})
+*)
 
 module Op = struct
   let add a b = Manyop (Bvmanyarith Bvadd, [a; b], unknown)
@@ -142,3 +148,28 @@ module Op = struct
 
   let simplify ?(flags = []) e = Simplify (e, flags)
 end
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Comparisons } *)
+
+(** Equality for expression. Polymorphic equality will fail.
+    I love boilerplate code and love Ocaml! *)
+let rec equal_exp ?(annot = fun a b -> true) ~var ?(bnd = fun a b -> true) e e' =
+  let eqe = equal_exp ~annot ~var ~bnd in
+  match (e, e') with
+  | (Var (v, a), Var (v', a')) -> var v v' && annot a a'
+  | (Bound (b, a), Bound (b', a')) -> bnd b b' && annot a a'
+  | (Bits (bv, a), Bits (bv', a')) -> bv = bv' && annot a a'
+  | (Bool (b, a), Bool (b', a')) -> b = b' && annot a a'
+  | (Enum (e, a), Enum (e', a')) -> e = e' && annot a a'
+  | (Unop (u, e, a), Unop (u', e', a')) -> u = u' && eqe e e' && annot a a'
+  | (Binop (b, e, e2, a), Binop (b', e', e2', a')) ->
+      b = b' && eqe e e' && eqe e2 e2' && annot a a'
+  | (Manyop (m, el, a), Manyop (m', el', a')) -> m = m' && List.equal eqe el el' && annot a a'
+  | (Ite (c, e, e2, a), Ite (c', e', e2', a')) -> eqe c c' && eqe e e' && eqe e2 e2' && annot a a'
+  | (Let (b, bl, e, a), Let (b', bl', e', a')) ->
+      let eq_bind = Pair.equal ~fst:bnd ~snd:eqe in
+      eq_bind b b' && List.equal eq_bind bl bl' && eqe e e' && annot a a'
+  | _ -> false

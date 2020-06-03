@@ -24,3 +24,9 @@ let nop _ = ()
 let tee f a =
   f a;
   a
+
+(** [curry f a b = f (a, b)] *)
+let curry f a b = f (a, b)
+
+(** [uncurry f (a, b) = f a b] *)
+let uncurry f (a, b) = f a b

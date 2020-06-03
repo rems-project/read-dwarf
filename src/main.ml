@@ -27,6 +27,7 @@ let pcommands =
     RunFunc.command;
     RunInstr.command;
     RunBlock.command;
+    RunFuncRD.command;
   ]
 
 (** Add the test command if tests are enabled *)

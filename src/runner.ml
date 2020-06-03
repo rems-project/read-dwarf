@@ -29,20 +29,21 @@ type t = {
   dwarf : Dw.t option;
   instrs : (int, slot) Hashtbl.t;  (** Instruction cache *)
   pc : Reg.t;
+  funcs : int Vec.t;  (** Loaded functions by loading order *)
 }
 
 let of_elf ?dwarf elf =
   let instrs = Hashtbl.create 100 in
+  let funcs = Vec.empty () in
   let pc = Arch.pc () in
-  { elf; dwarf; instrs; pc }
+  { elf; dwarf; instrs; pc; funcs }
 
 let of_dwarf dwarf = of_elf ~dwarf dwarf.elf
 
-(** Load a symbol into the runner. All instruction traces are fetched and cached.
-
-    This may imply the discovery of some new register and thus require a state extension.*)
+(** Load a symbol into the runner. All instruction traces are fetched and cached.*)
 let load_sym runner (sym : Elf.Sym.t) =
   info "Loading symbol %s in %s" sym.name runner.elf.filename;
+  Vec.add_one runner.funcs sym.addr;
   let opcode_list = BytesSeq.to_list32bs sym.data in
   List.iteri
     (fun index code ->
@@ -103,12 +104,13 @@ let fetch (runner : t) (pc : int) : slot =
 
     In any case the returned states are unlocked.
 *)
-let execute_normal ?(prelock = fun state -> ()) runner traces next state =
+let execute_normal ?(prelock = fun state -> ()) ~pc runner traces next state =
   let dwarf = runner.dwarf in
   let run_pure () =
     List.map
       (fun trc ->
         let nstate = State.copy state in
+        nstate.last_pc <- pc;
         TraceRun.trace_pc_mut ?dwarf ~next nstate trc;
         nstate)
       traces
@@ -116,6 +118,7 @@ let execute_normal ?(prelock = fun state -> ()) runner traces next state =
   if not (State.is_locked state) then begin
     match traces with
     | [trc] ->
+        state.last_pc <- pc;
         TraceRun.trace_pc_mut ?dwarf ~next state trc;
         [state]
     | trcs ->
@@ -141,7 +144,7 @@ let run ?prelock runner state : State.t list =
   try
     let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
     match fetch runner pc with
-    | Normal (traces, next) -> execute_normal ?prelock runner traces next state
+    | Normal (traces, next) -> execute_normal ?prelock ~pc runner traces next state
     | Special ->
         Raise.fail "Special instruction at 0x%x in %s. unsupported for now" pc runner.elf.filename
     | Nocode -> Raise.fail "Trying to run 0x%x in %s: no code there" pc runner.elf.filename

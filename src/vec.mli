@@ -82,6 +82,14 @@ val map_mut_until : limit:int -> ('a -> 'a) -> 'a t -> unit
 (** Write the value in all the cells of the vector *)
 val fill_all : 'a t -> 'a -> unit
 
+val to_seq_sub : 'a t -> pos:int -> len:int -> 'a Seq.t
+
+val to_seq : 'a t -> 'a Seq.t
+
+val to_seqi_sub : 'a t -> pos:int -> len:int -> (int * 'a) Seq.t
+
+val to_seqi : 'a t -> (int * 'a) Seq.t
+
 (** Vector pretty printer *)
 val pp : ('a -> PP.document) -> 'a t -> PP.document
 

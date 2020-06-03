@@ -29,6 +29,8 @@ module Id = struct
 
   let of_string = int_of_string
 
+  let equal : t -> t -> bool = ( = )
+
   let pp id = id |> to_string |> PP.string
 end
 
@@ -57,6 +59,10 @@ type t = {
   mem : mem;
   elf : Elf.File.t option;
   fenv : Fragment.env;
+  mutable last_pc : int;
+      (** The PC of the instruction that lead into this state. The state should be
+          right after that instruction. This has no semantic meaning as part of the state.
+          It's just for helping knowing what comes from where *)
 }
 
 and tval = { ctyp : Ctype.t option; exp : exp }
@@ -71,13 +77,15 @@ and mem_event =
   | Read of mem_block * var
   | Write of mem_block * exp
   | Lock of t
-      (** represents that all the memory operation below were already in the given state *)
+      (** Represents that all the memory operation below were already in the given state *)
 
 and mem = { mutable trace : mem_event list }
 
 (* Other ast aliases *)
 
 type smt = (Ast.lrng, var, Ast.no, Ast.no) Ast.smt
+
+let equal s s' = Id.equal s.id s'.id
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -131,6 +139,15 @@ module Var = struct
 
   let to_exp (v : t) : exp = Ast.Var (v, dummy_annot)
 
+  let equal v v' =
+    match (v, v') with
+    | (Register (st, reg), Register (st', reg')) -> equal st st' && Reg.equal reg reg'
+    | (ReadVar (st, num), ReadVar (st', num')) -> equal st st' && num = num'
+    | (Arg num, Arg num') -> num = num'
+    | (RetArg, RetArg) -> true
+    | (RetAddr, RetAddr) -> true
+    | _ -> false
+
   let pp sv = sv |> to_string |> PP.string
 
   let pp_bar sv = PP.(bar ^^ pp sv ^^ bar)
@@ -148,6 +165,11 @@ let tval_map_exp f t = { t with exp = f t.exp }
 let get_exp tval = tval.exp
 
 let get_ctyp tval = tval.ctyp
+
+let equal_exp (e : exp) (e' : exp) = Ast.equal_exp ~var:Var.equal e e'
+
+let equal_tval (tv : tval) (tv' : tval) =
+  equal_exp tv.exp tv'.exp && Opt.equal Ctype.equal tv.ctyp tv'.ctyp
 
 let pp_exp_smt (exp : exp) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
 
@@ -169,6 +191,20 @@ module Mem = struct
   type event = mem_event
 
   type t = mem
+
+  let equal_size = Ast.Size.equal
+
+  let equal_block bl bl' = equal_exp bl.addr bl'.addr && equal_size bl.size bl'.size
+
+  let equal_event e e' =
+    match (e, e') with
+    | (Read (mb, v), Read (mb', v')) -> Var.equal v v' && equal_block mb mb'
+    | (Write (mb, e), Write (mb', e')) -> equal_exp e e' && equal_block mb mb'
+    | (Lock st, Lock st') -> equal st st'
+    | _ -> false
+
+  (* TODO rewrite that to stop the search at the first lock *)
+  let equal m m' = List.equal equal_event m.trace m'.trace
 
   let empty () = { trace = [] }
 
@@ -241,12 +277,7 @@ let is_locked state =
 
 let make_reg_cell state ?ctyp p = { exp = Var.to_exp (Register (state, p)); ctyp }
 
-(** Makes a fresh state with all variable fresh and new
-
-    Remark: This create a state according to the current register layout in the Reg module
-    ({!Reg.index}). If new registers are added afterwards, this state won't have them.
-    Use {!copy_extend} to fix that.
-*)
+(** Makes a fresh state with all variable fresh and new *)
 let make ?elf () =
   let id = !next_id in
   let state =
@@ -258,6 +289,7 @@ let make ?elf () =
       mem = Mem.empty ();
       elf;
       fenv = Fragment.Env.make ();
+      last_pc = 0;
     }
   in
   (* Warning: here I'm creating a cyclic reference. Please be aware of that *)
@@ -269,9 +301,7 @@ let make ?elf () =
 (** Do a deep copy of all the mutable part of the state,
     so it can be mutated without retro-action.
 
-    Remark: This create a new state with the same register layout as the input state
-    It will not accommodate register discovered in between
-    Use {!copy_extend} to add the new register that are missing
+    The returned state is always unlocked
 *)
 let copy ?elf state =
   let id = !next_id in
@@ -284,6 +314,7 @@ let copy ?elf state =
       mem = Mem.copy state.mem;
       elf = Opt.(elf ||| state.elf);
       fenv = Fragment.Env.copy state.fenv;
+      last_pc = state.last_pc;
     }
   in
   next_id := id + 1;
@@ -293,6 +324,12 @@ let copy ?elf state =
 (** Copy the state with {!copy} iff it is locked.
     The returned state is always unlocked *)
 let copy_if_locked ?elf state = if is_locked state then copy ?elf state else state
+
+(** Give the previous locked state in this state trace. *)
+let previous state =
+  List.find_map
+    (function Lock state' when not (state' == state) -> Some state' | _ -> None)
+    state.mem.trace
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -454,15 +491,14 @@ let pp_tval { exp; ctyp } =
   match ctyp with None -> pp_exp exp | Some t -> infix 2 1 colon (pp_exp exp) (Ctype.pp t)
 
 let pp s =
-  PP.(
-    record "state"
-      [
-        ("id", Id.pp s.id);
-        ("regs", Reg.Map.pp pp_tval s.regs);
-        ("fenv", Fragment.Env.pp s.fenv);
-        ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
-        ("memory", Mem.pp s.mem);
-        ( "asserts",
-          s.asserts |> List.map (fun e -> prefix 2 1 !^"assert:" $ pp_exp e) |> separate hardline
-        );
-      ])
+  let open PP in
+  record "state"
+    [
+      ("id", Id.pp s.id);
+      ("last_pc", ptr s.last_pc);
+      ("regs", Reg.Map.pp pp_tval s.regs);
+      ("fenv", Fragment.Env.pp s.fenv);
+      ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
+      ("memory", Mem.pp s.mem);
+      ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts);
+    ]

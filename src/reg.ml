@@ -75,6 +75,10 @@ let ensure_adds path ty = ensure_add path ty |> ignore
 
 let iter f = IdMap.iter f index
 
+let seq_all () = Seq.iota (num ())
+
+let equal = ( = )
+
 let pp reg = reg |> to_string |> PP.string
 
 (*****************************************************************************)

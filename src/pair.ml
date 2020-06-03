@@ -12,4 +12,8 @@ let swap (x, y) = (y, x)
 let compare ?(fst = compare) ?(snd = compare) (a1, b1) (a2, b2) =
   match fst a1 a2 with 0 -> snd b1 b2 | x when x < 0 -> -1 | _ -> 1
 
+let equal ?(fst = ( = )) ?(snd = ( = )) (a1, b1) (a2, b2) = fst a1 a2 && snd b1 b2
+
 let make a b = (a, b)
+
+let split a = (a, a)

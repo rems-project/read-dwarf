@@ -121,7 +121,7 @@ smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'm) }}
   | ( declare-const var ty )            :: :: DeclareConst
   | ( define-const var exp )            :: :: DefineConst
   | ( assert exp )                      :: :: Assert
-  | ( simplify exp fbool1 .. fboolj )    :: :: Simplify
+  | ( simplify exp fbool1 .. fboolj )   :: :: Simplify
   | ( push )                            :: :: Push
   | ( pop )                             :: :: Pop
   | ( get-info :version )               :: :: GetVersion

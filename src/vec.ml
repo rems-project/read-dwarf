@@ -115,6 +115,28 @@ let fill_all vec elem =
     unsafe_set vec i elem
   done
 
+let to_seq_sub vec ~pos ~len =
+  let rec next len vec i () =
+    if i < len then Seq.Cons (unsafe_get vec i, next len vec (i + 1)) else Seq.Nil
+  in
+  if pos < 0 || pos + len > length vec then Raise.inv_arg "Vec.to_seq_sub: invalid range";
+  next (pos + len) vec pos
+
+let to_seq vec =
+  let len = length vec in
+  to_seq_sub vec ~pos:0 ~len
+
+let to_seqi_sub vec ~pos ~len =
+  let rec next len vec i () =
+    if i < len then Seq.Cons ((i, unsafe_get vec i), next len vec (i + 1)) else Seq.Nil
+  in
+  if pos < 0 || pos + len > length vec then Raise.inv_arg "Vec.to_seq_sub: invalid range";
+  next (pos + len) vec pos
+
+let to_seqi vec =
+  let len = length vec in
+  to_seqi_sub vec ~pos:0 ~len
+
 let pp conv vec = PP.(!^"vec" ^^ (vec |> to_array |> array conv))
 
 let ppi conv vec = PP.(vec |> to_list |> List.mapi (fun i v -> (int i, conv v)) |> PP.mapping "")

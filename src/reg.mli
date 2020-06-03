@@ -84,6 +84,12 @@ val ensure_adds : Path.t -> ty -> unit
 (** Run a function over all registers *)
 val iter : (Path.t -> t -> ty -> unit) -> unit
 
+(** Returns a sequence of all registers *)
+val seq_all : unit -> t Seq.t
+
+(** Equality predicate *)
+val equal : t -> t -> bool
+
 (** Pretty prints the register (Just use {!to_string}) *)
 val pp : t -> PP.document
 
@@ -117,6 +123,9 @@ module PMap : sig
 
   (** Throw [Invalid_argument] if the register is not bound *)
   val get : 'a t -> reg -> 'a
+
+  (** Builds the {!PMap} from a sequence *)
+  val of_seq : (reg * 'a) Seq.t -> 'a t
 
   val pp : ('a -> PP.document) -> 'a t -> PP.document
 end

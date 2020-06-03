@@ -32,5 +32,8 @@ val empty : unit -> 'a t
 (** Returns a list of bindings in the hash vector *)
 val bindings : 'a t -> (int * 'a) list
 
+(** Fill the hashVector from a sequence *)
+val of_seq : (int * 'a) Seq.t -> 'a t
+
 (** Pretty print a hashVector *)
 val pp : ('a -> PP.document) -> 'a t -> PP.document

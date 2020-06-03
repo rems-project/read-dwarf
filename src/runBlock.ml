@@ -81,7 +81,7 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len brea
     let+ l = len in
     start + l
   in
-  let endpred = Block.gen_endpred ?min ?max ~brks in
+  let endpred = Block.gen_endpred ?min ?max ~brks () in
   TraceCache.start @@ Arch.get_isla_config ();
   let runner = Runner.of_elf elf in
   (elf, Block.make ~runner ~start ~endpred)

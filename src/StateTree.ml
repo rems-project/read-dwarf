@@ -1,3 +1,5 @@
+(** This module provides a tree of state to represent an unmerged execution *)
+
 type 'a t = { state : State.t; data : 'a; rest : 'a t list }
 
 let bars =
@@ -16,6 +18,9 @@ let rec prefix_iter f t =
 let rec postfix_iter f t =
   List.iter (postfix_iter f) t.rest;
   f t.data t.state
+
+(** Default iter when you don't care about order *)
+let iter = prefix_iter
 
 (** This is prefix, do a List.rev to get a postfix version *)
 let rec map_to_list f t =

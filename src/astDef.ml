@@ -21,6 +21,8 @@ module Size = struct
 
   let to_bits size = 8 * to_bytes size
 
+  let equal = ( = )
+
   let pp_bytes s = s |> to_bytes |> PP.int
 end
 
