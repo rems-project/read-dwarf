@@ -94,9 +94,9 @@ let prec_manyop : Ast.manyop -> prec = function
 (** {1 Actual Pretty printing } *)
 
 let pp_bits bv =
-  (bv |> BitVec.to_string ~base:16 ~force_width:false ~prefix:true |> string)
-  ^^ colon
-  ^^ (bv |> BitVec.size |> int)
+  let size = BitVec.size bv in
+  let main_part = bv |> BitVec.to_string ~base:16 ~force_width:false ~prefix:true |> string in
+  if size = 64 then main_part else main_part ^^ colon ^^ int size
 
 let ppnot = PP.char '!'
 
