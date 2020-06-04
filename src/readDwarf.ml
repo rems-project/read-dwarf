@@ -67,7 +67,7 @@ let qemu_log =
 let out_file =
   let doc = "file for output (optional)" in
   setter Globals.out_file
-    Arg.(value & opt (some non_dir_file) None & info ["out"] ~docv:"OUT_FILE" ~doc)
+    Arg.(value & opt (some non_dir_file) None & info ["o"; "out"] ~docv:"OUT_FILE" ~doc)
 
 let info =
   let doc = "Read and dump dwarf information" in
