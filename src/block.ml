@@ -18,17 +18,21 @@ type t = { runner : Runner.t; start : int; endpred : State.exp -> string option 
     [endpred] is a predicate on the symbolic PC expression *)
 let make ~runner ~start ~endpred = { runner; start; endpred }
 
-type label = Start | End of string | BranchAt of int
+type label = Start | End of string | BranchAt of int | NormalAt of int
 
 let label_to_string = function
   | Start -> "Start"
   | End s -> Printf.sprintf "End (%s)" s
   | BranchAt pc -> Printf.sprintf "Branch at 0x%x" pc
+  | NormalAt pc -> Printf.sprintf "Normal at 0x%x" pc
 
 let pp_label label = label |> label_to_string |> PP.string
 
-(** Run the block an return a state tree indexed by the addresses of the branches *)
-let run (b : t) (start : State.t) : label StateTree.t =
+(** Run the block an return a state tree indexed by the addresses of the branches
+
+    When [every_instruction] is true, It will make a snapshot of
+*)
+let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree.t =
   let pcreg = Arch.pc () in
   assert (State.is_locked start);
   let rec run_from state =
@@ -42,10 +46,17 @@ let run (b : t) (start : State.t) : label StateTree.t =
     | None -> (
         info "Running pc %t" (PP.top State.pp_exp pc_exp);
         let prelock state = State.map_mut_exp Z3.simplify state in
+        if every_instruction then begin
+          prelock state;
+          State.lock state
+        end;
         let states = Runner.run ~prelock b.runner state in
         match states with
         | [] -> Raise.fail "Reached a exceptional instruction"
-        | [state] -> run_from state
+        | [state] when not every_instruction -> run_from state
+        | [state] when every_instruction ->
+            let rest = [run_from state] in
+            { state; data = NormalAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
         | states ->
             let rest = List.map run_from states in
             StateTree.

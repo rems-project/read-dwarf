@@ -11,7 +11,7 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let run_func_rd elfname name objdump_d branchtables every =
+let run_func_rd elfname name objdump_d branchtables every_instruction =
   base "Running with rd %s in %s" name elfname;
   base "Loading %s" elfname;
   let dwarf = Dw.of_file elfname in
@@ -46,7 +46,7 @@ let run_func_rd elfname name objdump_d branchtables every =
       let runner = Runner.of_dwarf dwarf in
       let block = Block.make ~runner ~start:sym.addr ~endpred in
       base "Start running";
-      let tree = Block.run block start in
+      let tree = Block.run ~every_instruction block start in
       base "Ended running, start pretty printing";
       (* This table will contain the state diff to print at each pc with a message *)
       let instr_data : (int, string * StateDiff.t) Hashtbl.t = Hashtbl.create 100 in
@@ -60,6 +60,7 @@ let run_func_rd elfname name objdump_d branchtables every =
               match a with
               | Block.Start -> ()
               | Block.BranchAt pc -> Hashtbl.add instr_data pc ("Before branch", diff)
+              | Block.NormalAt pc -> Hashtbl.add instr_data pc ("Normal instr", diff)
               | Block.End s ->
                   Hashtbl.add instr_data (st.last_pc + 4)
                     (Printf.sprintf "End because: %s" s, diff)
@@ -90,8 +91,7 @@ let func =
 
 let every =
   let doc =
-    "Whether to dump state diff at every instruction (by default, only at branch points)\n\
-    \      (unimplemented for now, will be ingnored)"
+    "Whether to dump state diff at every instruction (by default, only at branch points)"
   in
   Arg.(value & flag & info ["e"; "every-instruction"] ~doc)
 
