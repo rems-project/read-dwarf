@@ -255,8 +255,14 @@ module Mem = struct
 
   let pp_event : event -> PP.document = function
     | Lock s -> PP.(dprintf "Lock %d" s.id)
-    | Read (mb, var) -> PP.(!^"Reading " ^^ Var.pp var ^^ !^" from: " ^^ pp_block mb)
-    | Write (mb, exp) -> PP.(!^"Writing " ^^ pp_exp exp ^^ !^" at " ^^ pp_block mb)
+    | Read (mb, var) ->
+        PP.(
+          dprintf "Reading %d bits in |" (Size.to_bits mb.size)
+          ^^ Var.pp var ^^ !^"| from: " ^^ pp_exp mb.addr)
+    | Write (mb, exp) ->
+        PP.(
+          dprintf "Writing %d bits with " (Size.to_bits mb.size)
+          ^^ pp_exp exp ^^ !^" at " ^^ pp_exp mb.addr)
 
   let pp mem = PP.prefix 2 1 (PP.string "Full trace:") (PP.list pp_event (List.rev mem.trace))
 end
