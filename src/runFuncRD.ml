@@ -38,6 +38,7 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
     let instr = analyse_analysis.instructions.(index) in
     Analyse.pp_instruction Types.Ascii analyse_test analyse_analysis index instr
   in
+  base "Entry state:\n%t" PP.(topi State.pp start);
   match func.sym with
   | None -> fail "Function %s exists in DWARF data but do not have any code" name
   | Some sym ->
@@ -60,7 +61,7 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
               match a with
               | Block.Start -> ()
               | Block.BranchAt pc -> Hashtbl.add instr_data pc ("Before branch", diff)
-              | Block.NormalAt pc -> Hashtbl.add instr_data pc ("Normal instr", diff)
+              | Block.NormalAt pc -> Hashtbl.add instr_data (pc + 4) ("Normal instr", diff)
               | Block.End s ->
                   Hashtbl.add instr_data (st.last_pc + 4)
                     (Printf.sprintf "End because: %s" s, diff)
