@@ -22,6 +22,9 @@
 % Hi-lock: (("^.*\\(?:^[+].*$\\).*$" (0 (quote font-lock-constant-face) prepend)))
 % Acquamarine, #7fffd4
 %
+% Hi-lock: (("^.*\\(?:^[~].*$\\).*$" (0 (quote compilation-info) prepend)))
+% ??? font-lock-warning-face
+%
 % Hi-lock: (("^.*\\(?:^[-].*$\\).*$" (0 (quote shadow) prepend)))
 % Hi-lock: (("^.*\\(?:^[-].*$\\).*$" (0 (quote shadow) prepend)))
 % grey70
