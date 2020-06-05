@@ -44,69 +44,70 @@ module Mem = struct
 end
 
 (** This module provide diff utility between fragment environment ({!Fragment.Env.t}) *)
-module Fenv = struct
-  type modif_elem = Add of int * Ctype.t | Rem of int | Mod of int * Ctype.t
 
-  type modif = modif_elem list
-
-  type t = { modifs : (int * modif) list; news : (int * Fragment.t) list }
-
-  (** Make a diff between fragment *)
-  let frag_diff (f1 : Fragment.t) (f2 : Fragment.t) : modif_elem list =
-    let l1 = Fragment.bindings f1 in
-    let l2 = Fragment.bindings f2 in
-    let rec diff l1 l2 =
-      match (l1, l2) with
-      | ([], _) -> List.map (fun (i, c) -> Add (i, c)) l1
-      | (_, []) -> List.map (fun (i, c) -> Rem i) l1
-      | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a1 = a2 && Ctype.equal ct1 ct2 -> diff t1 t2
-      | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a1 = a2 -> Mod (a2, ct2) :: diff t1 t2
-      | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a1 < a2 -> Rem a1 :: diff t1 l2
-      | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a2 < a1 -> Add (a2, ct2) :: diff l1 t2
-      | _ -> failwith "I'm bad with arithmetic (This should not be possible)"
-    in
-    diff l1 l2
-
-  let diff (e1 : Fragment.Env.t) (e2 : Fragment.Env.t) =
-    let n1 = Vec.length e1.frags in
-    let n2 = Vec.length e2.frags in
-    let new_frags =
-      if n2 < n1 then begin
-        warn
-          "StateDiff: less fragment in the new state than in the old one. Deleted fragment not \
-           shown";
-        0
-      end
-      else n2 - n1
-    in
-    let modifs =
-      Seq.iota n1
-      |> Seq.filter_map (fun i ->
-             match frag_diff (Fragment.Env.get e1 i) (Fragment.Env.get e2 i) with
-             | [] -> None
-             | l -> Some (i, l))
-      |> List.of_seq
-    in
-    let news = Vec.to_seqi_sub e2.frags ~pos:n1 ~len:new_frags |> List.of_seq in
-    { modifs; news }
-
-  open PP
-
-  let pp_modif_elem = function
-    | Add (i, ctyp) -> prefix 2 1 (!^"At " ^^ shex i ^^ !^" add:") (Ctype.pp ctyp)
-    | Mod (i, ctyp) -> prefix 2 1 (!^"At " ^^ shex i ^^ !^" modify:") (Ctype.pp ctyp)
-    | Rem i -> !^"Remove type at " ^^ shex i
-
-  let pp_modif num mel =
-    prefix 2 1 (dprintf "Change on fragment %d:" num) (list pp_modif_elem mel)
-
-  let pp_new num frag = prefix 2 1 (dprintf "New fragment %d:" num) (Fragment.pp frag)
-
-  let pp (fd : t) =
-    separate hardline (List.map (uncurry pp_modif) fd.modifs)
-    ^^ hardline
-    ^^ separate hardline (List.map (uncurry pp_new) fd.news)
-end
+(* module Fenv = struct
+ *   type modif_elem = Add of int * Ctype.t | Rem of int | Mod of int * Ctype.t
+ *
+ *   type modif = modif_elem list
+ *
+ *   type t = { modifs : (int * modif) list; news : (int * Fragment.t) list }
+ *
+ *   (\** Make a diff between fragment *\)
+ *   let frag_diff (f1 : Fragment.t) (f2 : Fragment.t) : modif_elem list =
+ *     let l1 = Fragment.bindings f1 in
+ *     let l2 = Fragment.bindings f2 in
+ *     let rec diff l1 l2 =
+ *       match (l1, l2) with
+ *       | ([], _) -> List.map (fun (i, c) -> Add (i, c)) l1
+ *       | (_, []) -> List.map (fun (i, c) -> Rem i) l1
+ *       | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a1 = a2 && Ctype.equal ct1 ct2 -> diff t1 t2
+ *       | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a1 = a2 -> Mod (a2, ct2) :: diff t1 t2
+ *       | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a1 < a2 -> Rem a1 :: diff t1 l2
+ *       | ((a1, ct1) :: t1, (a2, ct2) :: t2) when a2 < a1 -> Add (a2, ct2) :: diff l1 t2
+ *       | _ -> failwith "I'm bad with arithmetic (This should not be possible)"
+ *     in
+ *     diff l1 l2
+ *
+ *   let diff (e1 : Fragment.Env.t) (e2 : Fragment.Env.t) =
+ *     let n1 = Vec.length e1.frags in
+ *     let n2 = Vec.length e2.frags in
+ *     let new_frags =
+ *       if n2 < n1 then begin
+ *         warn
+ *           "StateDiff: less fragment in the new state than in the old one. Deleted fragment not \
+ *            shown";
+ *         0
+ *       end
+ *       else n2 - n1
+ *     in
+ *     let modifs =
+ *       Seq.iota n1
+ *       |> Seq.filter_map (fun i ->
+ *              match frag_diff (Fragment.Env.get e1 i) (Fragment.Env.get e2 i) with
+ *              | [] -> None
+ *              | l -> Some (i, l))
+ *       |> List.of_seq
+ *     in
+ *     let news = Vec.to_seqi_sub e2.frags ~pos:n1 ~len:new_frags |> List.of_seq in
+ *     { modifs; news }
+ *
+ *   open PP
+ *
+ *   let pp_modif_elem = function
+ *     | Add (i, ctyp) -> prefix 2 1 (!^"At " ^^ shex i ^^ !^" add:") (Ctype.pp ctyp)
+ *     | Mod (i, ctyp) -> prefix 2 1 (!^"At " ^^ shex i ^^ !^" modify:") (Ctype.pp ctyp)
+ *     | Rem i -> !^"Remove type at " ^^ shex i
+ *
+ *   let pp_modif num mel =
+ *     prefix 2 1 (dprintf "Change on fragment %d:" num) (list pp_modif_elem mel)
+ *
+ *   let pp_new num frag = prefix 2 1 (dprintf "New fragment %d:" num) (Fragment.pp frag)
+ *
+ *   let pp (fd : t) =
+ *     separate hardline (List.map (uncurry pp_modif) fd.modifs)
+ *     ^^ hardline
+ *     ^^ separate hardline (List.map (uncurry pp_new) fd.news)
+ * end *)
 
 (** The type of state diff *)
 type t = {
@@ -116,7 +117,7 @@ type t = {
   (* read_vars are explicitly note here as one can get the read var diff from mem *)
   asserts : exp list;
   mem : Mem.t;
-  fenv : Fenv.t;
+  fenv : Fragment.Env.t;
 }
 
 (** Generic diff between two {!Reg.Map.t}.
@@ -143,7 +144,7 @@ let pp (sd : t) =
       ("from", State.Id.pp sd.src ^^ !^" -> " ^^ State.Id.pp sd.dst);
       ("regs", Reg.PMap.pp State.pp_tval sd.regs);
       ("memory", Mem.pp sd.mem);
-      ("fenv", Fenv.pp sd.fenv);
+      ("fenv", Fragment.Env.pp sd.fenv);
       ( "asserts",
         separate_map hardline (fun e -> prefix 2 1 !^"assert:" $ State.pp_exp e) sd.asserts );
     ]
@@ -157,7 +158,7 @@ let diff (s1 : state) (s2 : state) : t =
   let regs = reg_map_diff s1.regs s2.regs in
   let asserts = list_diff State.equal_exp "asserts" s1.asserts s2.asserts in
   let mem = Mem.diff s1.mem s2.mem in
-  let fenv = Fenv.diff s1.fenv s2.fenv in
+  let fenv = s2.fenv in
   let res = { src; dst; regs; asserts; mem; fenv } in
 
   debug "diffing\n%t\n\n%t\ninto\n%t\n"
