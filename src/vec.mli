@@ -7,6 +7,8 @@ val length : 'a t -> int
 
 val empty : unit -> 'a t
 
+val mem : 'a -> 'a t -> bool
+
 val get : 'a t -> int -> 'a
 
 val unsafe_get : 'a t -> int -> 'a
@@ -81,6 +83,9 @@ val map_mut_until : limit:int -> ('a -> 'a) -> 'a t -> unit
 
 (** Write the value in all the cells of the vector *)
 val fill_all : 'a t -> 'a -> unit
+
+(** Insert an element at the specified position that may be one past the end *)
+val insert : 'a t -> int -> 'a -> unit
 
 val to_seq_sub : 'a t -> pos:int -> len:int -> 'a Seq.t
 

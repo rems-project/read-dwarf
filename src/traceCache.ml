@@ -116,3 +116,5 @@ let get_traces (opcode : BytesSeq.t) : Trace.t list =
       let straces = List.map Trace.simplify traces in
       TC.add cache (Some opcode) straces;
       straces
+
+let get_instr (opcode : BytesSeq.t) : Instr.t = Instr.of_traces @@ get_traces opcode

@@ -8,6 +8,8 @@ let length = length
 
 let empty = empty
 
+let mem = mem
+
 let map = map
 
 let get = get
@@ -114,6 +116,17 @@ let fill_all vec elem =
   for i = 0 to len - 1 do
     unsafe_set vec i elem
   done
+
+let insert vec pos elem =
+  let len = length vec in
+  if pos = len then add_one vec elem
+  else begin
+    add_one vec (unsafe_get vec (len - 1));
+    for i = len - 2 downto pos do
+      unsafe_get vec i |> unsafe_set vec (i + 1)
+    done;
+    unsafe_set vec pos elem
+  end
 
 let to_seq_sub vec ~pos ~len =
   let rec next len vec i () =

@@ -17,7 +17,7 @@ end)
 
 (** Give the instruction descriptor at a given address *)
 type slot =
-  | Normal of Trace.t list * int  (** The traces and the size of the instruction *)
+  | Normal of Instr.t  (** The traces and the size of the instruction *)
   | Special  (** Special instructions. Will be used to represent external events *)
   | Nocode
       (** The is no code at this address. Running it is UB.
@@ -49,15 +49,15 @@ let load_sym runner (sym : Elf.Sym.t) =
     (fun index code ->
       let addr = sym.addr + (4 * index) in
       try
-        let traces = TraceCache.get_traces code in
-        if traces = [] then begin
+        let instr = TraceCache.get_instr code in
+        if instr.traces = [] then begin
           debug "Instruction at 0x%x in %s is loaded as special" addr sym.name;
           Hashtbl.add runner.instrs addr Special
         end
         else begin
           debug "Instruction at 0x%x in %s is loaded as normal. Traces are:\n%t" addr sym.name
-            PP.(topi Trace.pp_multiple traces);
-          Hashtbl.add runner.instrs addr (Normal (traces, 4))
+            PP.(topi Instr.pp instr);
+          Hashtbl.add runner.instrs addr (Normal instr)
         end
       with exn ->
         warn "Could not convert isla trace of instruction at 0x%x in %s to Trace.t: %s" addr
@@ -104,22 +104,23 @@ let fetch (runner : t) (pc : int) : slot =
 
     In any case the returned states are unlocked.
 *)
-let execute_normal ?(prelock = fun state -> ()) ~pc runner traces next state =
+let execute_normal ?(prelock = fun state -> ()) ~pc runner (instr : Instr.t) state =
   let dwarf = runner.dwarf in
+  let next = instr.length in
   let run_pure () =
     List.map
-      (fun trc ->
+      (fun (trc : Instr.trace_meta) ->
         let nstate = State.copy state in
         nstate.last_pc <- pc;
-        TraceRun.trace_pc_mut ?dwarf ~next nstate trc;
+        TraceRun.trace_pc_mut ?dwarf ~next nstate trc.trace;
         nstate)
-      traces
+      instr.traces
   in
   if not (State.is_locked state) then begin
-    match traces with
+    match instr.traces with
     | [trc] ->
         state.last_pc <- pc;
-        TraceRun.trace_pc_mut ?dwarf ~next state trc;
+        TraceRun.trace_pc_mut ?dwarf ~next state trc.trace;
         [state]
     | trcs ->
         prelock state;
@@ -144,7 +145,7 @@ let run ?prelock runner state : State.t list =
   try
     let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
     match fetch runner pc with
-    | Normal (traces, next) -> execute_normal ?prelock ~pc runner traces next state
+    | Normal instr -> execute_normal ?prelock ~pc runner instr state
     | Special ->
         Raise.fail "Special instruction at 0x%x in %s. unsupported for now" pc runner.elf.filename
     | Nocode -> Raise.fail "Trying to run 0x%x in %s: no code there" pc runner.elf.filename
@@ -161,8 +162,8 @@ let run ?prelock runner state : State.t list =
 let pp_slot =
   let open PP in
   function
-  | Normal (traces, next) ->
-      prefix 4 1 (dprintf "Normal instruction of size %d:" next) (Trace.pp_multiple traces)
+  | Normal instr ->
+      prefix 4 1 (dprintf "Normal instruction of size %d:" instr.length) (Instr.pp instr)
   | Special -> !^"Special instruction"
   | Nocode -> !^"Not an instruction"
   | IslaFail -> !^"Isla failed at that PC: investigate"
