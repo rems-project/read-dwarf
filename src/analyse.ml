@@ -3376,7 +3376,9 @@ let mk_inlining test sdt instructions =
   let (inlining_list, max_labels) = f [] issr 25 0 0 [] in
   let inlining = Array.of_list inlining_list in
 
-  let pp_inlining_label_prefix s = " " ^ s ^ String.make (max_labels - String.length s) ' ' ^ " " in
+  let pp_inlining_label_prefix s =
+    " " ^ s ^ String.make (max_labels - String.length s) ' ' ^ " "
+  in
 
   (inlining, pp_inlining_label_prefix)
 
@@ -3683,8 +3685,12 @@ let pp_instruction m test an k i =
       else ""
     end
   (* the inlining label prefix *)
-  ^ css m Render_inlining ("~" ^ let s = (an.pp_inlining_label_prefix ppd_labels) in String.sub s 1 (String.length s - 1))
-
+  ^ css m Render_inlining
+      ("~"
+      ^
+      let s = an.pp_inlining_label_prefix ppd_labels in
+      String.sub s 1 (String.length s - 1)
+      )
   (* the rendered control flow *)
   ^ css m Render_ctrlflow an.rendered_control_flow.(k)
   (* the address and (hex) instruction *)
