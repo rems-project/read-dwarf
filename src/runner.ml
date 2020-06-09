@@ -158,6 +158,16 @@ let run ?prelock runner state : State.t list =
       runner.elf.filename;
     Raise.again exn
 
+(** Return the {!Instr.t} data of the instruction at address,
+    and throw [Not_found] if the instruction was invalid*)
+let expect_normal runner addr =
+  match fetch runner addr with Normal instr -> instr | _ -> raise Not_found
+
+(** Return the {!Instr.t} data of the instruction at address,
+    and [None] if the instruction was invalid*)
+let get_normal_opt runner addr : Instr.t option =
+  match fetch runner addr with Normal instr -> Some instr | _ -> None
+
 (** Pretty prints a instruction slot *)
 let pp_slot =
   let open PP in

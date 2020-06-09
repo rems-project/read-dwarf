@@ -21,3 +21,9 @@ let iota_step_up ?(start = 0) ~step ~endi : int t =
     if cur < endi then Cons (cur, aux step endi (cur + step)) else Nil
   in
   aux step endi start
+
+let rec stop_at f (s : 'a Seq.t) () =
+  match s () with
+  | Nil -> Nil
+  | Cons (a, s') when f a -> Nil
+  | Cons (a, s') -> Cons (a, stop_at f s')

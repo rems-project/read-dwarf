@@ -76,6 +76,23 @@ let sub ~pos ~len l = take len (drop pos l)
 let rec short_combine l1 l2 =
   match (l1, l2) with (a1 :: t1, a2 :: t2) -> (a1, a2) :: short_combine t1 t2 | _ -> []
 
+(** Same as [merge] but duplicate elements are deleted. It is assumed that element
+    are not duplicate in the argument (like if sorted with [sort_uniq] *)
+let rec merge_uniq cmp l1 l2 =
+  match (l1, l2) with
+  | ([], _) -> l2
+  | (_, []) -> l1
+  | (a1 :: t1, a2 :: t2) -> (
+      match cmp a1 a2 with
+      | 0 -> a1 :: merge_uniq cmp t1 t2
+      | x when x < 0 -> a1 :: merge_uniq cmp t1 l2
+      | x -> a2 :: merge_uniq cmp l1 t2
+    )
+
+let of_seq_rev s =
+  let rec aux acc s = match s () with Seq.Nil -> acc | Seq.Cons (a, s) -> aux (a :: acc) s in
+  aux [] s
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)

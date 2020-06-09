@@ -53,9 +53,12 @@ type mem_size = Ast.Size.t
 *)
 type t = {
   id : id;
+  base_state : t option;
+  (* The immediate dominator state in the control flow graph *)
   mutable regs : tval Reg.Map.t;
   read_vars : (ty * tval) vector;
   mutable asserts : exp list;
+  (* Only asserts since base_state *)
   mem : mem;
   elf : Elf.File.t option;
   fenv : Fragment.env;
@@ -289,6 +292,7 @@ let make ?elf () =
   let state =
     {
       id;
+      base_state = None;
       regs = Reg.Map.dummy ();
       read_vars = Vec.empty ();
       asserts = [];
@@ -307,16 +311,21 @@ let make ?elf () =
 (** Do a deep copy of all the mutable part of the state,
     so it can be mutated without retro-action.
 
+    If the copied state is locked, then new state is based on it,
+    otherwise it is a literal copy.
+
     The returned state is always unlocked
 *)
 let copy ?elf state =
   let id = !next_id in
+  let locked = is_locked state in
   let nstate =
     {
       id;
+      base_state = (if locked then Some state else state.base_state);
       regs = Reg.Map.copy state.regs;
       read_vars = Vec.empty ();
-      asserts = state.asserts;
+      asserts = (if locked then [] else state.asserts);
       mem = Mem.copy state.mem;
       elf = Opt.(elf ||| state.elf);
       fenv = Fragment.Env.copy state.fenv;
@@ -332,10 +341,7 @@ let copy ?elf state =
 let copy_if_locked ?elf state = if is_locked state then copy ?elf state else state
 
 (** Give the previous locked state in this state trace. *)
-let previous state =
-  List.find_map
-    (function Lock state' when not (state' == state) -> Some state' | _ -> None)
-    state.mem.trace
+let previous state = state.base_state
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -501,10 +507,34 @@ let pp s =
   record "state"
     [
       ("id", Id.pp s.id);
+      ("base_state", Opt.fold ~none:!^"none" ~some:(fun s -> Id.pp s.id) s.base_state);
       ("last_pc", ptr s.last_pc);
       ("regs", Reg.Map.pp pp_tval s.regs);
       ("fenv", Fragment.Env.pp s.fenv);
       ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
       ("memory", Mem.pp s.mem);
+      ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts);
+    ]
+
+(** Print only the mentioned regs and the memory and asserts since the base_state.
+    Until a better solution is found, the fenv will be printed entirely all the time *)
+let pp_partial ~regs s =
+  let open PP in
+  record "state"
+    [
+      ("id", Id.pp s.id);
+      ("base_state", Opt.fold ~none:!^"none" ~some:(fun s -> Id.pp s.id) s.base_state);
+      ("last_pc", ptr s.last_pc);
+      ( "regs",
+        List.map (fun reg -> (Reg.pp reg, Reg.Map.get s.regs reg |> pp_tval)) regs
+        |> PP.mapping "" );
+      ("fenv", Fragment.Env.pp s.fenv);
+      ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
+      ( "memory",
+        s.mem.trace |> List.to_seq
+        |> Seq.stop_at (function
+             | Lock s' -> Opt.equal ( == ) (Some s') s.base_state
+             | _ -> false)
+        |> List.of_seq_rev |> list Mem.pp_event );
       ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts);
     ]

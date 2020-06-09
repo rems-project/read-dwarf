@@ -4,8 +4,12 @@
 
 type trace_meta = { trace : Trace.t; jump : bool; footprint : Reg.t list }
 
-type t = { traces : trace_meta list; length : int  (** Bytes length *) }
+type t = { traces : trace_meta list; length : int;  (** Bytes length *) footprint : Reg.t list }
 
+(** Helper to access the [footprint] field *)
+let footprint t = t.footprint
+
+(** Compute the metadata of trace *)
 let trace_meta_of_trace trace =
   let pc = Arch.pc () in
   let footprint = ref [] in
@@ -27,10 +31,14 @@ let trace_meta_of_trace trace =
   List.iter process_event trace;
   { trace; jump = !jump; footprint = List.sort_uniq compare !footprint }
 
+(** Generate an instruction full data from a list of traces *)
 let of_traces traces =
   let traces = List.map trace_meta_of_trace traces in
   let length = 4 (* TODO *) in
-  { traces; length }
+  let footprint =
+    List.fold_left (fun l (tr : trace_meta) -> List.merge_uniq compare l tr.footprint) [] traces
+  in
+  { traces; length; footprint }
 
 (** Pretty print multiple traces *)
 let pp instr =

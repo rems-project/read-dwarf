@@ -54,8 +54,8 @@ let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree
         match states with
         | [] -> Raise.fail "Reached a exceptional instruction"
         | [state] when not every_instruction -> run_from state
-        | [state] when every_instruction ->
-            let rest = [run_from state] in
+        | [nstate] when every_instruction ->
+            let rest = [run_from nstate] in
             { state; data = NormalAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
         | states ->
             let rest = List.map run_from states in

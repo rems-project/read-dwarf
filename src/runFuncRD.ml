@@ -42,7 +42,6 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
   match func.sym with
   | None -> fail "Function %s exists in DWARF data but do not have any code" name
   | Some sym ->
-      let open Opt in
       let endpred = Block.gen_endpred ~loop:1 ~brks:[] () in
       let runner = Runner.of_dwarf dwarf in
       let block = Block.make ~runner ~start:sym.addr ~endpred in
@@ -50,22 +49,40 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
       let tree = Block.run ~every_instruction block start in
       base "Ended running, start pretty printing";
       (* This table will contain the state diff to print at each pc with a message *)
-      let instr_data : (int, string * StateDiff.t) Hashtbl.t = Hashtbl.create 100 in
+      let instr_data : (int, string * State.t * Reg.t list) Hashtbl.t = Hashtbl.create 100 in
       let pc_reg = Arch.pc () in
+      let get_footprint pc =
+        Runner.get_normal_opt runner pc |> Opt.fold ~none:[] ~some:Instr.footprint
+      in
       StateTree.iter
         (fun a st ->
-          match State.previous st with
-          | None -> ()
-          | Some prev -> (
-              let diff = StateDiff.diff prev st in
-              match a with
-              | Block.Start -> ()
-              | Block.BranchAt pc -> Hashtbl.add instr_data pc ("Before branch", diff)
-              | Block.NormalAt pc -> Hashtbl.add instr_data (pc + 4) ("Normal instr", diff)
-              | Block.End s ->
-                  Hashtbl.add instr_data (st.last_pc + 4)
-                    (Printf.sprintf "End because: %s" s, diff)
-            ))
+          match a with
+          | Block.Start -> ()
+          | Block.BranchAt pc ->
+              let cur_instr_f = get_footprint pc in
+              let last_pc = st.last_pc in
+              let last_instr_f = get_footprint last_pc in
+              let s =
+                if last_pc <> pc - 4 then Printf.sprintf "Coming from 0x%x: " last_pc else ""
+              in
+              let regs = List.merge_uniq Stdlib.compare cur_instr_f last_instr_f in
+              Hashtbl.add instr_data pc
+                (Printf.sprintf "%sBefore branch %t" s PP.(tos (list Reg.pp) regs), st, regs)
+          | Block.NormalAt pc ->
+              let cur_instr_f = get_footprint pc in
+              let last_pc = st.last_pc in
+              let last_instr_f = get_footprint last_pc in
+              let s =
+                if last_pc <> pc - 4 then Printf.sprintf "Coming from 0x%x: " last_pc else ""
+              in
+              let regs = List.merge_uniq Stdlib.compare cur_instr_f last_instr_f in
+              Hashtbl.add instr_data pc
+                (Printf.sprintf "%sNormal instruction %t" s PP.(tos (list Reg.pp) regs), st, regs)
+          | Block.End s ->
+              let last_pc = st.last_pc in
+              let last_instr = Runner.expect_normal runner last_pc in
+              Hashtbl.add instr_data (st.last_pc + 4)
+                (Printf.sprintf "End because: %s" s, st, last_instr.footprint))
         tree;
       Vec.iter
         (fun funcaddr ->
@@ -73,12 +90,9 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
           Analyse.pp_instruction_init ();
           Seq.iota_step_up ~start:funcaddr ~step:4 ~endi:(funcaddr + sym.size)
           |> Seq.iter (fun pc ->
-                 begin
-                   match Hashtbl.find_opt instr_data pc with
-                   | Some (msg, stdiff) ->
-                       base "StateDiff at 0x%x, %s:\n%t" pc msg PP.(topi StateDiff.pp stdiff)
-                   | None -> ()
-                 end;
+                 Hashtbl.find_all instr_data pc
+                 |> List.iter (fun (msg, st, regs) ->
+                        base "At 0x%x, %s:\n%t" pc msg PP.(topi (State.pp_partial ~regs) st));
                  print_string (print_analyse_instruction pc)))
         runner.funcs
 

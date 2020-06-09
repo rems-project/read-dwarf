@@ -45,9 +45,14 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Add a concept of state diffs.
- - Add a new printer that print read-dwarf like output but with state diffs in
-   between each instruction.
+ - Add a clean concept of instruction footprint
+ - Change run-func-rd from printing diffs to printing state part matching the footprints
+ - Start doing a expression simplifier (may be more or less long)
+ - Fork PPrint to be able to add characters other than space as part of the indentation
+ - Do state assertion removal (remove useless assertion according to Z3, stop executing
+   if state is impossible to reach (dead code))
+ - Improving calling convention to tell that stack pointer (and others pointers) are 
+   aligned (to reduce the number of assertions)
  - Resolve memory read to obviously non-aliasing addresses directly
 
 ## Memory stack
