@@ -45,8 +45,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Add a clean concept of instruction footprint
- - Change run-func-rd from printing diffs to printing state part matching the footprints
  - Start doing a expression simplifier (may be more or less long)
  - Fork PPrint to be able to add characters other than space as part of the indentation
  - Do state assertion removal (remove useless assertion according to Z3, stop executing
@@ -118,4 +116,6 @@
  - Do a proper fetch and execute with global ELF and DWARF and multiple cached functions
  - Use that to allow "out of function" branches.
  - Add a new block end condition about running over a PC multiple times.
+ - Add a clean concept of instruction footprint
+ - Change run-func-rd from printing diffs to printing state part matching the footprints
 
