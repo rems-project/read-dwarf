@@ -66,8 +66,7 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
                 if last_pc <> pc - 4 then Printf.sprintf "Coming from 0x%x: " last_pc else ""
               in
               let regs = List.merge_uniq Stdlib.compare cur_instr_f last_instr_f in
-              Hashtbl.add instr_data pc
-                (Printf.sprintf "%sBefore branch %t" s PP.(tos (list Reg.pp) regs), st, regs)
+              Hashtbl.add instr_data pc (Printf.sprintf "%sBefore branch" s, st, regs)
           | Block.NormalAt pc ->
               let cur_instr_f = get_footprint pc in
               let last_pc = st.last_pc in
@@ -76,8 +75,7 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
                 if last_pc <> pc - 4 then Printf.sprintf "Coming from 0x%x: " last_pc else ""
               in
               let regs = List.merge_uniq Stdlib.compare cur_instr_f last_instr_f in
-              Hashtbl.add instr_data pc
-                (Printf.sprintf "%sNormal instruction %t" s PP.(tos (list Reg.pp) regs), st, regs)
+              Hashtbl.add instr_data pc (Printf.sprintf "%sNormal instruction" s, st, regs)
           | Block.End s ->
               let last_pc = st.last_pc in
               let last_instr = Runner.expect_normal runner last_pc in
