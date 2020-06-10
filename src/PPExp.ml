@@ -96,7 +96,10 @@ let prec_manyop : Ast.manyop -> prec = function
 let pp_bits bv =
   let size = BitVec.size bv in
   let main_part = bv |> BitVec.to_string ~base:16 ~force_width:false ~prefix:true |> string in
-  if size = 64 then main_part else main_part ^^ colon ^^ int size
+  match size with
+  | 1 -> if BitVec.to_z bv = Z.zero then !^"0:1" else !^"1:1"
+  | 64 -> main_part
+  | _ -> main_part ^^ colon ^^ int size
 
 let ppnot = PP.char '!'
 
