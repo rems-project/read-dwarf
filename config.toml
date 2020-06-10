@@ -33,3 +33,4 @@ timeout = 1000 # ms, optional
     [z3.simplify-opts]
     # Use the same name as given by (help simplify) in Z3. Only booleans are supported for now
     pull_cheap_ite = true
+    elim_sign_ext = false
