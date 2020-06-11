@@ -43,10 +43,13 @@ let ctxfull state =
   (* TODO make that also context_full *)
   map_mut_exp
     (fun e ->
-      declare e;
-      e |> AstManip.allow_mem
-      |> Z3.simplify_gen ~ppv:Var.pp ~vofs:Var.of_string
-      |> AstManip.expect_no_mem)
+      if Ast.is_atomic e then e
+      else begin
+        declare e;
+        e |> AstManip.allow_mem
+        |> Z3.simplify_gen ~ppv:Var.pp ~vofs:Var.of_string
+        |> AstManip.expect_no_mem
+      end)
     state;
   (* Context-full simplification of assertion *)
   let found_false = ref false in
