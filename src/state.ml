@@ -284,6 +284,14 @@ let unsafe_unlock state = Mem.unlock state.mem
 let is_locked state =
   match state.mem.trace with Lock s :: _ when s.id = state.id -> true | _ -> false
 
+(** Tell is state is possible.
+
+    A state is impossible if it has a single assert that is [false].
+
+    {!StateSimplify.ctxfull} will call the SMT solver and set the assertion to that if
+    required so you should call that function before [is_possible] *)
+let is_possible state = match state.asserts with [Ast.Bool (false, _)] -> false | _ -> true
+
 let make_reg_cell state ?ctyp p = { exp = Var.to_exp (Register (state, p)); ctyp }
 
 (** Makes a fresh state with all variable fresh and new *)

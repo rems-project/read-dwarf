@@ -45,8 +45,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Do state assertion removal (remove useless assertion according to Z3, stop executing
-   if state is impossible to reach (dead code))
  - Improving calling convention to tell that stack pointer (and others pointers) are 
    aligned (to reduce the number of assertions)
  - Resolve memory read to obviously non-aliasing addresses directly
@@ -117,4 +115,6 @@
  - Add a new block end condition about running over a PC multiple times.
  - Add a clean concept of instruction footprint
  - Change run-func-rd from printing diffs to printing state part matching the footprints
+ - Do state assertion removal (remove useless assertion according to Z3, stop executing
+   if state is impossible to reach (dead code))
 

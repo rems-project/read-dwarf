@@ -18,7 +18,10 @@ module ContextFull = Z3.ContextCounter (struct
 end)
 
 (** Do a context aware simplify, for now, it just does a context free simplify and then
-    remove assertion that proven true or false by Z3
+    remove assertion that proven true or false by Z3.
+
+    If a state has a false assertion anywhere then all assertions will collapse
+    in a single false.
 *)
 let ctxfull state =
   debug "StateSimplifying %d" state.id;

@@ -37,32 +37,39 @@ let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree
   assert (State.is_locked start);
   let rec run_from state =
     let pc_exp = State.get_reg state pcreg |> State.get_exp in
-    match b.endpred pc_exp with
-    | Some endmsg ->
-        info "Stopped at pc %t because %s" (PP.top State.pp_exp pc_exp) endmsg;
-        State.map_mut_exp Z3.simplify state;
-        State.lock state;
-        StateTree.{ state; data = End endmsg; rest = [] }
-    | None -> (
-        info "Running pc %t" (PP.top State.pp_exp pc_exp);
-        let prelock state = StateSimplify.ctxfull state in
-        if every_instruction then begin
-          prelock state;
-          State.lock state
-        end;
-        let states = Runner.run ~prelock b.runner state in
-        debug "After locking";
-        match states with
-        | [] -> Raise.fail "Reached a exceptional instruction"
-        | [state] when not every_instruction -> run_from state
-        | [nstate] when every_instruction ->
-            let rest = [run_from nstate] in
-            { state; data = NormalAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
-        | states ->
-            let rest = List.map run_from states in
-            StateTree.
-              { state; data = BranchAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
-      )
+    if State.is_possible state then
+      match b.endpred pc_exp with
+      | Some endmsg ->
+          info "Stopped at pc %t because %s" (PP.top State.pp_exp pc_exp) endmsg;
+          StateSimplify.ctxfull state;
+          State.lock state;
+          StateTree.{ state; data = End endmsg; rest = [] }
+      | None -> (
+          info "Running pc %t" (PP.top State.pp_exp pc_exp);
+          let prelock state = StateSimplify.ctxfull state in
+          if every_instruction then begin
+            prelock state;
+            State.lock state
+          end;
+          let states = Runner.run ~prelock b.runner state in
+          debug "After locking";
+          match states with
+          | [] -> Raise.fail "Reached a exceptional instruction"
+          | [state] when not every_instruction -> run_from state
+          | [nstate] when every_instruction ->
+              let rest = [run_from nstate] in
+              { state; data = NormalAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
+          | states ->
+              let rest = List.map run_from states in
+              StateTree.
+                { state; data = BranchAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
+        )
+    else begin
+      info "Reached dead code at %t" (PP.top State.pp_exp pc_exp);
+      StateSimplify.ctxfull state;
+      State.lock state;
+      StateTree.{ state; data = End "Reached dead code"; rest = [] }
+    end
   in
   let state = State.copy start in
   State.set_pc ~pc:pcreg state b.start;
