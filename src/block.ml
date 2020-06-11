@@ -45,12 +45,13 @@ let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree
         StateTree.{ state; data = End endmsg; rest = [] }
     | None -> (
         info "Running pc %t" (PP.top State.pp_exp pc_exp);
-        let prelock state = State.map_mut_exp Z3.simplify state in
+        let prelock state = StateSimplify.ctxfull state in
         if every_instruction then begin
           prelock state;
           State.lock state
         end;
         let states = Runner.run ~prelock b.runner state in
+        debug "After locking";
         match states with
         | [] -> Raise.fail "Reached a exceptional instruction"
         | [state] when not every_instruction -> run_from state

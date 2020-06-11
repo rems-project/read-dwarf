@@ -357,7 +357,7 @@ let push_assert (s : t) (e : exp) =
 let map_mut_exp (f : exp -> exp) s : unit =
   assert (not @@ is_locked s);
   let tval_map tv = { tv with exp = f tv.exp } in
-  Reg.Map.map_mut tval_map s.regs;
+  Reg.Map.map_mut_current tval_map s.regs;
   Vec.map_mut (Pair.map Fun.id tval_map) s.read_vars;
   s.asserts <- List.map f s.asserts;
   Mem.map_mut_exp f s.mem

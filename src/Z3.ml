@@ -205,13 +205,21 @@ let ensure_started_get () =
 (** Open a new context with a name. Ensure the server is started *)
 let open_context name =
   let serv = ensure_started_get () in
-  if z3_trace then context := { name; num = 0 } :: !context;
+  if z3_trace then begin
+    debug "Opening context %s" name;
+    context := { name; num = 0 } :: !context
+  end;
   command Ast.Push
 
 (** Closes current context *)
 let close_context () =
   let serv = get_server () in
-  if z3_trace then context := List.tl !context;
+  if z3_trace then begin
+    let { name; num } = List.hd !context in
+    debug "Closing context %s at %d at %s" name num
+      (Printexc.get_callstack 100 |> Printexc.raw_backtrace_to_string);
+    context := List.tl !context
+  end;
   command Ast.Pop
 
 (** Module for handling a context numbering scheme automatically.
@@ -226,12 +234,18 @@ module ContextCounter (S : Logs.String) = struct
   let counter = Counter.make 0
 
   let openc () =
-    if z3_trace then open_context (Printf.sprintf "%s %d" S.str (Counter.get counter))
+    if z3_trace then open_context (Printf.sprintf "%s:%d" S.str (Counter.get counter))
     else open_context S.str
 
   let num () = Counter.read counter
 
-  let closec = close_context
+  let closec () =
+    begin
+      if z3_trace then
+        let { name; _ } = List.hd !context in
+        Scanf.sscanf name "%s@:%d" (fun n _ -> assert (n = S.str))
+    end;
+    close_context ()
 end
 
 (*****************************************************************************)
@@ -328,7 +342,7 @@ let simplify (exp : State.exp) : State.exp =
     |> simplify_gen ~ppv:State.Var.pp ~vofs:State.Var.of_string
     |> AstManip.expect_no_mem
   in
-  close_context ();
+  SimpContext.closec ();
   res_exp
 
 module SatContext = ContextCounter (struct
@@ -343,7 +357,7 @@ let check_sat asserts : bool option =
   List.iter (declare_vars ~declared serv) asserts;
   List.iter (fun e -> send_smt ~ppv:State.Var.pp serv (Assert (e |> exp_conv))) asserts;
   let a = request CheckSat in
-  close_context ();
+  SatContext.closec ();
   match a with
   | Error s -> Raise.fail "Z3 encountered an error on check_sat %d : %s" (SatContext.num ()) s
   | Sat -> Some true

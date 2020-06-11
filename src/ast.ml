@@ -142,6 +142,10 @@ module Op = struct
 
   let bits_smt s = bits (BitVec.of_smt s)
 
+  let true_exp = Bool (true, unknown)
+
+  let false_exp = Bool (false, unknown)
+
   let concat l = Manyop (Concat, l, unknown)
 
   let assert_op e = Assert e

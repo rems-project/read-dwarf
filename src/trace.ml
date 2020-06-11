@@ -232,5 +232,5 @@ let simplify events =
   TraceSimpContext.openc ();
   declare_regs ();
   let events = List.filter_map event_simplify events in
-  Z3.close_context ();
+  TraceSimpContext.closec ();
   events
