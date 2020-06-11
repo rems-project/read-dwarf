@@ -11,7 +11,7 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let run_func_rd elfname name objdump_d branchtables every_instruction =
+let run_func_rd elfname name objdump_d branchtables =
   base "Running with rd %s in %s" name elfname;
   base "Loading %s" elfname;
   let dwarf = Dw.of_file elfname in
@@ -46,7 +46,7 @@ let run_func_rd elfname name objdump_d branchtables every_instruction =
       let runner = Runner.of_dwarf dwarf in
       let block = Block.make ~runner ~start:sym.addr ~endpred in
       base "Start running";
-      let tree = Block.run ~every_instruction block start in
+      let tree = Block.run ~every_instruction:true block start in
       base "Ended running, start pretty printing";
       (* This table will contain the state diff to print at each pc with a message *)
       let instr_data : (int, string * State.t * Reg.t list) Hashtbl.t = Hashtbl.create 100 in
@@ -102,12 +102,6 @@ let func =
   let doc = "Symbol name of the function to run" in
   Arg.(required & pos 1 (some string) None & info [] ~docv:"FUNCTION" ~doc)
 
-let every =
-  let doc =
-    "Whether to dump state diff at every instruction (by default, only at branch points)"
-  in
-  Arg.(value & flag & info ["e"; "every-instruction"] ~doc)
-
 let objdump_d =
   let doc = "File containing result of objdump -d" in
   Arg.(required & opt (some non_dir_file) None & info ["objdump-d"] ~docv:"OBJDUMP_FILE" ~doc)
@@ -119,7 +113,7 @@ let branch_table =
     & opt (some non_dir_file) None
     & info ["branch-tables"] ~docv:"BRANCH_TABLES_FILE" ~doc)
 
-let term = Term.(func_options comopts run_func_rd $ elf $ func $ objdump_d $ branch_table $ every)
+let term = Term.(func_options comopts run_func_rd $ elf $ func $ objdump_d $ branch_table)
 
 let info =
   let doc =
