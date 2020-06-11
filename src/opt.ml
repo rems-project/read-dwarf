@@ -24,6 +24,10 @@ let of_bool ~some b = if b then Some some else None
 
 let of_bool_fun ~some b = if b then Some (some ()) else None
 
+let guard b v = if b then Some v else None
+
+let guardn b v = if b then None else Some v
+
 let ( let+ ) o f = Option.map f o
 
 let ( and+ ) = ( &&& )

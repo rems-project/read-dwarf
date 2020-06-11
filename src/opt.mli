@@ -48,6 +48,12 @@ val of_bool : some:'a -> bool -> 'a option
 (** Create an option from a bool, with the some value as computed by the some function *)
 val of_bool_fun : some:(unit -> 'a) -> bool -> 'a option
 
+(** Return the second argument if the first is true, otherwise [None] *)
+val guard : bool -> 'a -> 'a option
+
+(** Return the second argument if the first is false, otherwise [None] *)
+val guardn : bool -> 'a -> 'a option
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)

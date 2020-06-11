@@ -205,6 +205,8 @@ module Mem = struct
 
   let empty () = { trace = [] }
 
+  let is_empty mem = mem.trace = []
+
   let make state = { trace = [] }
 
   let read mem mb var = mem.trace <- Read (mb, var) :: mem.trace
@@ -520,16 +522,23 @@ let pp s =
     Until a better solution is found, the fenv will be printed entirely all the time *)
 let pp_partial ~regs s =
   let open PP in
+  let open Opt in
   record "state"
-    [
-      ("id", Id.pp s.id);
-      ("base_state", Opt.fold ~none:!^"none" ~some:(fun s -> Id.pp s.id) s.base_state);
-      ("last_pc", ptr s.last_pc);
-      ( "regs",
-        List.map (fun reg -> (Reg.pp reg, Reg.Map.get s.regs reg |> pp_tval)) regs
-        |> PP.mapping "" );
-      ("fenv", Fragment.Env.pp s.fenv);
-      ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
-      ( "memory", Mem.pp s.mem );
-      ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts);
-    ]
+  @@ List.filter_map
+       (function (s, Some a) -> Some (s, a) | _ -> None)
+       [
+         ("id", Id.pp s.id |> some);
+         ("base_state", Opt.map (fun s -> Id.pp s.id) s.base_state);
+         ("last_pc", ptr s.last_pc |> some);
+         ( "regs",
+           List.map (fun reg -> (Reg.pp reg, Reg.Map.get s.regs reg |> pp_tval)) regs
+           |> PP.mapping "" |> some );
+         ("fenv", Fragment.Env.pp s.fenv |> some);
+         ( "read_vars",
+           guardn (Vec.length s.read_vars = 0) @@ Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars
+         );
+         ("memory", guardn (Mem.is_empty s.mem) @@ Mem.pp s.mem);
+         ( "asserts",
+           guardn (s.asserts = [])
+           @@ separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts );
+       ]

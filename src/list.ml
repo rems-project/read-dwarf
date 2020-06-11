@@ -36,6 +36,12 @@ let rec find_map f = function
       match f x with Some _ as result -> result | None -> find_map f l
     )
 
+(** Takes a list of option and only keeps the [Some]. Equivalent to [filter_map Fun.id] *)
+let rec filter_opt = function
+  | [] -> []
+  | Some a :: l -> a :: filter_opt l
+  | None :: l -> filter_opt l
+
 (** Monadic bind. It's just {!concat_map} *)
 let bind l f = concat_map f l
 
