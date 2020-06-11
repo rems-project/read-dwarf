@@ -151,6 +151,8 @@ module Op = struct
   let assert_op e = Assert e
 
   let simplify ?(flags = []) e = Simplify (e, flags)
+
+  let comp comp a b = Binop (Bvcomp comp, a, b, unknown)
 end
 
 (*****************************************************************************)

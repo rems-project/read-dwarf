@@ -259,6 +259,13 @@ let get_abi api =
     State.set_reg_type state sp (Ctype.of_frag @@ FreeFragment stack_frag_id);
     State.set_reg state r30
       (State.make_tval ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) (State.Var.to_exp RetAddr));
+    let sp_var = Ast.Op.var (State.Register (state, sp)) in
+    (* Assert that Sp is 16 bytes aligned *)
+    State.push_assert state Ast.Op.(extract 3 0 sp_var = bits_int ~size:4 0);
+    (* Assert that Sp has zero top bits *)
+    State.push_assert state Ast.Op.(extract 63 52 sp_var = bits_int ~size:12 0);
+    (* Assert that there is enough stack space *)
+    State.push_assert state Ast.Op.(comp Ast.Bvuge sp_var (bits_int ~size:64 0x1000));
     State.lock state;
     state
   in
