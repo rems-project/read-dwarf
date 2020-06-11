@@ -53,12 +53,11 @@ type mem_size = Ast.Size.t
 *)
 type t = {
   id : id;
-  base_state : t option;
-  (* The immediate dominator state in the control flow graph *)
+  base_state : t option;  (** The immediate dominator state in the control flow graph *)
+  mutable locked : bool;
   mutable regs : tval Reg.Map.t;
   read_vars : (ty * tval) vector;
-  mutable asserts : exp list;
-  (* Only asserts since base_state *)
+  mutable asserts : exp list;  (** Only asserts since base_state *)
   mem : mem;
   elf : Elf.File.t option;
   fenv : Fragment.env;
@@ -76,11 +75,7 @@ and var = Register of t * Reg.t | ReadVar of t * int | Arg of int | RetArg | Ret
 
 and mem_block = { addr : exp; size : mem_size }
 
-and mem_event =
-  | Read of mem_block * var
-  | Write of mem_block * exp
-  | Lock of t
-      (** Represents that all the memory operation below were already in the given state *)
+and mem_event = Read of mem_block * var | Write of mem_block * exp
 
 and mem = { mutable trace : mem_event list }
 
@@ -203,7 +198,6 @@ module Mem = struct
     match (e, e') with
     | (Read (mb, v), Read (mb', v')) -> Var.equal v v' && equal_block mb mb'
     | (Write (mb, e), Write (mb', e')) -> equal_exp e e' && equal_block mb mb'
-    | (Lock st, Lock st') -> equal st st'
     | _ -> false
 
   (* TODO rewrite that to stop the search at the first lock *)
@@ -217,24 +211,23 @@ module Mem = struct
 
   let write mem mb value = mem.trace <- Write (mb, value) :: mem.trace
 
-  let lock mem state = mem.trace <- Lock state :: mem.trace
-
-  let unlock mem =
-    match mem.trace with
-    | Lock _ :: l -> mem.trace <- l
-    | _ -> failwith "Can't unlock the unlocked"
+  (* let lock mem state = mem.trace <- Lock state :: mem.trace
+   *
+   * let unlock mem =
+   *   match mem.trace with
+   *   | Lock _ :: l -> mem.trace <- l
+   *   | _ -> failwith "Can't unlock the unlocked" *)
 
   let copy mem = { trace = mem.trace }
 
   let map_mut_exp (f : exp -> exp) (mem : t) : unit =
-    let rec map_until_lock = function
+    let rec map_events = function
       | [] -> []
-      | Lock _ :: l as res -> res
       | Write ({ addr; size }, value) :: l ->
-          Write ({ addr = f addr; size }, f value) :: map_until_lock l
-      | Read ({ addr; size }, var) :: l -> Read ({ addr = f addr; size }, var) :: map_until_lock l
+          Write ({ addr = f addr; size }, f value) :: map_events l
+      | Read ({ addr; size }, var) :: l -> Read ({ addr = f addr; size }, var) :: map_events l
     in
-    mem.trace <- map_until_lock mem.trace
+    mem.trace <- map_events mem.trace
 
   let map_exp (f : exp -> exp) (mem : t) : t =
     let res = copy mem in
@@ -247,8 +240,7 @@ module Mem = struct
         | Read ({ addr; size }, var) -> f addr
         | Write ({ addr; size }, value) ->
             f addr;
-            f value
-        | Lock _ -> ())
+            f value)
       mem.trace
 
   let pp_size size = PP.(dprintf "%dbits" (Size.to_bits size))
@@ -257,7 +249,6 @@ module Mem = struct
     PP.(pp_size block.size ^^ surround 2 0 lbracket (pp_exp block.addr) rbracket)
 
   let pp_event : event -> PP.document = function
-    | Lock s -> PP.(dprintf "Lock %d" s.id)
     | Read (mb, var) ->
         PP.(
           dprintf "Reading %d bits in |" (Size.to_bits mb.size)
@@ -276,13 +267,12 @@ end
 (** {1 State management } *)
 
 (** Lock the state. Once a state is locked it should not be mutated anymore *)
-let lock state = Mem.lock state.mem state
+let lock state = state.locked <- true
 
 (** Unlock the state. This is dangerous, do not use if you do not know how to use it *)
-let unsafe_unlock state = Mem.unlock state.mem
+let unsafe_unlock state = state.locked <- false
 
-let is_locked state =
-  match state.mem.trace with Lock s :: _ when s.id = state.id -> true | _ -> false
+let is_locked state = state.locked
 
 (** Tell is state is possible.
 
@@ -301,6 +291,7 @@ let make ?elf () =
     {
       id;
       base_state = None;
+      locked = false;
       regs = Reg.Map.dummy ();
       read_vars = Vec.empty ();
       asserts = [];
@@ -331,10 +322,11 @@ let copy ?elf state =
     {
       id;
       base_state = (if locked then Some state else state.base_state);
+      locked = false;
       regs = Reg.Map.copy state.regs;
       read_vars = Vec.empty ();
       asserts = (if locked then [] else state.asserts);
-      mem = Mem.copy state.mem;
+      mem = (if locked then Mem.empty () else Mem.copy state.mem);
       elf = Opt.(elf ||| state.elf);
       fenv = Fragment.Env.copy state.fenv;
       last_pc = state.last_pc;
@@ -538,11 +530,6 @@ let pp_partial ~regs s =
         |> PP.mapping "" );
       ("fenv", Fragment.Env.pp s.fenv);
       ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
-      ( "memory",
-        s.mem.trace |> List.to_seq
-        |> Seq.stop_at (function
-             | Lock s' -> Opt.equal ( == ) (Some s') s.base_state
-             | _ -> false)
-        |> List.of_seq_rev |> list Mem.pp_event );
+      ( "memory", Mem.pp s.mem );
       ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts);
     ]
