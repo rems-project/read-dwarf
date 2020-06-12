@@ -141,7 +141,7 @@ let execute_normal ?(prelock = fun state -> ()) ~pc runner (instr : Instr.t) sta
     In any case the returned states are unlocked.
 *)
 let run ?prelock runner state : State.t list =
-  let pc_exp = State.get_reg state runner.pc |> State.get_exp in
+  let pc_exp = State.get_reg_exp state runner.pc in
   try
     let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
     match fetch runner pc with
@@ -154,7 +154,7 @@ let run ?prelock runner state : State.t list =
           runner.elf.filename
   with exn ->
     err "Trying to run instruction at %t in %s: too symbolic"
-      PP.(top State.pp_exp pc_exp)
+      PP.(top State.Exp.pp pc_exp)
       runner.elf.filename;
     Raise.again exn
 

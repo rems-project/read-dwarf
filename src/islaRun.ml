@@ -36,7 +36,7 @@ type value_context = State.exp HashVector.t
 let get_var l vc i =
   match HashVector.get_opt vc i with
   | Some exp -> exp
-  | None -> run_error l "v%d is not bound in %t" i (PP.tos (PPI.hvector State.pp_exp) vc)
+  | None -> run_error l "v%d is not bound in %t" i (PP.tos (PPI.hvector State.Exp.pp) vc)
 
 (** Convert an {!Isla} expression to an {!Ast} by substituing
     all free variable with the bound expression in the {!value_context}.
@@ -100,7 +100,7 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
       let valu = IslaManip.valu_get valu string_path in
       let reg = Reg.of_path (name :: string_path) in
       let exp : State.exp = exp_of_valu l vc valu in
-      Reg.Map.set state.regs reg (State.make_tval exp)
+      Reg.Map.set state.regs reg (State.Tval.make exp)
   | ReadMem (result, kind, addr, size, l) ->
       debug "Reading Mem";
       (* TODO stop ignoring kind *)

@@ -126,8 +126,8 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
 (** Stage 1 expression typer *)
 let rec expr ~ctxt (exp : Trace.exp) : Ctype.t option =
   match exp with
-  | Var (Register reg, l) -> State.get_reg ctxt.state reg |> State.get_ctyp
-  | Var (Read r, l) -> HashVector.get ctxt.mem_reads r |> State.get_ctyp
+  | Var (Register reg, l) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
+  | Var (Read r, l) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
   | Bits (bv, l) ->
       let size = BitVec.size bv in
       if size mod 8 = 0 || size = Arch.address_size then
@@ -193,8 +193,8 @@ let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) (mb : State.M
       { exp; ctyp }
   | Some _ ->
       warn "Reading from non-ptr unimplemented for now";
-      State.read s mb |> State.make_tval
-  | None -> State.read s mb |> State.make_tval
+      State.read s mb |> State.Tval.of_exp
+  | None -> State.read s mb |> State.Tval.of_exp
 
 (*****************************************************************************)
 (*****************************************************************************)

@@ -12,16 +12,16 @@ end)
 (*****************************************************************************)
 (** {1 Support types } *)
 
-type 'a vector = 'a Vec.t
-
 (** This type is the standard annotation inside the state stucture.
     For now it is Isla.lrng, but it may change depending on our needs *)
 type annot = Isla.lrng
 
 let dummy_annot = Isla.UnknownRng
 
+(** The type of registers, so basically the machine type of data we represent *)
 type ty = Reg.ty
 
+(** The type of a state ID. for now it's an integer, but it may change later *)
 module Id = struct
   type t = int
 
@@ -39,10 +39,200 @@ type id = Id.t
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 State types } *)
+(** {1 State variable management } *)
 
-(** All the possible atomic access sizes *)
-type mem_size = Ast.Size.t
+module Var = struct
+  (** The type of a variable in the state *)
+  type t = Register of Id.t * Reg.t | ReadVar of Id.t * int | Arg of int | RetArg | RetAddr
+
+  (** Convert the variable to the string encoding. For parsing infrastructure reason,
+      the encoding must always contain at least one [:]. *)
+  let to_string = function
+    | Register (state, reg) ->
+        Printf.sprintf "reg:%s:%s" (state |> Id.to_string) (Reg.to_string reg)
+    | ReadVar (state, num) -> Printf.sprintf "read:%s:%i" (state |> Id.to_string) num
+    | Arg num -> Printf.sprintf "arg:%i" num
+    | RetArg -> "retarg:"
+    | RetAddr -> "retaddr:"
+
+  (** The opposite of {!to_string}. Will raise [Invalid_argument] when the string don't match *)
+  let of_string s : t =
+    match String.split_on_char ':' s with
+    | ["reg"; state; reg] ->
+        let state : Id.t = state |> Id.of_string in
+        let reg = Reg.of_string reg in
+        Register (state, reg)
+    | ["read"; state; num] ->
+        let state : Id.t = state |> Id.of_string in
+        let num = int_of_string num in
+        ReadVar (state, num)
+    | ["arg"; num] -> Arg (int_of_string num)
+    | ["retarg"; ""] -> RetArg
+    | ["retaddr"; ""] -> RetAddr
+    | _ -> Raise.inv_arg "Invalid state variable: %s" s
+
+  (* let to_exp (v : t) : exp = Ast.Var (v, dummy_annot) *)
+
+  let of_reg id reg = Register (id, reg)
+
+  let equal v v' =
+    match (v, v') with
+    | (Register (st, reg), Register (st', reg')) -> Id.equal st st' && Reg.equal reg reg'
+    | (ReadVar (st, num), ReadVar (st', num')) -> Id.equal st st' && num = num'
+    | (Arg num, Arg num') -> num = num'
+    | (RetArg, RetArg) -> true
+    | (RetAddr, RetAddr) -> true
+    | _ -> false
+
+  let pp sv = sv |> to_string |> PP.string
+
+  (** Pretty prints but with bars around *)
+  let pp_bar sv = PP.(bar ^^ pp sv ^^ bar)
+end
+
+type var = Var.t
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 State expression and typed-value management } *)
+
+(** Module for state expressions *)
+module Exp = struct
+  type t = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
+
+  let equal (e : t) (e' : t) = Ast.equal_exp ~var:Var.equal e e'
+
+  let pp (exp : t) = PPExp.pp_exp Var.pp_bar exp
+
+  let of_var : Var.t -> t = Ast.Op.var
+
+  let of_reg id reg = Var.of_reg id reg |> of_var
+
+  let pp_smt (exp : t) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
+end
+
+type exp = Exp.t
+
+type smt = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.smt
+
+let pp_smt (smt : smt) = Ast.pp_smt Var.pp (AstManip.smt_allow_lets @@ AstManip.smt_allow_mem smt)
+
+(** Module for optionally typed state expressions *)
+module Tval = struct
+  type t = { ctyp : Ctype.t option; exp : Exp.t }
+
+  let make ?ctyp exp = { exp; ctyp }
+
+  let of_exp = make
+
+  let of_var ?ctyp var = Exp.of_var var |> of_exp ?ctyp
+
+  let of_reg ?ctyp id reg = Exp.of_reg id reg |> of_exp ?ctyp
+
+  let map_exp f t = { t with exp = f t.exp }
+
+  let iter_exp f t = f t.exp
+
+  let exp t = t.exp
+
+  let ctyp t = t.ctyp
+
+  let equal (tv : t) (tv' : t) =
+    Exp.equal tv.exp tv'.exp && Opt.equal Ctype.equal tv.ctyp tv'.ctyp
+
+  let pp { exp; ctyp } =
+    let open PP in
+    match ctyp with None -> Exp.pp exp | Some t -> infix 2 1 colon (Exp.pp exp) (Ctype.pp t)
+end
+
+type tval = Tval.t
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 State memory management } *)
+
+(** This module helps managing the memory part of the state. *)
+module Mem = struct
+  module Size = Ast.Size
+
+  module Block = struct
+    type t = { addr : Exp.t; size : Size.t }
+
+    let equal bl bl' = Exp.equal bl.addr bl'.addr && Size.equal bl.size bl'.size
+
+    let map_exp (f : Exp.t -> Exp.t) : t -> t = fun { addr; size } -> { addr = f addr; size }
+
+    let iter_exp (f : Exp.t -> unit) : t -> unit = fun { addr; size } -> f addr
+
+    let pp mb = PP.(Size.pp_bits mb.size ^^ surround 2 0 lbracket (Exp.pp mb.addr) rbracket)
+  end
+
+  type block = Block.t
+
+  module Event = struct
+    type t = Read of Block.t * var | Write of Block.t * exp
+
+    let equal e e' =
+      match (e, e') with
+      | (Read (mb, v), Read (mb', v')) -> Var.equal v v' && Block.equal mb mb'
+      | (Write (mb, e), Write (mb', e')) -> Exp.equal e e' && Block.equal mb mb'
+      | _ -> false
+
+    let map_exp (f : Exp.t -> Exp.t) : t -> t = function
+      | Write (mb, e) -> Write (Block.map_exp f mb, f e)
+      | Read (mb, v) -> Read (Block.map_exp f mb, v)
+
+    let iter_exp (f : Exp.t -> unit) : t -> unit = function
+      | Write (mb, e) ->
+          Block.iter_exp f mb;
+          f e
+      | Read (mb, v) -> Block.iter_exp f mb
+
+    let pp : t -> PP.document =
+      let open PP in
+      function
+      | Read (mb, var) ->
+          dprintf "Reading %d bits in |" (Size.to_bits mb.size)
+          ^^ Var.pp var ^^ !^"| from: " ^^ Exp.pp mb.addr
+      | Write (mb, exp) ->
+          dprintf "Writing %d bits with " (Size.to_bits mb.size)
+          ^^ Exp.pp exp ^^ !^" at " ^^ Exp.pp mb.addr
+  end
+
+  type event = Event.t
+
+  type t = { mutable trace : Event.t list }
+
+  let equal m m' = List.equal Event.equal m.trace m'.trace
+
+  let empty () = { trace = [] }
+
+  let is_empty mem = mem.trace = []
+
+  let make state = { trace = [] }
+
+  let read mem mb var = mem.trace <- Read (mb, var) :: mem.trace
+
+  let write mem mb value = mem.trace <- Write (mb, value) :: mem.trace
+
+  let copy mem = { trace = mem.trace }
+
+  let map_mut_exp (f : exp -> exp) (mem : t) : unit =
+    mem.trace <- List.map (Event.map_exp f) mem.trace
+
+  let map_exp (f : exp -> exp) (mem : t) : t = { trace = List.map (Event.map_exp f) mem.trace }
+
+  let iter_exp (f : exp -> unit) (mem : t) : unit = List.iter (Event.iter_exp f) mem.trace
+
+  let pp mem = PP.prefix 2 1 (PP.string "Full trace:") (PP.list Event.pp (List.rev mem.trace))
+end
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 State type } *)
 
 (** Represent the state of the machine.
     Should only be mutated when created before locking.
@@ -50,38 +240,38 @@ type mem_size = Ast.Size.t
     The {!lock} function allow to lock a state for mutation. This is not encoded into
     the type system (yet) but it should nevertheless be respected. Once a state is locked,
     it should not be mutated anymore.
+
+    The state are based on a dominator tree from the control flow graph structure.
+    The variable in them are allowed to depend on themselves or any ancestor in the
+    dominator tree. The [base_state] contains the immediate dominator. However a
+    state may not represent a full node of the control flow graph but only the
+    part of that node that represent control-flow coming from specific patha.
+    In that case the dominator notion is only about those paths. State may only
+    refer variables in among their ancestor line. This especially important when
+    merging states.
+
+    State are represented by their id and may identified to their id, they may not be
+    two different state (and I mean physical equality here) with same id. See {!id2state}
 *)
 type t = {
-  id : id;
+  id : Id.t;
   base_state : t option;  (** The immediate dominator state in the control flow graph *)
-  mutable locked : bool;
-  mutable regs : tval Reg.Map.t;
-  read_vars : (ty * tval) vector;
+  mutable locked : bool;  (** Tells if the state is locked *)
+  mutable regs : Tval.t Reg.Map.t;
+  read_vars : (ty * Tval.t) Vec.t;
   mutable asserts : exp list;  (** Only asserts since base_state *)
-  mem : mem;
+  mem : Mem.t;
   elf : Elf.File.t option;
+      (** Optionally an ELF file, this may be used when running instructions on
+          the state to provide more concrete values in certain case. It *will*
+          affect the execution behavior. However the symbolic execution should
+          always be more concrete with it than without it *)
   fenv : Fragment.env;
   mutable last_pc : int;
       (** The PC of the instruction that lead into this state. The state should be
           right after that instruction. This has no semantic meaning as part of the state.
           It's just for helping knowing what comes from where *)
 }
-
-and tval = { ctyp : Ctype.t option; exp : exp }
-
-and exp = (Ast.lrng, var, Ast.no, Ast.no) Ast.exp
-
-and var = Register of t * Reg.t | ReadVar of t * int | Arg of int | RetArg | RetAddr
-
-and mem_block = { addr : exp; size : mem_size }
-
-and mem_event = Read of mem_block * var | Write of mem_block * exp
-
-and mem = { mutable trace : mem_event list }
-
-(* Other ast aliases *)
-
-type smt = (Ast.lrng, var, Ast.no, Ast.no) Ast.smt
 
 let equal s s' = Id.equal s.id s'.id
 
@@ -103,169 +293,6 @@ let to_id (st : t) = st.id
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 State variable management } *)
-
-module Var = struct
-  type state = t
-
-  type t = var
-
-  (** Convert the variable to the string encoding. For parsing infrastructure reason,
-      the encoding must always contain at least one [:]. *)
-  let to_string = function
-    | Register (state, reg) ->
-        Printf.sprintf "reg:%s:%s" (state |> to_id |> Id.to_string) (Reg.to_string reg)
-    | ReadVar (state, num) -> Printf.sprintf "read:%s:%i" (state |> to_id |> Id.to_string) num
-    | Arg num -> Printf.sprintf "arg:%i" num
-    | RetArg -> "retarg:"
-    | RetAddr -> "retaddr:"
-
-  let of_string s : t =
-    match String.split_on_char ':' s with
-    | ["reg"; state; reg] ->
-        let state : state = state |> Id.of_string |> of_id in
-        let reg = Reg.of_string reg in
-        Register (state, reg)
-    | ["read"; state; num] ->
-        let state : state = state |> Id.of_string |> of_id in
-        let num = int_of_string num in
-        ReadVar (state, num)
-    | ["arg"; num] -> Arg (int_of_string num)
-    | ["retarg"; ""] -> RetArg
-    | ["retaddr"; ""] -> RetAddr
-    | _ -> Raise.inv_arg "Invalid state variable: %s" s
-
-  let to_exp (v : t) : exp = Ast.Var (v, dummy_annot)
-
-  let equal v v' =
-    match (v, v') with
-    | (Register (st, reg), Register (st', reg')) -> equal st st' && Reg.equal reg reg'
-    | (ReadVar (st, num), ReadVar (st', num')) -> equal st st' && num = num'
-    | (Arg num, Arg num') -> num = num'
-    | (RetArg, RetArg) -> true
-    | (RetAddr, RetAddr) -> true
-    | _ -> false
-
-  let pp sv = sv |> to_string |> PP.string
-
-  let pp_bar sv = PP.(bar ^^ pp sv ^^ bar)
-end
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 State expression and typed-value management } *)
-
-let make_tval ?ctyp exp = { exp; ctyp }
-
-let tval_map_exp f t = { t with exp = f t.exp }
-
-let get_exp tval = tval.exp
-
-let get_ctyp tval = tval.ctyp
-
-let equal_exp (e : exp) (e' : exp) = Ast.equal_exp ~var:Var.equal e e'
-
-let equal_tval (tv : tval) (tv' : tval) =
-  equal_exp tv.exp tv'.exp && Opt.equal Ctype.equal tv.ctyp tv'.ctyp
-
-let pp_exp_smt (exp : exp) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
-
-let pp_exp (exp : exp) = PPExp.pp_exp Var.pp_bar exp
-
-let pp_smt (smt : smt) = Ast.pp_smt Var.pp (AstManip.smt_allow_lets @@ AstManip.smt_allow_mem smt)
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 State memory management } *)
-
-(** This module helps managing the memory part of the state. *)
-module Mem = struct
-  module Size = Ast.Size
-
-  type block = mem_block
-
-  type event = mem_event
-
-  type t = mem
-
-  let equal_size = Ast.Size.equal
-
-  let equal_block bl bl' = equal_exp bl.addr bl'.addr && equal_size bl.size bl'.size
-
-  let equal_event e e' =
-    match (e, e') with
-    | (Read (mb, v), Read (mb', v')) -> Var.equal v v' && equal_block mb mb'
-    | (Write (mb, e), Write (mb', e')) -> equal_exp e e' && equal_block mb mb'
-    | _ -> false
-
-  (* TODO rewrite that to stop the search at the first lock *)
-  let equal m m' = List.equal equal_event m.trace m'.trace
-
-  let empty () = { trace = [] }
-
-  let is_empty mem = mem.trace = []
-
-  let make state = { trace = [] }
-
-  let read mem mb var = mem.trace <- Read (mb, var) :: mem.trace
-
-  let write mem mb value = mem.trace <- Write (mb, value) :: mem.trace
-
-  (* let lock mem state = mem.trace <- Lock state :: mem.trace
-   *
-   * let unlock mem =
-   *   match mem.trace with
-   *   | Lock _ :: l -> mem.trace <- l
-   *   | _ -> failwith "Can't unlock the unlocked" *)
-
-  let copy mem = { trace = mem.trace }
-
-  let map_mut_exp (f : exp -> exp) (mem : t) : unit =
-    let rec map_events = function
-      | [] -> []
-      | Write ({ addr; size }, value) :: l ->
-          Write ({ addr = f addr; size }, f value) :: map_events l
-      | Read ({ addr; size }, var) :: l -> Read ({ addr = f addr; size }, var) :: map_events l
-    in
-    mem.trace <- map_events mem.trace
-
-  let map_exp (f : exp -> exp) (mem : t) : t =
-    let res = copy mem in
-    map_mut_exp f res;
-    res
-
-  let iter_exp (f : exp -> unit) (mem : t) : unit =
-    List.iter
-      (function
-        | Read ({ addr; size }, var) -> f addr
-        | Write ({ addr; size }, value) ->
-            f addr;
-            f value)
-      mem.trace
-
-  let pp_size size = PP.(dprintf "%dbits" (Size.to_bits size))
-
-  let pp_block block =
-    PP.(pp_size block.size ^^ surround 2 0 lbracket (pp_exp block.addr) rbracket)
-
-  let pp_event : event -> PP.document = function
-    | Read (mb, var) ->
-        PP.(
-          dprintf "Reading %d bits in |" (Size.to_bits mb.size)
-          ^^ Var.pp var ^^ !^"| from: " ^^ pp_exp mb.addr)
-    | Write (mb, exp) ->
-        PP.(
-          dprintf "Writing %d bits with " (Size.to_bits mb.size)
-          ^^ pp_exp exp ^^ !^" at " ^^ pp_exp mb.addr)
-
-  let pp mem = PP.prefix 2 1 (PP.string "Full trace:") (PP.list pp_event (List.rev mem.trace))
-end
-
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
 (** {1 State management } *)
 
 (** Lock the state. Once a state is locked it should not be mutated anymore *)
@@ -274,6 +301,7 @@ let lock state = state.locked <- true
 (** Unlock the state. This is dangerous, do not use if you do not know how to use it *)
 let unsafe_unlock state = state.locked <- false
 
+(** Tell if the state is locked, in which case it shouldn't be mutated *)
 let is_locked state = state.locked
 
 (** Tell is state is possible.
@@ -284,8 +312,6 @@ let is_locked state = state.locked
     required so you should call that function before [is_possible] *)
 let is_possible state = match state.asserts with [Ast.Bool (false, _)] -> false | _ -> true
 
-let make_reg_cell state ?ctyp p = { exp = Var.to_exp (Register (state, p)); ctyp }
-
 (** Makes a fresh state with all variable fresh and new *)
 let make ?elf () =
   let id = !next_id in
@@ -294,7 +320,7 @@ let make ?elf () =
       id;
       base_state = None;
       locked = false;
-      regs = Reg.Map.dummy ();
+      regs = Reg.Map.init @@ Tval.of_reg id;
       read_vars = Vec.empty ();
       asserts = [];
       mem = Mem.empty ();
@@ -303,8 +329,6 @@ let make ?elf () =
       last_pc = 0;
     }
   in
-  (* Warning: here I'm creating a cyclic reference. Please be aware of that *)
-  state.regs <- Reg.Map.init @@ make_reg_cell state;
   next_id := id + 1;
   WeakMap.add id2state id state;
   state
@@ -358,23 +382,15 @@ let push_assert (s : t) (e : exp) =
 (** Map a function on all the expressions of a state by mutating *)
 let map_mut_exp (f : exp -> exp) s : unit =
   assert (not @@ is_locked s);
-  let tval_map tv = { tv with exp = f tv.exp } in
-  Reg.Map.map_mut_current tval_map s.regs;
-  Vec.map_mut (Pair.map Fun.id tval_map) s.read_vars;
+  Reg.Map.map_mut_current (Tval.map_exp f) s.regs;
+  Vec.map_mut (Pair.map Fun.id (Tval.map_exp f)) s.read_vars;
   s.asserts <- List.map f s.asserts;
   Mem.map_mut_exp f s.mem
 
-(** Copy the state and map all the expression on it. The new state is unlocked *)
-let map_exp (f : exp -> exp) s : t =
-  let res = copy s in
-  map_mut_exp f res;
-  res
-
 (** Iterates a function on all the expressions of a state *)
 let iter_exp (f : exp -> unit) s =
-  let tval_iter tv = f tv.exp in
-  Reg.Map.iter tval_iter s.regs;
-  Vec.iter (Pair.iter ignore tval_iter) s.read_vars;
+  Reg.Map.iter (Tval.iter_exp f) s.regs;
+  Vec.iter (Pair.iter ignore (Tval.iter_exp f)) s.read_vars;
   List.iter f s.asserts;
   Mem.iter_exp f s.mem
 
@@ -382,10 +398,12 @@ let iter_exp (f : exp -> unit) s =
 let iter_var (f : var -> unit) s = iter_exp (AstManip.exp_iter_var f) s
 
 (** Return the type of a state variable *)
-let var_type var =
+let var_type (var : Var.t) =
   match var with
-  | Register (state, r) -> Reg.reg_type r
-  | ReadVar (state, i) -> Vec.get state.read_vars i |> fst
+  | Register (_, r) -> Reg.reg_type r
+  | ReadVar (id, i) ->
+      let state = of_id id in
+      Vec.get state.read_vars i |> fst
   | Arg _ -> Ast.Ty_BitVec 64
   | RetArg -> Ast.Ty_BitVec 64
   | RetAddr -> Ast.Ty_BitVec 64
@@ -399,8 +417,8 @@ let var_type var =
 let make_read (s : t) ?ctyp ?exp (ty : ty) : var =
   assert (not @@ is_locked s);
   let len = Vec.length s.read_vars in
-  let var = ReadVar (s, len) in
-  Vec.add_one s.read_vars (ty, { ctyp; exp = Opt.value exp ~default:(Var.to_exp var) });
+  let var = Var.ReadVar (s.id, len) in
+  Vec.add_one s.read_vars (ty, { ctyp; exp = Opt.value exp ~default:(Exp.of_var var) });
   var
 
 (** Read the block designated by mb from the state and return an expression read.
@@ -434,7 +452,7 @@ let read ?ctyp (s : t) (mb : Mem.block) : exp =
   in
   let nvar = make_read ?ctyp ?exp s ty in
   Mem.read s.mem mb nvar;
-  Opt.value exp ~default:(Var.to_exp nvar)
+  Opt.value exp ~default:(Exp.of_var nvar)
 
 (** Write the provided value in the block. Mutate the state.*)
 let write (s : t) (mb : Mem.block) (value : exp) : unit =
@@ -450,7 +468,7 @@ let write (s : t) (mb : Mem.block) (value : exp) : unit =
     and resets the type to the provided type (or no type if not provided)*)
 let reset_reg (s : t) ?(ctyp : Ctype.t option) (reg : Reg.t) : unit =
   assert (not @@ is_locked s);
-  Reg.Map.set s.regs reg @@ make_reg_cell s ?ctyp reg
+  Reg.Map.set s.regs reg @@ Tval.of_reg s.id ?ctyp reg
 
 (** Sets the content of register *)
 let set_reg (s : t) (reg : Reg.t) (tval : tval) : unit =
@@ -460,15 +478,19 @@ let set_reg (s : t) (reg : Reg.t) (tval : tval) : unit =
 (** Sets the type of the register, leaves the value unchanged *)
 let set_reg_type (s : t) (reg : Reg.t) (ctyp : Ctype.t) : unit =
   assert (not @@ is_locked s);
-  let { exp; _ } = Reg.Map.get s.regs reg in
-  let ntval = { exp; ctyp = Some ctyp } in
+  let exp = Reg.Map.get s.regs reg |> Tval.exp in
+  let ntval = Tval.make ~ctyp exp in
   Reg.Map.set s.regs reg ntval
 
-(** Get the content of the register *)
+(** Get the content of the register with it's type *)
 let get_reg (s : t) (reg : Reg.t) : tval = Reg.Map.get s.regs reg
 
+(** Get the content of the register without it's type *)
+let get_reg_exp s reg = get_reg s reg |> Tval.exp
+
+(** Apply a function to a register. Leave the type intact *)
 let update_reg_exp (s : t) (reg : Reg.t) (f : exp -> exp) =
-  Reg.Map.get s.regs reg |> tval_map_exp f |> Reg.Map.set s.regs reg
+  Reg.Map.get s.regs reg |> Tval.map_exp f |> Reg.Map.set s.regs reg
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -479,11 +501,11 @@ let update_reg_exp (s : t) (reg : Reg.t) (f : exp -> exp) =
 let set_pc ~(pc : Reg.t) (s : t) (pcval : int) =
   let exp = Ast.Op.bits_int ~size:64 pcval in
   let ctyp = Ctype.of_frag Ctype.Global ~offset:pcval ~constexpr:true in
-  set_reg s pc @@ make_tval ~ctyp exp
+  set_reg s pc @@ Tval.make ~ctyp exp
 
 (** Bump a concrete PC by a concrete bump (generally the size of a non-branching instruction *)
 let bump_pc ~(pc : Reg.t) (s : t) (bump : int) =
-  let pc_exp = get_reg s pc |> get_exp in
+  let pc_exp = get_reg_exp s pc in
   assert (ConcreteEval.is_concrete pc_exp);
   let old_pc = ConcreteEval.eval pc_exp |> Value.expect_bv |> BitVec.to_int in
   let new_pc = old_pc + bump in
@@ -491,7 +513,7 @@ let bump_pc ~(pc : Reg.t) (s : t) (bump : int) =
 
 (** Try to evaluate the PC if it is concrete *)
 let concretize_pc ~(pc : Reg.t) (s : t) =
-  let pc_exp = get_reg s pc |> get_exp in
+  let pc_exp = get_reg_exp s pc in
   try ConcreteEval.eval pc_exp |> Value.expect_bv |> BitVec.to_int |> set_pc ~pc s
   with ConcreteEval.Symbolic -> ()
 
@@ -500,10 +522,6 @@ let concretize_pc ~(pc : Reg.t) (s : t) =
 (*****************************************************************************)
 (** {1 Pretty printing } *)
 
-let pp_tval { exp; ctyp } =
-  let open PP in
-  match ctyp with None -> pp_exp exp | Some t -> infix 2 1 colon (pp_exp exp) (Ctype.pp t)
-
 let pp s =
   let open PP in
   record "state"
@@ -511,11 +529,11 @@ let pp s =
       ("id", Id.pp s.id);
       ("base_state", Opt.fold ~none:!^"none" ~some:(fun s -> Id.pp s.id) s.base_state);
       ("last_pc", ptr s.last_pc);
-      ("regs", Reg.Map.pp pp_tval s.regs);
+      ("regs", Reg.Map.pp Tval.pp s.regs);
       ("fenv", Fragment.Env.pp s.fenv);
-      ("read_vars", Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars);
+      ("read_vars", Vec.ppi (fun (_, tv) -> Tval.pp tv) s.read_vars);
       ("memory", Mem.pp s.mem);
-      ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts);
+      ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ Exp.pp e) s.asserts);
     ]
 
 (** Print only the mentioned regs and the memory and asserts since the base_state.
@@ -531,14 +549,14 @@ let pp_partial ~regs s =
          ("base_state", Opt.map (fun s -> Id.pp s.id) s.base_state);
          ("last_pc", ptr s.last_pc |> some);
          ( "regs",
-           List.map (fun reg -> (Reg.pp reg, Reg.Map.get s.regs reg |> pp_tval)) regs
+           List.map (fun reg -> (Reg.pp reg, Reg.Map.get s.regs reg |> Tval.pp)) regs
            |> PP.mapping "" |> some );
          ("fenv", Fragment.Env.pp s.fenv |> some);
          ( "read_vars",
-           guardn (Vec.length s.read_vars = 0) @@ Vec.ppi (fun (_, tv) -> pp_tval tv) s.read_vars
+           guardn (Vec.length s.read_vars = 0) @@ Vec.ppi (fun (_, tv) -> Tval.pp tv) s.read_vars
          );
          ("memory", guardn (Mem.is_empty s.mem) @@ Mem.pp s.mem);
          ( "asserts",
            guardn (s.asserts = [])
-           @@ separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ pp_exp e) s.asserts );
+           @@ separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ Exp.pp e) s.asserts );
        ]

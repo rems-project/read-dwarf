@@ -47,7 +47,7 @@ let event_mut ~(ctxt : ctxt) (event : Trace.event) =
         | Some dwarf ->
             let ptrtype = Typer.expr ~ctxt addr in
             Typer.read ~dwarf ctxt.state ?ptrtype mb
-        | None -> State.read ctxt.state mb |> State.make_tval
+        | None -> State.read ctxt.state mb |> State.Tval.of_exp
       in
       HashVector.set ctxt.mem_reads value tval
   | WriteMem { addr; value; size } -> (

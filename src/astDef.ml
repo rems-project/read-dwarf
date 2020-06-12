@@ -24,6 +24,8 @@ module Size = struct
   let equal = ( = )
 
   let pp_bytes s = s |> to_bytes |> PP.int
+
+  let pp_bits s = PP.(dprintf "%dbits" (to_bits s))
 end
 
 type rexp = (lrng, string, string, Size.t) exp

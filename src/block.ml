@@ -36,16 +36,16 @@ let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree
   let pcreg = Arch.pc () in
   assert (State.is_locked start);
   let rec run_from state =
-    let pc_exp = State.get_reg state pcreg |> State.get_exp in
+    let pc_exp = State.get_reg_exp state pcreg in
     if State.is_possible state then
       match b.endpred pc_exp with
       | Some endmsg ->
-          info "Stopped at pc %t because %s" (PP.top State.pp_exp pc_exp) endmsg;
+          info "Stopped at pc %t because %s" (PP.top State.Exp.pp pc_exp) endmsg;
           StateSimplify.ctxfull state;
           State.lock state;
           StateTree.{ state; data = End endmsg; rest = [] }
       | None -> (
-          info "Running pc %t" (PP.top State.pp_exp pc_exp);
+          info "Running pc %t" (PP.top State.Exp.pp pc_exp);
           let prelock state = StateSimplify.ctxfull state in
           if every_instruction then begin
             prelock state;
@@ -65,7 +65,7 @@ let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree
                 { state; data = BranchAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
         )
     else begin
-      info "Reached dead code at %t" (PP.top State.pp_exp pc_exp);
+      info "Reached dead code at %t" (PP.top State.Exp.pp pc_exp);
       StateSimplify.ctxfull state;
       State.lock state;
       StateTree.{ state; data = End "Reached dead code"; rest = [] }
@@ -82,7 +82,6 @@ let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree
     - pc is one of [brks]
     - pc has be seen more than [loop]
 *)
-
 let gen_endpred ?min ?max ?loop ?(brks = []) () : State.exp -> string option =
   let endnow fmt = Printf.ksprintf Opt.some fmt in
   let pchtbl = Hashtbl.create 10 in
@@ -111,4 +110,4 @@ let gen_endpred ?min ?max ?loop ?(brks = []) () : State.exp -> string option =
           end
       | _ -> None
     )
-  | exp -> endnow "PC %t is symbolic" PP.(tos State.pp_exp exp)
+  | exp -> endnow "PC %t is symbolic" PP.(tos State.Exp.pp exp)

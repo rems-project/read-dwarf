@@ -247,25 +247,24 @@ let get_abi api =
         end)
       data.local_regs;
     for i = 0 to repr.reg_num - 1 do
-      let tval = State.make_tval ~ctyp:repr.reg_types.(i) (State.Var.to_exp @@ Arg i) in
+      let tval = State.Tval.of_var ~ctyp:repr.reg_types.(i) (Arg i) in
       State.set_reg state data.reg_map.(i) tval
     done;
     ( match repr.ret_pointer with
     | None -> ()
-    | Some ctyp ->
-        State.set_reg state ret_pointer_reg (State.make_tval ~ctyp (State.Var.to_exp @@ RetArg))
+    | Some ctyp -> State.set_reg state ret_pointer_reg (State.Tval.of_var ~ctyp RetArg)
     );
     let stack_frag_id = Fragment.Env.add_frag ~frag:repr.stack_fragment state.fenv in
     State.set_reg_type state sp (Ctype.of_frag @@ FreeFragment stack_frag_id);
     State.set_reg state r30
-      (State.make_tval ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) (State.Var.to_exp RetAddr));
-    let sp_var = Ast.Op.var (State.Register (state, sp)) in
+      (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) RetAddr);
+    let sp_exp = State.Exp.of_reg state.id sp in
     (* Assert that Sp is 16 bytes aligned *)
-    State.push_assert state Ast.Op.(extract 3 0 sp_var = bits_int ~size:4 0);
+    State.push_assert state Ast.Op.(extract 3 0 sp_exp = bits_int ~size:4 0);
     (* Assert that Sp has zero top bits *)
-    State.push_assert state Ast.Op.(extract 63 52 sp_var = bits_int ~size:12 0);
+    State.push_assert state Ast.Op.(extract 63 52 sp_exp = bits_int ~size:12 0);
     (* Assert that there is enough stack space *)
-    State.push_assert state Ast.Op.(comp Ast.Bvuge sp_var (bits_int ~size:64 0x1000));
+    State.push_assert state Ast.Op.(comp Ast.Bvuge sp_exp (bits_int ~size:64 0x1000));
     State.lock state;
     state
   in
