@@ -16,7 +16,7 @@ module Config = ConfigFile.Arch.Isla
 type config = Config.t
 
 (** Bump when updating isla *)
-let required_version = "dev-2846f8560be7681533bc452393e567c5658caa6e"
+let required_version = "dev-e6d5ea336532a38c3d196eccac6aa5d7c454f6a1"
 
 let req_num = ref (-1)
 

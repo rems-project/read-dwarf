@@ -8,22 +8,32 @@ C type information. The project will only work for binaries generated from C.
 
 ## Dependencies
 
-You need the latest `linksem` and `ott`. Install them with opam
-by checking out the latest master on GitHub and doing `opam install .` in
-the repositories.
+### Build dependencies
+There are two build dependencies that are not on opam: `ott` and `isla-lang`.
 
-You also need to install `isla` and `isla-lang` from the `read-dwarf` branch.
-For isla you can do `make install` or `cargo install --locked --path .`
-For `isla-lang` you should do `opam install .`
-Warning for non-Rust users: You need to add ~/.cargo/bin to your PATH
-or specify the position of `isla-client` in `ISLA_CLIENT_PATH` for
-`read-dwarf` to find it.
+For `ott`: Go to
+[the `ott` repository](https://github.com/ott-lang/ott) and install the latest
+version.
 
-Finally you need `cmdliner`, `pprint`, `res`, `ocamlgraph` and `toml` from opam:
+For `isla-lang`: Go to [the `isla-lang`
+repository](https://github.com/rems-project/isla-lang) and install the latest
+version.
 
-```
-opam install cmdliner pprint res ocamlgraph toml
-```
+Then you can either install the default configuration of read-dwarf with opam,
+with `opam install .` or just install other dependencies with
+`opam install --deps-only .` and then follow the rest of the README
+
+
+### Run time dependencies
+
+You need a more or less recent version `z3`, if don't have it on your system
+package manager, you can use `opam install z3`.
+
+You also need to install `isla` from `cargo` with `cargo install isla --version
+0.1.0`. The current target version is `0.1.0`. Any other version is untested and
+given that `isla` is still in development, is not expected to work. Warning for
+non-Rust users: You need to add `~/.cargo/bin` to your PATH or specify the
+position of `isla-client` in `ISLA_CLIENT_PATH` for `read-dwarf` to find it.
 
 ## Configuration
 
@@ -40,7 +50,7 @@ it is checked out in the repository.
 
 ## Building
 
-A simple `make` works. `read-dwarf` symlink will then be created.
+A simple `make` works. A `read-dwarf` symlink will then be created.
 
 While developing, `make merlin` will only build the necessary parts for the
 merlin plugin to work. It will fail later than plain `make` allowing a more
@@ -67,7 +77,8 @@ Ask everyone if you want to change ocamlformat options or bump the version.
 
 ## Documentation
 
-`make doc` builds the automatic documentation that is then accessible from `doc.html`.
+`make doc` builds the automatic documentation that is then accessible from
+`doc.html`.
 
 The `odoc` program (`opam install odoc`) is required.
 
@@ -117,11 +128,11 @@ opam install qtest ounit
 
 ## Caching
 
-Read-dwarf may create a cache in a directory named `.rdcache`. When searching for a cache,
-read-dwarf will search if there already is a `.rdcache` directory either in the current
-directory or one of its parent and use the closest one it finds. If it finds none and need
-a cache, it will create a .rdcache in the current directory. This directory contains several
-caches indexed by name.
+Read-dwarf may create a cache in a directory named `.rdcache`. When searching
+for a cache, read-dwarf will search if there already is a `.rdcache` directory
+either in the current directory or one of its parent and use the closest one it
+finds. If it finds none and need a cache, it will create a .rdcache in the
+current directory. This directory contains several caches indexed by name.
 
 Use `read-dwarf cache --clear name` to delete such a cache or
 `read-dwarf cache --clear --a` to clear the whole `.rdcache` directory.
