@@ -6,6 +6,8 @@ maintainer: [
   "Thibaut Pérami <thibaut.perami@cl.cam.ac.uk>"
 ]
 authors: ["Peter Sewell" "Thibaut Pérami"]
+homepage: "https://github.com/rems-project/read-dwarf"
+bug-reports: "https://github.com/rems-project/read-dwarf/issues"
 depends: [
   "dune" {>= "2.0"}
   "ocaml" {>= "4.08.0"}
@@ -36,3 +38,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
+dev-repo: "git+https://github.com/rems-project/read-dwarf.git"
