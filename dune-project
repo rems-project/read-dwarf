@@ -22,7 +22,7 @@
   (ocamlgraph (>= 1.8.8))
   (toml (>= 5.0.0))
   isla-lang
-  (ott :build)
+  (ott (and (>= 0.31) :build))
   (qtest :with-test)
   (ounit :with-test)
   (odoc :with-doc)
