@@ -9,15 +9,9 @@ C type information. The project will only work for binaries generated from C.
 ## Dependencies
 
 ### Build dependencies
-There are two build dependencies that are not on opam: `ott` and `isla-lang`.
-
-For `ott`: Go to
-[the `ott` repository](https://github.com/ott-lang/ott) and install the latest
-version.
-
-For `isla-lang`: Go to [the `isla-lang`
+There is one dependency that is not on opam: `isla-lang`. Go to [the `isla-lang`
 repository](https://github.com/rems-project/isla-lang) and install the latest
-version.
+version. `opam install .` should work there.
 
 Then you can either install the default configuration of read-dwarf with opam,
 with `opam install .` or just install other dependencies with
