@@ -2,7 +2,7 @@
 
  - Find a name other than "read-dwarf"
  - Make all the test target in the Makefile work again ideally without requiring
-   hafnium-verification-plan
+   hafnium-verification-plan. Basically understand and cleanup the Makefile
 
 ## Internal infrastructure
 
@@ -10,18 +10,26 @@
  - Try to have read-dwarf automatically create/cache the objdump instead
    of asking it as a command line parameter.
  - Add prefix to external output or error coming from servers like isla or z3 with sed
- - Scrap Tests.ml completely and do an actual OUnit test suit that 
+ - Scrap Tests.ml completely and do an actual OUnit test suit that
    checks more that just "read-dwarf do not crash" on some inputs.
  - Think about removing PPrint and using StdLib.Format (and Fmt) instead
    - Need to test performance,
    - Need to swap ott pp generation to StdLib.Format, which is good for portability
+   - PPrint is pervasive in REMS code including sail. Scrapping it is probably useless.
+ - Stop using location annotation internally and use type annotations instead.
+   The boundary between location annotation and type annotation need to be thought of.
+ - Hashcons expressions and use memoisation for pure annoying functions like simplify and
+   for equality testing
+ - Do our own simplifier and stop relaying on Z3 `simplify`.
  - Do a rd2 command that basically does the same thing as rd but using internal data structure
    and not Linksem's data structures.
+ - Do `run-func-rd2`.
  - Do a html command that basically does the same thing as rd2 but with a collapsible
    html file and way more information, in particular with an option to have
    the result of symbolic evaluation
+ - Do a state invariant checker and assert it more or less regularly.
 
-## Linksem
+## Linksem performance
 
  - Performance after 27/03/2020 patch:
    - All non printing operation are generally way less than 1s. Possible improvements:
@@ -38,15 +46,14 @@
      We should use ropes like ocaml-ropes (Need to decide if Lem depends on that,
      linksem depends on that or we reimplement them in lem or linksem)
 
-# Required Plumbing
+# Unassigned necessary tasks
 
  - isla
    - Move the initial state from isla to readDwarf (Peter's qemu work)
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Improving calling convention to tell that stack pointer (and others pointers) are 
-   aligned (to reduce the number of assertions)
+ - Overhaul memory representation to add restricted block (like the stack) and memory trace caches.
  - Resolve memory read to obviously non-aliasing addresses directly
  - Fork PPrint to be able to add characters other than space as part of the indentation
 
@@ -117,4 +124,3 @@
  - Change run-func-rd from printing diffs to printing state part matching the footprints
  - Do state assertion removal (remove useless assertion according to Z3, stop executing
    if state is impossible to reach (dead code))
-
