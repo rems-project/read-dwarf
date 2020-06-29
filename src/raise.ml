@@ -8,3 +8,13 @@ let fail fmt = Printf.ksprintf failwith fmt
 
 (** Raise again an exception without losing the backtrace. *)
 let again exn = Printexc.raise_with_backtrace exn (Printexc.get_raw_backtrace ())
+
+exception Todo
+
+(** Put that in unfinished places of the code that need to be completed *)
+let todo () = raise Todo
+
+exception Unreachable
+
+(** Put that in-place of dead code that is required by the typer *)
+let unreachable () = raise Unreachable
