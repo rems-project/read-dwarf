@@ -5,7 +5,6 @@
 
 open Cmdliner
 open CommonOpt
-open Fun
 
 open Logs.Logger (struct
   let str = __MODULE__
