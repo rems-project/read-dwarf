@@ -24,3 +24,9 @@ val make : 'a -> 'b -> 'a * 'b
 
 (** Just build a pair with twice the element. Useful in high order programming *)
 val split : 'a -> 'a * 'a
+
+(** Check that both individual predicates hold *)
+val for_all : ('a -> bool) -> ('b -> bool) -> 'a * 'b -> bool
+
+(** Check that at least one of the individual predicates holds *)
+val exists : ('a -> bool) -> ('b -> bool) -> 'a * 'b -> bool

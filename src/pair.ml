@@ -17,3 +17,7 @@ let equal ?(fst = ( = )) ?(snd = ( = )) (a1, b1) (a2, b2) = fst a1 a2 && snd b1 
 let make a b = (a, b)
 
 let split a = (a, a)
+
+let for_all f1 f2 (a, b) = f1 a && f2 b
+
+let exists f1 f2 (a, b) = f1 a || f2 b

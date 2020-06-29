@@ -42,8 +42,30 @@ let rec filter_opt = function
   | Some a :: l -> a :: filter_opt l
   | None :: l -> filter_opt l
 
+(** This function behaves as [partition] then a [map]. First we do a [partition]
+    with the function assuming [Some] means [true], then for all the extracted
+    elements we map [f] on them and return the results.
+
+    Formally: [partition_map f l = (filter (fun a -> f a = None) l, filter_map f l)] *)
+let rec partition_map (f : 'a -> 'b option) : 'a list -> 'a list * 'b list = function
+  | [] -> ([], [])
+  | a :: l -> (
+      let (main, newl) = partition_map f l in
+      match f a with Some b -> (main, b :: newl) | None -> (a :: main, newl)
+    )
+
+(** Return [None] if the list is empty, and [Some list] if the list is not empty *)
+let none_if_empty = function [] -> None | l -> Some l
+
 (** Monadic bind. It's just {!concat_map} *)
 let bind l f = concat_map f l
+
+(** Remove the first element matching the predicate.
+    Returns [None] if no element matches the predicate *)
+let rec remove f = function
+  | [] -> None
+  | a :: l when f a -> Some l
+  | a :: l -> remove f l |> Stdlib.Option.map (List.cons a)
 
 (** Drop the specified number of item from the list.
     If n is greater than the size of the list, then return the empty list *)

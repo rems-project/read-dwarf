@@ -132,6 +132,11 @@ module Op = struct
 
   let ( + ) a b = add a b
 
+  let sum = function
+    | [] -> Raise.inv_arg "Cannot sum the empty list"
+    | [e] -> e
+    | l -> Manyop (Bvmanyarith Bvadd, l, unknown)
+
   let sub a b = Binop (Bvarith Bvsub, a, b, unknown)
 
   let ( - ) a b = sub a b
@@ -143,6 +148,8 @@ module Op = struct
   let sdiv a b = Binop (Bvarith Bvsdiv, a, b, unknown)
 
   let not a = Unop (Not, a, unknown)
+
+  let neg a = Unop (Bvneg, a, unknown)
 
   let extract a b e = Unop (Extract (a, b), e, unknown)
 
@@ -158,11 +165,16 @@ module Op = struct
 
   let bits_smt s = bits (BitVec.of_smt s)
 
+  let zero ~size = bits (BitVec.zero ~size)
+
   let true_exp = Bool (true, unknown)
 
   let false_exp = Bool (false, unknown)
 
-  let concat l = Manyop (Concat, l, unknown)
+  let concat = function
+    | [] -> Raise.inv_arg "Cannot concatenate the empty list"
+    | [e] -> e
+    | l -> Manyop (Concat, l, unknown)
 
   let assert_op e = Assert e
 

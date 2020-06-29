@@ -104,24 +104,16 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
   | ReadMem (result, kind, addr, size, l) ->
       debug "Reading Mem";
       (* TODO stop ignoring kind *)
-      let mb : State.Mem.block =
-        {
-          addr = exp_of_valu l vc addr |> Pointer.to_ptr_size;
-          size = State.Mem.Size.of_bytes size;
-        }
-      in
-      write_to_valu l vc result (State.read state mb)
+      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
+      let size = State.Mem.Size.of_bytes size in
+      write_to_valu l vc result (State.read_noprov state ~addr ~size)
   | WriteMem (success, kind, addr, data, size, l) ->
       debug "Writing Mem";
       (* TODO stop ignoring kind *)
-      let mb : State.Mem.block =
-        {
-          addr = exp_of_valu l vc addr |> Pointer.to_ptr_size;
-          size = State.Mem.Size.of_bytes size;
-        }
-      in
+      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
+      let size = State.Mem.Size.of_bytes size in
       let data = exp_of_valu l vc data in
-      State.write state mb data
+      State.write_noprov state ~addr ~size data
   | Cycle _ -> () (* Nothing happens here, this is just a marker *)
   | Branch _ -> () (* Nothing happens here, this is just a marker *)
   | BranchAddress _ -> () (* Nothing happens here, this is just a marker *)

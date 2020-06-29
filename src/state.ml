@@ -41,6 +41,7 @@ type id = Id.t
 (*****************************************************************************)
 (** {1 State variable management } *)
 
+(** This module provide state variables *)
 module Var = struct
   (** The type of a variable in the state *)
   type t = Register of Id.t * Reg.t | ReadVar of Id.t * int | Arg of int | RetArg | RetAddr
@@ -54,6 +55,16 @@ module Var = struct
     | Arg num -> Printf.sprintf "arg:%i" num
     | RetArg -> "retarg:"
     | RetAddr -> "retaddr:"
+
+  (** Expect a register variable and return the corresponding register. Throw otherwise. *)
+  let expect_register = function
+    | Register (_, reg) -> reg
+    | v -> Raise.inv_arg "Expected register variable but got %s" (to_string v)
+
+  (** Expect a read variable and return the corresponding index. Throw otherwise. *)
+  let expect_readvar = function
+    | ReadVar (_, rv) -> rv
+    | v -> Raise.inv_arg "Expected read variable but got %s" (to_string v)
 
   (** The opposite of {!to_string}. Will raise [Invalid_argument] when the string don't match *)
   let of_string s : t =
@@ -71,8 +82,7 @@ module Var = struct
     | ["retaddr"; ""] -> RetAddr
     | _ -> Raise.inv_arg "Invalid state variable: %s" s
 
-  (* let to_exp (v : t) : exp = Ast.Var (v, dummy_annot) *)
-
+  (** Create a register variable bound to the provided state id and register *)
   let of_reg id reg = Register (id, reg)
 
   let equal v v' =
@@ -84,6 +94,7 @@ module Var = struct
     | (RetAddr, RetAddr) -> true
     | _ -> false
 
+  (** Basically [to_string] in pp mode *)
   let pp sv = sv |> to_string |> PP.string
 
   (** Pretty prints but with bars around *)
@@ -99,16 +110,19 @@ type var = Var.t
 
 (** Module for state expressions *)
 module Exp = struct
+  (** The instantiation of {!Ast.exp} for state expressions *)
   type t = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
 
   let equal (e : t) (e' : t) = Ast.equal_exp ~var:Var.equal e e'
-
-  let pp (exp : t) = PPExp.pp_exp Var.pp_bar exp
 
   let of_var : Var.t -> t = Ast.Op.var
 
   let of_reg id reg = Var.of_reg id reg |> of_var
 
+  (** Pretty print the expression in human readable format. See module {!PPExp} *)
+  let pp (exp : t) = PPExp.pp_exp Var.pp_bar exp
+
+  (** Pretty print the expression in a SMTLIB format *)
   let pp_smt (exp : t) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
 end
 
@@ -153,80 +167,104 @@ type tval = Tval.t
 (*****************************************************************************)
 (** {1 State memory management } *)
 
-(** This module helps managing the memory part of the state. *)
+(** This module helps managing the memory part of the state.
+
+    This type has an imperative interface even if the underlying {!SymbolicFragment}
+    has a pure interface.*)
 module Mem = struct
   module Size = Ast.Size
 
-  module Block = struct
-    type t = { addr : Exp.t; size : Size.t }
+  (** The module of state memory fragment *)
+  module Fragment = SymbolicFragment.Make (Var)
 
-    let equal bl bl' = Exp.equal bl.addr bl'.addr && Size.equal bl.size bl'.size
+  (** The index of a symbolic fragment. See {!t} for more explanations  *)
+  type provenance = Ctype.provenance
 
-    let map_exp (f : Exp.t -> Exp.t) : t -> t = fun { addr; size } -> { addr = f addr; size }
+  (** The type of memory. There is a main memory and a bunch of restricted fragments.
+      Each of the restricted fragment has a symbolic base that should be subtracted
+      from the address before accessing the fragment itself.
 
-    let iter_exp (f : Exp.t -> unit) : t -> unit = fun { addr; size } -> f addr
+      In general the stack will be the fragment 0 but this is not guaranteed.
+      Some execution contexts may even not have any stacks.*)
+  type t = { mutable main : Fragment.t; frags : (Exp.t * Fragment.t) Vec.t }
 
-    let pp mb = PP.(Size.pp_bits mb.size ^^ surround 2 0 lbracket (Exp.pp mb.addr) rbracket)
-  end
+  let empty () = { main = Fragment.empty; frags = Vec.empty () }
 
-  type block = Block.t
+  let from mem =
+    { main = Fragment.from mem.main; frags = Vec.map (Pair.map Fun.id Fragment.from) mem.frags }
 
-  module Event = struct
-    type t = Read of Block.t * var | Write of Block.t * exp
+  let copy mem = { main = mem.main; frags = Vec.copy mem.frags }
 
-    let equal e e' =
-      match (e, e') with
-      | (Read (mb, v), Read (mb', v')) -> Var.equal v v' && Block.equal mb mb'
-      | (Write (mb, e), Write (mb', e')) -> Exp.equal e e' && Block.equal mb mb'
-      | _ -> false
+  (** Add a new fragment with the specified base *)
+  let new_frag mem base =
+    Vec.add_one mem.frags (base, Fragment.empty);
+    Ctype.Restricted (Vec.length mem.frags - 1)
 
-    let map_exp (f : Exp.t -> Exp.t) : t -> t = function
-      | Write (mb, e) -> Write (Block.map_exp f mb, f e)
-      | Read (mb, v) -> Read (Block.map_exp f mb, v)
+  (** Mutate the fragment in memory designated by [provenance] with the function *)
+  let update_frag ~(provenance : provenance) f mem =
+    match provenance with
+    | Main -> mem.main <- f mem.main
+    | Restricted i ->
+        let (base, frag) = Vec.get mem.frags i in
+        let nfrag = f frag in
+        Vec.set mem.frags i (base, nfrag)
 
-    let iter_exp (f : Exp.t -> unit) : t -> unit = function
-      | Write (mb, e) ->
-          Block.iter_exp f mb;
-          f e
-      | Read (mb, v) -> Block.iter_exp f mb
+  (** Give the fragment and in-fragment address corresponding to
+      the [provenance] and [addr] given *)
+  let get_frag_addr ~(provenance : provenance) mem ~(addr : Exp.t) =
+    match provenance with
+    | Main -> (mem.main, addr)
+    | Restricted i ->
+        let (term, frag) = Vec.get mem.frags i in
+        (frag, AstManip.smart_substract ~size:52 (* HACK *) ~equal_var:Var.equal ~term addr)
 
-    let pp : t -> PP.document =
-      let open PP in
-      function
-      | Read (mb, var) ->
-          dprintf "Reading %d bits in |" (Size.to_bits mb.size)
-          ^^ Var.pp var ^^ !^"| from: " ^^ Exp.pp mb.addr
-      | Write (mb, exp) ->
-          dprintf "Writing %d bits with " (Size.to_bits mb.size)
-          ^^ Exp.pp exp ^^ !^" at " ^^ Exp.pp mb.addr
-  end
+  (** Read a value of size [size] in memory at address [addr] in the fragment designated
+      by [provenance] into variable [var]. If the read can be resolved from previous writes,
+      then an expression is returned, otherwise [None] is returned *)
+  let read ~provenance mem ~var ~(addr : Exp.t) ~size : exp option =
+    let (frag, frag_addr) = get_frag_addr ~provenance mem ~addr in
+    (* For now bounds are never generated. This would require a great improvement
+       in array analysis in the type inference system *)
+    let block = Fragment.Block.make_split frag_addr size in
+    update_frag ~provenance (fun frag -> Fragment.read_sym frag block var) mem;
+    Fragment.try_read frag block
 
-  type event = Event.t
+  (** Write a value [exp] of size [size] in memory at address [addr] in the fragment
+      designated by [provenance]. *)
+  let write ~provenance mem ~addr ~size ~exp : unit =
+    let (frag, frag_addr) = get_frag_addr ~provenance mem ~addr in
+    info "Writing %d bits at %t" (Size.to_bits size) PP.(top Exp.pp addr);
+    (* For now bounds are never generated. This would require a great improvement
+       in array analysis in the type inference system *)
+    let block = Fragment.Block.make_split frag_addr size in
+    let wr frag = Fragment.write frag block exp in
+    update_frag ~provenance wr mem
 
-  type t = { mutable trace : Event.t list }
+  (** Map a function over all the memory expressions. The semantic meaning of
+      expression must not change *)
+  let map_mut_exp f mem =
+    mem.main <- Fragment.map_exp f mem.main;
+    Vec.map_mut (Pair.map f (Fragment.map_exp f)) mem.frags
 
-  let equal m m' = List.equal Event.equal m.trace m'.trace
+  (** Iterate a function of all the memory expressions *)
+  let iter_exp f mem =
+    Fragment.iter_exp f mem.main;
+    Vec.iter (Pair.iter f (Fragment.iter_exp f)) mem.frags
 
-  let empty () = { trace = [] }
+  (** Pretty print the memory *)
+  let pp mem =
+    let open PP in
+    record ""
+      [
+        ("main", Fragment.pp_raw mem.main);
+        ( "frags",
+          Vec.ppi
+            (fun (base, frag) -> PP.infix 2 1 colon (Exp.pp base) (Fragment.pp_raw frag))
+            mem.frags );
+      ]
 
-  let is_empty mem = mem.trace = []
-
-  let make state = { trace = [] }
-
-  let read mem mb var = mem.trace <- Read (mb, var) :: mem.trace
-
-  let write mem mb value = mem.trace <- Write (mb, value) :: mem.trace
-
-  let copy mem = { trace = mem.trace }
-
-  let map_mut_exp (f : exp -> exp) (mem : t) : unit =
-    mem.trace <- List.map (Event.map_exp f) mem.trace
-
-  let map_exp (f : exp -> exp) (mem : t) : t = { trace = List.map (Event.map_exp f) mem.trace }
-
-  let iter_exp (f : exp -> unit) (mem : t) : unit = List.iter (Event.iter_exp f) mem.trace
-
-  let pp mem = PP.prefix 2 1 (PP.string "Full trace:") (PP.list Event.pp (List.rev mem.trace))
+  let is_empty mem =
+    Fragment.is_empty mem.main && Vec.for_all (Pair.for_all Fun.ctrue Fragment.is_empty) mem.frags
 end
 
 (*****************************************************************************)
@@ -352,7 +390,7 @@ let copy ?elf state =
       regs = Reg.Map.copy state.regs;
       read_vars = Vec.empty ();
       asserts = (if locked then [] else state.asserts);
-      mem = (if locked then Mem.empty () else Mem.copy state.mem);
+      mem = (if locked then Mem.from state.mem else Mem.copy state.mem);
       elf = Opt.(elf ||| state.elf);
       fenv = Fragment.Env.copy state.fenv;
       last_pc = state.last_pc;
@@ -379,7 +417,9 @@ let push_assert (s : t) (e : exp) =
   assert (not @@ is_locked s);
   s.asserts <- e :: s.asserts
 
-(** Map a function on all the expressions of a state by mutating *)
+(** Map a function on all the expressions of a state by mutating. This function,
+    must preserve the semantic meaning of expression (like a simplification function)
+    otherwise state invariants may be broken. *)
 let map_mut_exp (f : exp -> exp) s : unit =
   assert (not @@ is_locked s);
   Reg.Map.map_mut_current (Tval.map_exp f) s.regs;
@@ -414,50 +454,73 @@ let var_type (var : Var.t) =
 (** {1 State memory accessors } *)
 
 (** Create a new Extra symbolic variable by mutating the state *)
-let make_read (s : t) ?ctyp ?exp (ty : ty) : var =
+let make_read (s : t) ?ctyp (ty : ty) : var =
   assert (not @@ is_locked s);
   let len = Vec.length s.read_vars in
   let var = Var.ReadVar (s.id, len) in
-  Vec.add_one s.read_vars (ty, { ctyp; exp = Opt.value exp ~default:(Exp.of_var var) });
+  Vec.add_one s.read_vars (ty, { ctyp; exp = Exp.of_var var });
   var
 
-(** Read the block designated by mb from the state and return an expression read.
-    This may mutate the state to add the read of the state as
+let set_read (s : t) (read_num : int) (exp : Exp.t) =
+  Vec.update s.read_vars read_num @@ Pair.map Fun.id (Tval.map_exp (Fun.const exp))
 
-    Depending on the inputs and the setting, this expression could be:
-    - a symbolic Extra variable that has a read event in the trace
-    - a concrete constant (read from rodata)
-    - a symbolic initial memory variable (when and if those exist)
+(** Read memory from rodata.
 
-    In practice for now it is always the first case *)
-let read ?ctyp (s : t) (mb : Mem.block) : exp =
+    TODO Move this code into SymbolicFragment *)
+let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option =
+  match s.elf with
+  | Some elf when ConcreteEval.is_concrete addr -> (
+      let int_addr = ConcreteEval.eval addr |> Value.expect_bv |> BitVec.to_int in
+      let size = size |> Ast.Size.to_bits in
+      try
+        let (sym, offset) = Elf.SymTbl.of_addr_with_offset elf.symbols int_addr in
+        if sym.writable then None
+        else
+          (* Assume little endian here *)
+          Some (Ast.Op.bits (BytesSeq.getbvle ~size sym.data offset))
+      with Not_found ->
+        warn "Reading global at 0x%x which is not in a global symbol" int_addr;
+        None
+    )
+  | _ -> None
+
+(** Read the block designated by [addr] and [size] from the state and return an expression read.
+    This will mutate the state to bind the read result to the newly created read variable.
+
+    The [ctyp] parameter may give a type to the read variable.
+
+    The expression could be either:
+      - An actual expression if the read could be resolved.
+      - Just the symbolic read variable if the read couldn't be resolved
+
+    This function is for case with [provenance] information is known.*)
+let read ~provenance ?ctyp (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t =
   assert (not @@ is_locked s);
-  let ty = Mem.Size.to_bv mb.size in
-  let exp =
-    match s.elf with
-    | Some elf when ConcreteEval.is_concrete mb.addr -> (
-        let int_addr = ConcreteEval.eval mb.addr |> Value.expect_bv |> BitVec.to_int in
-        let size = mb.size |> Ast.Size.to_bits in
-        try
-          let (sym, offset) = Elf.SymTbl.of_addr_with_offset elf.symbols int_addr in
-          if sym.writable then None
-          else
-            (* Assume little endian here *)
-            Some (Ast.Op.bits (BytesSeq.getbvle ~size sym.data offset))
-        with Not_found ->
-          warn "Reading global at 0x%x which is not in a global symbol" int_addr;
-          None
-      )
-    | _ -> None
-  in
-  let nvar = make_read ?ctyp ?exp s ty in
-  Mem.read s.mem mb nvar;
-  Opt.value exp ~default:(Exp.of_var nvar)
+  let ty = Mem.Size.to_bv size in
+  let var = make_read ?ctyp s ty in
+  let exp = Mem.read s.mem ~provenance ~var ~addr ~size in
+  let exp = if provenance = Main && exp = None then read_from_rodata ~addr ~size s else exp in
+  Opt.iter (set_read s (Var.expect_readvar var)) exp;
+  Opt.value exp ~default:(Exp.of_var var)
+
+(** A wrapper around {!read} for use when there is no provenance information.
+    It may able to still perform the read under certain condition and otherwise will fail.*)
+let read_noprov ?ctyp (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t =
+  if ConcreteEval.is_concrete addr || Vec.length s.mem.frags = 0 then
+    read ~provenance:Ctype.Main ?ctyp s ~addr ~size
+  else Raise.fail "Trying to access %t in state %d: No provenance info" PP.(tos Exp.pp addr) s.id
 
 (** Write the provided value in the block. Mutate the state.*)
-let write (s : t) (mb : Mem.block) (value : exp) : unit =
+let write ~provenance (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) (value : Exp.t) : unit =
   assert (not @@ is_locked s);
-  Mem.write s.mem mb value
+  Mem.write ~provenance s.mem ~addr ~size ~exp:value
+
+(** A wrapper around {!write} for use when there is no provenance information.
+    It may able to still perform the write under certain condition and otherwise will fail.*)
+let write_noprov (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) (value : Exp.t) : unit =
+  if ConcreteEval.is_concrete addr || Vec.length s.mem.frags = 0 then
+    write ~provenance:Ctype.Main s ~addr ~size value
+  else Raise.fail "Trying to access %t in state %d: No provenance info" PP.(tos Exp.pp addr) s.id
 
 (*****************************************************************************)
 (*****************************************************************************)

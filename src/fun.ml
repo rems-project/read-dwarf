@@ -30,3 +30,9 @@ let curry f a b = f (a, b)
 
 (** [uncurry f (a, b) = f a b] *)
 let uncurry f (a, b) = f a b
+
+(** Shorthand for [const true] *)
+let ctrue a = true
+
+(** Shorthand for [const false] *)
+let cfalse a = false

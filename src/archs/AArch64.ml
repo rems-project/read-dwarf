@@ -255,7 +255,12 @@ let get_abi api =
     | Some ctyp -> State.set_reg state ret_pointer_reg (State.Tval.of_var ~ctyp RetArg)
     );
     let stack_frag_id = Fragment.Env.add_frag ~frag:repr.stack_fragment state.fenv in
-    State.set_reg_type state sp (Ctype.of_frag @@ FreeFragment stack_frag_id);
+    let stack_provenance =
+      State.Mem.new_frag state.mem
+        (State.get_reg_exp state sp |> Ast.Op.extract (address_size - 1) 0)
+    in
+    State.set_reg_type state sp
+      (Ctype.of_frag ~provenance:stack_provenance @@ FreeFragment stack_frag_id);
     State.set_reg state r30
       (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) RetAddr);
     let sp_exp = State.Exp.of_reg state.id sp in

@@ -232,3 +232,52 @@ let check_no_mem (e : ('a, 'v, 'b, 'm) exp) : bool =
 let expect_no_mem ?(handler = fun () -> failwith "Expected no mem") :
     ('a, 'v, 'b, 'm1) exp -> ('a, 'v, 'b, 'm2) exp =
  fun exp -> if check_no_mem exp then Obj.magic exp else handler ()
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Sums manipulation } *)
+
+(** Split an expression as a list of terms. This function sees through +,- and extracts.
+
+    TODO I need to sort according to an arbitrary order to be able to compare reliably.
+    This will probably be part of a more general simplifier work.*)
+let rec sum_split = function
+  | Manyop (Bvmanyarith Bvadd, l, a) -> List.concat_map sum_split l
+  | Unop (Extract (b, a), e, _) ->
+      let l = sum_split e in
+      List.map (Ast.Op.extract b a) l
+  | Unop (Bvneg, e, _) ->
+      let l = sum_split e in
+      List.map Ast.Op.neg l
+  | Binop (Bvarith Bvsub, e, e', _) ->
+      let l = sum_split e in
+      let l' = sum_split e' in
+      let rl' = List.rev_map Ast.Op.neg l' in
+      List.rev_append l' l
+  | e -> [e]
+
+(** Merge a list of terms into a sum expression. The [size] is required if the empty list if given
+    to put and appropriately sized [0] *)
+let sum_merge_empty ~size l = if l = [] then Ast.Op.zero ~size else Ast.Op.sum l
+
+(** Add a [term] to a sum *)
+let add_term ~term exp = term :: sum_split exp |> Ast.Op.sum
+
+(** Remove a [term] from a sum. The terms are compared using the variable comparison [equal_var].
+    Return [Some res] if successful and [None] otherwise.
+
+    The [size] is required in case there is a single term and it is removed,
+    in order to put a properly sized [0] *)
+let remove_term ~size ~equal_var ~term exp =
+  let terms = sum_split exp in
+  let open Opt in
+  let+ nl = List.remove (equal_exp ~var:equal_var term) terms in
+  sum_merge_empty ~size nl
+
+(** Same as {!remove_term} but if the term is not found, add the opposite to the sum*)
+let smart_substract ~size ~equal_var ~term exp =
+  let terms = sum_split exp in
+  let nlo = List.remove (equal_exp ~var:equal_var term) terms in
+  let nl = Opt.value_fun ~default:(fun () -> Ast.Op.(neg term) :: terms) nlo in
+  sum_merge_empty ~size nl

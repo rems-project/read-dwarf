@@ -41,26 +41,26 @@ let event_mut ~(ctxt : ctxt) (event : Trace.event) =
   match event with
   | WriteReg { reg; value } -> Vec.add_one ctxt.reg_writes (reg, expand_tval ~ctxt value)
   | ReadMem { addr; value; size } ->
-      let mb : State.Mem.block = { addr = expand ~ctxt addr; size } in
+      let naddr = expand ~ctxt addr in
       let tval =
         match ctxt.dwarf with
         | Some dwarf ->
             let ptrtype = Typer.expr ~ctxt addr in
-            Typer.read ~dwarf ctxt.state ?ptrtype mb
-        | None -> State.read ctxt.state mb |> State.Tval.of_exp
+            Typer.read ~dwarf ctxt.state ?ptrtype ~addr:naddr ~size
+        | None -> State.read_noprov ctxt.state ~addr:naddr ~size |> State.Tval.of_exp
       in
       HashVector.set ctxt.mem_reads value tval
   | WriteMem { addr; value; size } -> (
-      let mb : State.Mem.block = { addr = expand ~ctxt addr; size } in
+      let naddr = expand ~ctxt addr in
       match ctxt.dwarf with
       | Some dwarf ->
           let ptrtype = Typer.expr ~ctxt addr in
           debug "Typed write mem with ptr:%t" (PP.top (PP.opt Ctype.pp) ptrtype);
           let value = expand_tval ~ctxt value in
-          Typer.write ~dwarf ctxt.state ?ptrtype mb value
+          Typer.write ~dwarf ctxt.state ?ptrtype ~addr:naddr ~size value
       | None ->
           let value = expand ~ctxt value in
-          State.write ctxt.state mb value
+          State.write_noprov ctxt.state ~addr:naddr ~size value
     )
   | Assert exp -> State.push_assert ctxt.state (expand ~ctxt exp)
 

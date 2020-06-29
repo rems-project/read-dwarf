@@ -1,4 +1,6 @@
-(** This module is eor extending the [Seq] module of the standard library *)
+(** This module is for extending the
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Seq.html} Seq}
+    module of the standard library *)
 
 include Stdlib.Seq
 
@@ -22,8 +24,27 @@ let iota_step_up ?(start = 0) ~step ~endi : int t =
   in
   aux step endi start
 
-let rec stop_at f (s : 'a Seq.t) () =
+(** Make the sequence stop when the condition is met *)
+let rec stop_at f (s : 'a t) () =
   match s () with
   | Nil -> Nil
   | Cons (a, s') when f a -> Nil
   | Cons (a, s') -> Cons (a, stop_at f s')
+
+(** Add a new element in front of the sequence. That element will appear first before
+    the rest of the sequence.
+
+    Added to [Stdlib] in Ocaml 4.11 *)
+let cons (v : 'a) (s : 'a t) () = Seq.Cons (v, s)
+
+(** Applies the specified function to the elements of the sequence in order,
+    and returns the first result of the form [Some v], or [None] if no such result was returned.
+
+    See {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html#VALfind_map} List.find_map}
+*)
+let rec find_map f seq =
+  match seq () with
+  | Nil -> None
+  | Cons (a, seq) ->
+      let v = f a in
+      if v = None then find_map f seq else v

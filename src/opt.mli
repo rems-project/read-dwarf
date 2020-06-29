@@ -48,6 +48,12 @@ val of_bool : some:'a -> bool -> 'a option
 (** Create an option from a bool, with the some value as computed by the some function *)
 val of_bool_fun : some:(unit -> 'a) -> bool -> 'a option
 
+(** [for_all p o = fold ~none:true ~some:p]*)
+val for_all : ('a -> bool) -> 'a option -> bool
+
+(** [exists p o = fold ~none:false ~some:p]*)
+val exists : ('a -> bool) -> 'a option -> bool
+
 (** Return the second argument if the first is true, otherwise [None] *)
 val guard : bool -> 'a -> 'a option
 
@@ -90,3 +96,14 @@ val lift : 'a option list -> 'a list option
 
 (** The same as a List.map and then a {!lift} *)
 val map_lift : ('a -> 'b option) -> 'a list -> 'b list option
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Pairs } *)
+
+(** Lift a pair of options to an option of pair *)
+val lift_pair : 'a option * 'b option -> ('a * 'b) option
+
+(** Unlift an option of pair to a pair of options *)
+val unlift_pair : ('a * 'b) option -> 'a option * 'b option

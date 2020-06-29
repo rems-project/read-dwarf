@@ -153,7 +153,7 @@ let run ?prelock runner state : State.t list =
         Raise.fail "Trying to run 0x%x in %s: Isla pipeline failed on that instruction" pc
           runner.elf.filename
   with exn ->
-    err "Trying to run instruction at %t in %s: too symbolic"
+    err "Trying to run instruction at %t in %s: Unexpected error"
       PP.(top State.Exp.pp pc_exp)
       runner.elf.filename;
     Raise.again exn

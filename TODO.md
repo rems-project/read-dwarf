@@ -60,8 +60,6 @@
 
 # Current task stacks for Thibaut. This is the short term task list
 
- - Overhaul memory representation to add restricted block (like the stack) and memory trace caches.
- - Resolve memory read to obviously non-aliasing addresses directly
  - Fork PPrint to be able to add characters other than space as part of the indentation
 
 ## Memory stack
@@ -131,3 +129,5 @@
  - Change run-func-rd from printing diffs to printing state part matching the footprints
  - Do state assertion removal (remove useless assertion according to Z3, stop executing
    if state is impossible to reach (dead code))
+ - Overhaul memory representation to add restricted block (like the stack) and memory trace caches.
+ - Resolve memory read to obviously non-aliasing addresses directly

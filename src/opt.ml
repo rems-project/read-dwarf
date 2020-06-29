@@ -24,6 +24,10 @@ let of_bool ~some b = if b then Some some else None
 
 let of_bool_fun ~some b = if b then Some (some ()) else None
 
+let for_all p = function None -> true | Some a -> p a
+
+let exists p = function None -> false | Some a -> p a
+
 let guard b v = if b then Some v else None
 
 let guardn b v = if b then None else Some v
@@ -56,3 +60,16 @@ let map_lift f l =
       let+ fe = f e and+ l = l in
       fe :: l)
     l (Some [])
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Pairs } *)
+
+(** Lift a pair of option to an option of pair *)
+let lift_pair (a, b) =
+  let+ a = a and+ b = b in
+  (a, b)
+
+(** Unlift an option of pair to a pair of option *)
+let unlift_pair = function None -> (None, None) | Some (a, b) -> (Some a, Some b)

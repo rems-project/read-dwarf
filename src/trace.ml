@@ -63,7 +63,7 @@ let exp_restrict e = e |> AstManip.expect_no_mem
 (** {1 Pretty printing } *)
 
 (** Pretty print an expression *)
-let pp_exp e = Ast.pp_exp Var.pp (exp_allow e)
+let pp_exp e = PPExp.pp_exp Var.pp e
 
 (** Pretty print an event *)
 let pp_event =

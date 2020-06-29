@@ -39,6 +39,7 @@ let unop (u : Ast.unop) tval : Ctype.t option =
   | Not | Bvredand | Bvredor -> None
   | Bvneg | Bvnot -> machine_of_size typ |> some
   | Extract (b, a) ->
+      debug "Extracting from type %t" PP.(top (opt Ctype.pp) tval.ctyp);
       if (* HACK for adrp: a = 0 && b = Arch.address_size - 1 &&*) Ctype.is_ptr typ then tval.ctyp
       else
         let bitsize = b - a + 1 in
@@ -48,8 +49,12 @@ let unop (u : Ast.unop) tval : Ctype.t option =
       if m mod 8 = 0 then machine_of_size ~update:(m / 8) typ |> some else None
 
 let constexpr_to_int ~ctxt e =
-  let vctxt v = expand_var ~ctxt v Ast.unknown |> ConcreteEval.eval_direct in
-  e |> ConcreteEval.eval_direct ~ctxt:vctxt |> Value.expect_bv |> BitVec.to_int
+  try
+    let vctxt v = expand_var ~ctxt v Ast.unknown |> ConcreteEval.eval_direct in
+    e |> ConcreteEval.eval_direct ~ctxt:vctxt |> Value.expect_bv |> BitVec.to_int
+  with ConcreteEval.Symbolic ->
+    err "Expression %t was typed as constexpr but is not constant" (PP.top Trace.pp_exp e);
+    Raise.again ConcreteEval.Symbolic
 
 let binop ~ctxt (b : Ast.no Ast.binop) (tval : tval) (tval' : tval) : Ctype.t option =
   let open Opt in
@@ -86,12 +91,14 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
             let constexpr = List.for_all (get_ctyp %> Ctype.is_constexpr) rest in
             if constexpr then (
               let v = List.fold_left (fun v tval -> v + constexpr_to_int ~ctxt tval.exp) 0 rest in
-              debug "update by %t" PP.(top shex v);
-              Ctype.ptr_update (get_ctyp ptr) v
+              debug "Update by %t" PP.(top shex v);
+              let t = Ctype.ptr_update (get_ctyp ptr) v in
+              debug "to get %t" PP.(top Ctype.pp t);
+              t
             )
             else Ctype.ptr_forget (get_ctyp ptr)
         | _ ->
-            warn "Multiple pointer in addition, returning Machine";
+            warn "Multiple pointers in an addition, returning Machine";
             Ctype.machine Ctype.ptr_size
     )
   | Bvmanyarith _ ->
@@ -105,7 +112,7 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
       match List.hd tvals with
       | {
        exp = Unop (Extract (m, n), _, _);
-       ctyp = Some ({ unqualified = Ptr { fragment = Global; offset }; _ } as ctyp);
+       ctyp = Some ({ unqualified = Ptr { fragment = Global; offset; _ }; _ } as ctyp);
       } -> (
           match offset with
           | Somewhere -> Some ctyp
@@ -114,7 +121,7 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
                 let new_int =
                   constexpr_to_int ~ctxt (Ast.Op.concat (List.map (fun t -> t.exp) tvals))
                 in
-                debug "new: %x = %t" new_int
+                debug "concat hack: %x = %t" new_int
                   (PP.top Trace.pp_exp (Ast.Op.concat (List.map (fun t -> t.exp) tvals)));
                 Some (Ctype.ptr_set ctyp new_int)
               with ConcreteEval.Symbolic -> Ctype.ptr_forget ctyp |> Opt.some
@@ -125,27 +132,33 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
 
 (** Stage 1 expression typer *)
 let rec expr ~ctxt (exp : Trace.exp) : Ctype.t option =
-  match exp with
-  | Var (Register reg, l) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
-  | Var (Read r, l) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
-  | Bits (bv, l) ->
-      let size = BitVec.size bv in
-      if size mod 8 = 0 || size = Arch.address_size then
-        Ctype.machine ~constexpr:true (size / 8) |> Opt.some
-      else None
-  | Bool (_, l) -> None
-  | Enum (_, l) -> None
-  | Unop (u, e, l) -> expr_tval ~ctxt e |> unop u
-  | Binop (b, e, e', l) ->
-      let te = expr_tval ~ctxt e in
-      let te' = expr_tval ~ctxt e' in
-      binop ~ctxt b te te'
-  | Manyop (m, el, l) -> List.map (expr_tval ~ctxt) el |> manyop ~ctxt m
-  | Ite (c, e, e', l) -> None
-  | Bound _ -> .
-  | Let _ -> .
+  let ctyp =
+    match exp with
+    | Var (Register reg, l) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
+    | Var (Read r, l) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
+    | Bits (bv, l) ->
+        let size = BitVec.size bv in
+        if size mod 8 = 0 || size = Arch.address_size then
+          Ctype.machine ~constexpr:true (size / 8) |> Opt.some
+        else None
+    | Bool (_, l) -> None
+    | Enum (_, l) -> None
+    | Unop (u, e, l) -> expr_tval ~ctxt e |> unop u
+    | Binop (b, e, e', l) ->
+        let te = expr_tval ~ctxt e in
+        let te' = expr_tval ~ctxt e' in
+        binop ~ctxt b te te'
+    | Manyop (m, el, l) -> List.map (expr_tval ~ctxt) el |> manyop ~ctxt m
+    | Ite (c, e, e', l) -> None
+    | Bound _ -> .
+    | Let _ -> .
+  in
+  debug "Typing %t with %t" PP.(top Trace.pp_exp exp) PP.(top (opt Ctype.pp) ctyp);
+  ctyp
 
-and expr_tval ~ctxt exp = { exp; ctyp = expr ~ctxt exp }
+and expr_tval ~ctxt exp =
+  let ctyp = expr ~ctxt exp in
+  { exp; ctyp }
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -182,19 +195,18 @@ let ptr_deref ~dwarf ~fenv ~size frag (offset : Ctype.offset) : Ctype.t option =
 
 (** Does the same as {!State.read}, but additionally take care of reading the type from a fragment
     and marking the type of the read variable. *)
-let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) (mb : State.Mem.block) :
-    State.tval =
+let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size : State.tval =
   match ptrtype with
-  | Some { unqualified = Ptr { fragment; offset }; _ } ->
+  | Some { unqualified = Ptr { fragment; offset; provenance }; _ } ->
       let fenv = s.fenv in
-      let size = State.Mem.Size.to_bytes mb.size in
-      let ctyp = ptr_deref ~dwarf ~fenv ~size fragment offset in
-      let exp = State.read ?ctyp s mb in
+      let bsize = State.Mem.Size.to_bytes size in
+      let ctyp = ptr_deref ~dwarf ~fenv ~size:bsize fragment offset in
+      let exp = State.read ~provenance ?ctyp s ~addr ~size in
       { exp; ctyp }
   | Some _ ->
       warn "Reading from non-ptr unimplemented for now";
-      State.read s mb |> State.Tval.of_exp
-  | None -> State.read s mb |> State.Tval.of_exp
+      State.read_noprov s ~addr ~size |> State.Tval.of_exp
+  | None -> State.read_noprov s ~addr ~size |> State.Tval.of_exp
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -207,7 +219,7 @@ let fragment_write_at ~(dwarf : Dw.t) ~fenv ~(ctyp : Ctype.t) (frag : Ctype.frag
   | FreeFragment i ->
       debug "Writing at %t in %d: %t" (PP.top PP.shex at) i (PP.top Ctype.pp ctyp);
       let original = Fragment.Env.get fenv i in
-      let cleared = Fragment.clear original ~start:at ~len:(Ctype.sizeof ctyp) in
+      let cleared = Fragment.clear original ~pos:at ~len:(Ctype.sizeof ctyp) in
       let newfrag = Fragment.add cleared at ctyp in
       Fragment.Env.set fenv i newfrag
   | _ -> ()
@@ -217,12 +229,13 @@ let ptr_write ~dwarf ~fenv ~ctyp frag (offset : Ctype.offset) : unit =
 
 (** Does the same as {!State.write}, but additionally take care of writing the type
     if the write is on a {!Ctype.FreeFragment}.*)
-let write ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) (mb : State.Mem.block)
+let write ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size
     (value : State.tval) : unit =
-  match (ptrtype, value.ctyp) with
-  | (Some { unqualified = Ptr { fragment; offset }; _ }, Some ctyp) ->
+  match ptrtype with
+  | Some { unqualified = Ptr { fragment; offset; provenance }; _ } ->
       let fenv = s.fenv in
-      let size = State.Mem.Size.to_bytes mb.size in
-      let ctyp = ptr_write ~dwarf ~fenv ~ctyp fragment offset in
-      State.write s mb value.exp
-  | _ -> State.write s mb value.exp
+      Opt.iter (fun ctyp -> ptr_write ~dwarf ~fenv ~ctyp fragment offset) value.ctyp;
+      State.write ~provenance s ~addr ~size value.exp
+  | _ ->
+      warn "Writing without provenance";
+      State.write_noprov s ~addr ~size value.exp

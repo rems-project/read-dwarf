@@ -31,12 +31,22 @@ let vDW_ATE_unsigned_char = "DW_ATE_unsigned_char" |> Dwarf.base_type_attribute_
 (** This is to represent a naming scope for structs *)
 type 'a named_env = (string, 'a) IdMap.t
 
+(** This is the provenance of the pointer. This tells to which symbolic memory block
+    a pointer points to. *)
+type provenance = Restricted of int | Main
+
+let pp_provenance =
+  let open PP in
+  function Main -> empty | Restricted i -> dprintf "block %d" i
+
 (** The unqualified part of the C type without const volatile, ...*)
 type unqualified =
   | Machine of int  (** Size in bytes for now*)
   | Cint of { name : string; signed : bool; size : int; ischar : bool }
   | Cbool
-  | Ptr of { fragment : fragment; offset : offset }
+  | Ptr of { fragment : fragment; offset : offset; provenance : provenance }
+      (** [fragment] is about a type fragment. [offset] is the position in that type fragment.
+          [provenance] is about a runtime symbolic block (see {!State.Mem}). *)
   | Struct of { name : string; size : int; id : int }
       (** See {!env} for what the id refers to. The int is the size *)
   | Array of { elem : t; dims : int option list }
@@ -166,10 +176,10 @@ let is_composite t = match t.unqualified with Struct _ -> true | Array _ -> true
 let is_constexpr t = t.constexpr
 
 (** Make a simple pointer from a type *)
-let ptr t = Ptr { fragment = DynArray t; offset = Const 0 }
+let ptr t = Ptr { fragment = DynArray t; offset = Const 0; provenance = Main }
 
 (** A void* pointer *)
-let voidstar = Ptr { fragment = Unknown; offset = Somewhere }
+let voidstar = Ptr { fragment = Unknown; offset = Somewhere; provenance = Main }
 
 (** Create a qualified type from an unqualified type with the specified qualifiers *)
 let qual ?(const = false) ?(volatile = false) ?(restrict = false) ?(constexpr = false) unqualified
@@ -189,12 +199,12 @@ let add_qual ?const ?volatile ?restrict ?constexpr old =
 let machine ?(constexpr = false) size = Machine size |> qual ~constexpr
 
 (** Create a pointer to fragment with specified offset (0 by default) *)
-let of_frag ?(offset = 0) ?(constexpr = false) ?(restrict = false) fragment =
-  Ptr { fragment; offset = Const offset } |> qual ~restrict ~constexpr
+let of_frag ?(provenance = Main) ?(offset = 0) ?(constexpr = false) ?(restrict = false) fragment =
+  Ptr { fragment; offset = Const offset; provenance } |> qual ~restrict ~constexpr
 
 (** Create a pointer to fragment Somewhere *)
-let of_frag_somewhere ?(constexpr = false) ?(restrict = false) fragment =
-  Ptr { fragment; offset = Somewhere } |> qual ~restrict ~constexpr
+let of_frag_somewhere ?(provenance = Main) ?(constexpr = false) ?(restrict = false) fragment =
+  Ptr { fragment; offset = Somewhere; provenance } |> qual ~restrict ~constexpr
 
 (** Build an incomplete struct with a linking name and a size *)
 let incomplete_struct name size = { layout = FieldMap.empty; name; size; complete = false }
@@ -209,20 +219,25 @@ let offset_update offset update =
 (** Update an pointer with an integer update *)
 let ptr_update ptr update =
   match ptr.unqualified with
-  | Ptr { fragment; offset } ->
-      { ptr with unqualified = Ptr { fragment; offset = offset_update offset update } }
+  | Ptr { fragment; offset; provenance } ->
+      {
+        ptr with
+        unqualified = Ptr { fragment; provenance; offset = offset_update offset update };
+      }
   | _ -> Raise.inv_arg "ptr_update: not a pointer"
 
+(** Set a arbitrary new offset in a pointer *)
 let ptr_set ptr noffset =
   match ptr.unqualified with
-  | Ptr { fragment; offset } ->
-      { ptr with unqualified = Ptr { fragment; offset = Const noffset } }
+  | Ptr { fragment; offset; provenance } ->
+      { ptr with unqualified = Ptr { fragment; offset = Const noffset; provenance } }
   | _ -> Raise.inv_arg "ptr_set: not a pointer"
 
 (** Make a pointer forget it's offset *)
 let ptr_forget ptr =
   match ptr.unqualified with
-  | Ptr { fragment; offset } -> { ptr with unqualified = Ptr { fragment; offset = Somewhere } }
+  | Ptr { fragment; offset; provenance } ->
+      { ptr with unqualified = Ptr { fragment; offset = Somewhere; provenance } }
   | _ -> Raise.inv_arg "ptr_forget: not a pointer"
 
 (*****************************************************************************)
@@ -532,8 +547,9 @@ and pp_unqualified = function
   | Cint { name; signed; size; ischar } ->
       !^name ^^ lparen ^^ pp_signed signed ^^ int (8 * size) ^^ rparen
   | Cbool -> !^"bool"
-  | Ptr { fragment; offset } ->
-      surround 2 0 lbrace (pp_offset offset ^^ pp_fragment fragment) rbrace
+  | Ptr { fragment; offset; provenance } ->
+      let prov = pp_provenance provenance ^^ !^": " in
+      surround 2 0 lbrace (prov ^^ pp_offset offset ^^ pp_fragment fragment) rbrace
   | Array { elem; dims } -> pp_arr elem dims
   | Struct { name; _ } -> dprintf "Struct %s" name
   | Enum { name; _ } -> dprintf "Enum %s" name

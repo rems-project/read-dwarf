@@ -17,7 +17,15 @@ val set : 'a t -> int -> 'a -> unit
 
 val unsafe_set : 'a t -> int -> 'a -> unit
 
+val update : 'a t -> int -> ('a -> 'a) -> unit
+
+val unsafe_update : 'a t -> int -> ('a -> 'a) -> unit
+
 val copy : 'a t -> 'a t
+
+val for_all : ('a -> bool) -> 'a t -> bool
+
+val exists : ('a -> bool) -> 'a t -> bool
 
 val map : ('a -> 'b) -> 'a t -> 'b t
 

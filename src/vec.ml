@@ -20,7 +20,15 @@ let set = set
 
 let unsafe_set = unsafe_set
 
+let update v i f = get v i |> f |> set v i
+
+let unsafe_update v i f = unsafe_get v i |> f |> unsafe_set v i
+
 let copy = copy
+
+let for_all = for_all
+
+let exists = exists
 
 let map = map
 
@@ -102,13 +110,13 @@ let map2 f veca vecb =
 let map_mut f vec =
   let len = length vec in
   for i = 0 to len - 1 do
-    unsafe_get vec i |> f |> unsafe_set vec i
+    unsafe_update vec i f
   done
 
 let map_mut_until ~limit f vec =
   let limit = min limit (length vec) in
   for i = 0 to limit - 1 do
-    unsafe_get vec i |> f |> unsafe_set vec i
+    unsafe_update vec i f
   done
 
 let fill_all vec elem =
