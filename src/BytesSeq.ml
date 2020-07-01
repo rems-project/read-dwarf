@@ -39,12 +39,16 @@ let of_hex hexstr : t =
   let res = Bytes.create reslen in
   let inc = Scanf.Scanning.from_string hexstr in
   for i = 0 to reslen - 1 do
-    Scanf.bscanf inc "%2x" (fun v -> Bytes.set_uint8 res i v)
+    Scanf.bscanf inc "%1x%1x" (fun u v -> Bytes.(set_uint8 res i ((u lsl 4) lor v)))
   done;
   of_bytes res
 
 (*$= of_hex & ~printer:to_string
      (of_hex "2a615B7c") (of_string "*a[|")
+*)
+(*$T of_hex
+     (try ignore (of_hex "2\175"); false with Stdlib.Scanf.Scan_failure _ -> true)
+     (try ignore (of_hex "7="); false with Stdlib.Scanf.Scan_failure _ -> true)
 *)
 
 (** Convert to a char array *)

@@ -46,7 +46,7 @@ mpool.c:117.3  (mpool_fini) 40012244:  14000038  b
 
 (*$T from_binary
      (try ignore @@ from_binary @@ BytesSeq.of_hex "000"; false with Failure _ ->  true)
-     (try ignore @@ from_binary @@ BytesSeq.of_hex "3700004914000038"; false with Failure _ -> true)
+     (try ignore @@ from_binary @@ BytesSeq.of_hex ("37000049" ^ "14000038"); false with Failure _ -> true)
 *)
 
 (** Simplifies the traces in the basic block *)
