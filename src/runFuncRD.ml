@@ -5,12 +5,13 @@
 
 open Cmdliner
 open CommonOpt
+open Fun
 
 open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let run_func_rd elfname name objdump_d branchtables =
+let run_func_rd elfname name objdump_d branchtables breakpoints =
   base "Running with rd %s in %s" name elfname;
   base "Loading %s" elfname;
   let dwarf = Dw.of_file elfname in
@@ -41,7 +42,12 @@ let run_func_rd elfname name objdump_d branchtables =
   match func.sym with
   | None -> fail "Function %s exists in DWARF data but do not have any code" name
   | Some sym ->
-      let endpred = Block.gen_endpred ~loop:1 ~brks:[] () in
+      let brks =
+        List.map
+          (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset)
+          breakpoints
+      in
+      let endpred = Block.gen_endpred ~loop:1 ~brks () in
       let runner = Runner.of_dwarf dwarf in
       let block = Block.make ~runner ~start:sym.addr ~endpred in
       base "Start running";
@@ -112,7 +118,14 @@ let branch_table =
     & opt (some non_dir_file) None
     & info ["branch-tables"] ~docv:"BRANCH_TABLES_FILE" ~doc)
 
-let term = Term.(func_options comopts run_func_rd $ elf $ func $ objdump_d $ branch_table)
+let breakpoints =
+  let doc =
+    "Stop condition: Stop as soon as the pc reach the position ((symbol + offset) or raw)"
+  in
+  Arg.(value & opt_all string [] & info ["b"; "break"] ~docv:"POSITION" ~doc)
+
+let term =
+  Term.(func_options comopts run_func_rd $ elf $ func $ objdump_d $ branch_table $ breakpoints)
 
 let info =
   let doc =
