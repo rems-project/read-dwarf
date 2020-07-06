@@ -1,6 +1,6 @@
-(** This module extend the base Ocaml API of option.
+(** This module extends the base OCaml API of Option.
 
-    In particular it add a bunch of monadic bindings and option merging.
+    In particular, it adds monadic bindings and option merging.
 *)
 
 include module type of Stdlib.Option
