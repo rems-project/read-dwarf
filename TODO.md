@@ -51,6 +51,13 @@
  - isla
    - Move the initial state from isla to readDwarf (Peter's qemu work)
 
+# Current task stacks for Dhruv
+ - Add symbolic evaluation for Branch tables (probably in
+   `Runner.execute_normal`, check if any of the next pc's are symbolic and get
+   a list of concrete addressess from this code - depends on what the API looks
+   like)
+ - Ask Peter about details
+
 # Current task stacks for Thibaut. This is the short term task list
 
  - Overhaul memory representation to add restricted block (like the stack) and memory trace caches.
