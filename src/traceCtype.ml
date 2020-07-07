@@ -174,7 +174,7 @@ let fragment_at ~(dwarf : Dw.t) ~fenv ~size (frag : Ctype.fragment) at : Ctype.t
   | DynArray t ->
       let at = at mod Ctype.sizeof t in
       Ctype.type_at ~env ~size t at
-  | FreeFragment i ->
+  | DynFragment i ->
       let frag = Fragment.Env.get fenv i in
       let* (typ, off) = Fragment.at_off_opt frag at in
       Ctype.type_at ~env ~size typ off
@@ -216,7 +216,7 @@ let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size :
 let fragment_write_at ~(dwarf : Dw.t) ~fenv ~(ctyp : Ctype.t) (frag : Ctype.fragment) at : unit =
   let env = dwarf.tenv in
   match frag with
-  | FreeFragment i ->
+  | DynFragment i ->
       debug "Writing at %t in %d: %t" (PP.top PP.shex at) i (PP.top Ctype.pp ctyp);
       let original = Fragment.Env.get fenv i in
       let cleared = Fragment.clear original ~pos:at ~len:(Ctype.sizeof ctyp) in

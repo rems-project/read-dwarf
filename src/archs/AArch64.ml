@@ -260,7 +260,7 @@ let get_abi api =
         (State.get_reg_exp state sp |> Ast.Op.extract (address_size - 1) 0)
     in
     State.set_reg_type state sp
-      (Ctype.of_frag ~provenance:stack_provenance @@ FreeFragment stack_frag_id);
+      (Ctype.of_frag ~provenance:stack_provenance @@ DynFragment stack_frag_id);
     State.set_reg state r30
       (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) RetAddr);
     let sp_exp = State.Exp.of_reg state.id sp in
