@@ -100,6 +100,7 @@
 (menhir
  (modules astParser ottlib)
  (merge_into astParser)
+ (flags --unused-token BV --unused-token BVI --unused-token VVAR)
  (infer true))
 
 (ocamllex

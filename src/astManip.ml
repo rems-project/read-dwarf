@@ -143,7 +143,7 @@ let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, '
 let allow_lets : ('a, 'v, no, 'm) exp -> ('a, 'v, 'b, 'm) exp =
   (* Check that exp is covariant in the 'b parameter, otherwise this is unsound *)
   let module M : sig
-    type +'b t
+    type +'b t [@@ocaml.warning "-34"] (* unused type *)
   end = struct
     type 'b t = (no, no, 'b, no) exp
   end in
@@ -152,7 +152,7 @@ let allow_lets : ('a, 'v, no, 'm) exp -> ('a, 'v, 'b, 'm) exp =
 let smt_allow_lets : ('a, 'v, no, 'm) smt -> ('a, 'v, 'b, 'm) smt =
   (* Check that smt is covariant in the 'b parameter, otherwise this is unsound *)
   let module M : sig
-    type +'b t
+    type +'b t [@@ocaml.warning "-34"] (* unused type *)
   end = struct
     type 'b t = (no, no, 'b, no) smt
   end in
@@ -191,7 +191,7 @@ let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) 
 let allow_mem : ('a, 'v, 'b, no) exp -> ('a, 'v, 'b, 'm) exp =
   (* Check that exp is covariant in the 'm parameter, otherwise this is unsound *)
   let module M : sig
-    type +'m t
+    type +'m t [@@ocaml.warning "-34"] (* unused type *)
   end = struct
     type 'm t = (no, no, no, 'm) exp
   end in
@@ -200,7 +200,7 @@ let allow_mem : ('a, 'v, 'b, no) exp -> ('a, 'v, 'b, 'm) exp =
 let smt_allow_mem : ('a, 'v, 'b, no) smt -> ('a, 'v, 'b, 'm) smt =
   (* Check that smt is covariant in the 'm parameter, otherwise this is unsound *)
   let module M : sig
-    type +'m t
+    type +'m t [@@ocaml.warning "-34"] (* unused type *)
   end = struct
     type 'm t = (no, no, no, 'm) exp
   end in
@@ -210,7 +210,7 @@ let smt_allow_mem : ('a, 'v, 'b, no) smt -> ('a, 'v, 'b, 'm) smt =
 let ty_allow_mem : no ty -> 'm ty =
   (* Check that ty is covariant in the 'm parameter, otherwise this is unsound *)
   let module M : sig
-    type +'m t
+    type +'m t [@@ocaml.warning "-34"] (* unused type *)
   end = struct
     type 'm t = 'm ty
   end in

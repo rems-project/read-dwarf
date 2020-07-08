@@ -27,8 +27,17 @@ embed
 {{ menhir
 
 %{
-   open AstDef
+[@@ocaml.warning "-33" (* unused open *)]
+
+open AstDef
 %}
+
+}}
+
+{{ocaml-preamble
+
+(* For an unknown reason, Ott generates spurious documentation comments in its output *)
+[@@@ocaml.warning "-50" (* unattached documentation comments *)]
 
 }}
 
