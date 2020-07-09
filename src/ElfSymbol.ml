@@ -42,7 +42,7 @@ let _ =
         Some (Printf.sprintf "Symbol %s at 0x%x could not be loaded" name addr)
     | _ -> None)
 
-let of_linksem segs ((name, (typ, size, addr, data, _)) as lsym) =
+let of_linksem segs (name, (typ, size, addr, data, _)) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
   let addr = Z.to_int addr in

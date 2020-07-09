@@ -675,8 +675,8 @@ let source_file_cache =
   ref ([] : ((string option * string option * string) * string array option) list)
 
 let source_line (comp_dir, dir, file) n1 =
-  let pp_string_option s = match s with Some s' -> s' | None -> "<none>" in
-  (* Printf.printf "comp_dir=\"%s\"  source_line dir=\"%s\"  file=\"%s\"\n"
+  (* let pp_string_option s = match s with Some s' -> s' | None -> "<none>" in
+     Printf.printf "comp_dir=\"%s\"  source_line dir=\"%s\"  file=\"%s\"\n"
        (pp_string_option comp_dir) (pp_string_option dir) file; *)
   let access_lines lines n =
     if n < 0 || n >= Array.length lines then
@@ -2025,8 +2025,6 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
     mk_node nesting k kind label
   in
 
-  let k_max = Array.length an.instructions in
-
   (* make the little piece of graph from a start node at k to its first non-start node *)
   let graphette_start return_target (k, nesting) : graph_cfg * (index * nesting) list
       (* work_list_new *) =
@@ -2904,7 +2902,7 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
     List.map (function (a, ss) -> (a, index_of_address a, ss)) nodes0
   in
 
-  let pp_node ((a, k, ss) as node) =
+  let pp_node (a, k, ss) =
     pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
   in
 
@@ -3160,9 +3158,6 @@ let globals_dwarf (sdt_d : Dwarf.sdt_dwarf) :
 
 let params_subroutine (ss : Dwarf.sdt_subroutine) =
   let name = maybe_name ss.ss_name in
-  let kind1 =
-    match ss.ss_kind with SSK_subprogram -> "" | SSK_inlined_subroutine -> "(inlined)"
-  in
   match ss.ss_entry_address with
   | None -> None
   | Some addr ->
@@ -3201,15 +3196,14 @@ let pp_ranged_var (prefix : string) (var : ranged_var) : string =
   ^ pp_context context
   ^ ( match svfp.svfp_decl with
     | None -> ""
-    | Some ((ufe, line, subprogram_name) as ud) -> ":" ^ string_of_int line
+    | Some (ufe, line, subprogram_name) -> ":" ^ string_of_int line
     )
   ^ "\n"
 
 let pp_ranged_vars (prefix : string) (vars : ranged_var list) : string =
   String.concat "" (List.map (pp_ranged_var prefix) vars)
 
-let compare_pc_ranges (((n1, n2, ops) as pc_range), var) (((n1', n2', ops') as pc_range'), var') =
-  compare n1 n1'
+let compare_pc_ranges ((n1, n2, ops), var) ((n1', n2', ops'), var') = compare n1 n1'
 
 let local_by_pc_ranges (((svfp : Dwarf.sdt_variable_or_formal_parameter), context) as var) :
     ranged_var list =
@@ -3251,11 +3245,11 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
       if not (Nat_big_num.less addr_prev addr) then
         Warn.fatal "mk_ranged_vars_at_instructions found non-increasing address %s" (pp_addr addr);
       let (still_current, old) =
-        List.partition (function ((n1, n2, ops), var) as rv -> Nat_big_num.less addr n2) prev
+        List.partition (function ((n1, n2, ops), var) -> Nat_big_num.less addr n2) prev
       in
       let (new', remaining') =
         partition_first
-          (function ((n1, n2, ops), var) as rv -> Nat_big_num.greater_equal addr n1)
+          (function ((n1, n2, ops), var) as _rv -> Nat_big_num.greater_equal addr n1)
           remaining
       in
       (* TODO: do we need to drop any that have been totally skipped over? *)
@@ -3950,9 +3944,7 @@ let process_file () : unit =
           let cfg_dot_file_base = cfg_dot_file_root ^ "_base.dot" in
           let cfg_dot_file_layout = cfg_dot_file_root ^ "_layout.dot" in
           pp_cfg graph cfg_dot_file_base false;
-          let status =
-            Unix.system ("dot -Txdot " ^ cfg_dot_file_base ^ " > " ^ cfg_dot_file_layout)
-          in
+          ignore @@ Unix.system ("dot -Txdot " ^ cfg_dot_file_base ^ " > " ^ cfg_dot_file_layout);
           let layout_lines =
             match read_file_lines cfg_dot_file_layout with
             | Ok lines -> lines
@@ -3972,13 +3964,8 @@ let process_file () : unit =
           List.iter (function line -> Printf.fprintf c "%s\n" line) ppd_correlate_edges;
           Printf.fprintf c "}\n";
           close_out c;
-          let status =
-            Unix.system ("dot -Tpdf " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".pdf")
-          in
-          let status =
-            Unix.system ("dot -Tsvg " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".svg")
-          in
-          ()
+          ignore @@ Unix.system ("dot -Tpdf " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".pdf");
+          ignore @@ Unix.system ("dot -Tsvg " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".svg")
       | None -> Warn.fatal "no dot file\n"
     )
   | _ -> Warn.fatal "missing files for elf2\n"

@@ -510,7 +510,7 @@ let env_of_linksem (lenv : linksem_env) : env =
   let env = make_env llenv in
   List.iter
     (function
-      | CT (CT_struct_union (cupdie, Atk_structure, mname, msize, _, _)) as ct ->
+      | CT (CT_struct_union (cupdie, Atk_structure, mname, msize, _, _)) ->
           Opt.(
             let+! name = mname and+ size = msize in
             if not @@ IdMap.mem env.structs name then

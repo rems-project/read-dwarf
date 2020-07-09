@@ -171,7 +171,7 @@ let get_abi_repr api : abi_repr =
           raise Allocated
         end;
         (* Item C.14 *)
-        let nsize = if size < 8 then 8 else size in
+        let size = if size < 8 then 8 else size in
         (* Item C.15 *)
         allocate_stack arg;
         vNSAA := !vNSAA + size

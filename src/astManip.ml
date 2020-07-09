@@ -254,7 +254,7 @@ let rec sum_split = function
       let l = sum_split e in
       let l' = sum_split e' in
       let rl' = List.rev_map Ast.Op.neg l' in
-      List.rev_append l' l
+      List.rev_append rl' l
   | e -> [e]
 
 (** Merge a list of terms into a sum expression. The [size] is required if the empty list if given

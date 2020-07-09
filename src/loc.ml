@@ -60,10 +60,9 @@ let of_linksem ?(amap = Arch.dwarf_reg_map ()) (elf : Elf.File.t) : linksem_t ->
              (Z.to_int op.op_code) op.op_string)
       else RegisterOffset (amap.(reg_num), int_of_oav arg)
   (* StackFrame *)
-  | [({ op_semantics = OpSem_fbreg; op_argument_values = [arg]; _ } as op)] ->
-      StackFrame (int_of_oav arg)
+  | [{ op_semantics = OpSem_fbreg; op_argument_values = [arg]; _ }] -> StackFrame (int_of_oav arg)
   (* Global *)
-  | [({ op_semantics = OpSem_lit; op_code = code; op_argument_values = [arg]; _ } as op)] as ops
+  | [{ op_semantics = OpSem_lit; op_code = code; op_argument_values = [arg]; _ }] as ops
     when Z.to_int code = vDW_OP_addr -> (
       try Global (Elf.SymTbl.of_addr_with_offset elf.symbols @@ int_of_oav arg)
       with Not_found ->

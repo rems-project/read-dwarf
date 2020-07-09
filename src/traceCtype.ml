@@ -214,7 +214,6 @@ let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size :
 (** {1 Memory Write} *)
 
 let fragment_write_at ~(dwarf : Dw.t) ~fenv ~(ctyp : Ctype.t) (frag : Ctype.fragment) at : unit =
-  let env = dwarf.tenv in
   match frag with
   | DynFragment i ->
       debug "Writing at %t in %d: %t" (PP.top PP.shex at) i (PP.top Ctype.pp ctyp);

@@ -204,7 +204,7 @@ let ensure_started_get () =
 
 (** Open a new context with a name. Ensure the server is started *)
 let open_context name =
-  let serv = ensure_started_get () in
+  ensure_started ();
   if z3_trace then begin
     debug "Opening context %s" name;
     context := { name; num = 0 } :: !context
@@ -213,7 +213,6 @@ let open_context name =
 
 (** Closes current context *)
 let close_context () =
-  let serv = get_server () in
   if z3_trace then begin
     let { name; num } = List.hd !context in
     debug "Closing context %s at %d at %s" name num

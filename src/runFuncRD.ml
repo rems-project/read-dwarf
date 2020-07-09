@@ -55,7 +55,6 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
       base "Ended running, start pretty printing";
       (* This table will contain the state diff to print at each pc with a message *)
       let instr_data : (int, string * State.t * Reg.t list) Hashtbl.t = Hashtbl.create 100 in
-      let pc_reg = Arch.pc () in
       let get_footprint pc =
         Runner.get_normal_opt runner pc |> Opt.fold ~none:[] ~some:Instr.footprint
       in
