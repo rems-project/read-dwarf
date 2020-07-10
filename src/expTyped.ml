@@ -76,7 +76,7 @@ let binop op (e : ('v, 'm) t) (e' : ('v, 'm) t) : ('v, 'm) t =
     size
   in
   match op with
-  | Eq | Neq ->
+  | Eq ->
       assert (get_type e = get_type e');
       Binop (op, e, e', Ty_Bool)
   | Bvarith _ -> Binop (op, e, e', Ty_BitVec (bv_same ()))

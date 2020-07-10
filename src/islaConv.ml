@@ -51,7 +51,6 @@ let bvmanyarith : Isla.bvmanyarith -> Ast.bvmanyarith = function
 
 let binop : Isla.binop -> 'm Ast.binop = function
   | Eq -> Eq
-  | Neq -> Neq
   | Bvarith b -> Bvarith (bvarith b)
   | Bvcomp b -> Bvcomp (bvcomp b)
 

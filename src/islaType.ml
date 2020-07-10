@@ -64,7 +64,7 @@ let type_binop l (b : binop) ((_, t) as ltt) ((_, t') as ltt') : ty =
     n
   in
   match b with
-  | Eq | Neq -> if t = t' then Ty_Bool else raise (TypeError (l, "Equality requires same type"))
+  | Eq -> if t = t' then Ty_Bool else raise (TypeError (l, "Equality requires same type"))
   | Bvarith _ -> Ty_BitVec (bv_same ())
   | Bvcomp _ ->
       ignore @@ bv_same ();

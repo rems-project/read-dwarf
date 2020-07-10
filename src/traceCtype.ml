@@ -60,7 +60,7 @@ let binop ~ctxt (b : Ast.no Ast.binop) (tval : tval) (tval' : tval) : Ctype.t op
   let open Opt in
   let* typ = tval.ctyp and* typ' = tval'.ctyp in
   match b with
-  | Eq | Neq | Bvcomp _ -> None
+  | Eq | Bvcomp _ -> None
   | Bvarith Bvsub when Ctype.is_ptr typ ->
       if typ'.constexpr then
         let v' = constexpr_to_int ~ctxt tval'.exp in

@@ -72,7 +72,7 @@ let prec_bvarith : Ast.bvarith -> prec = function
   | Bvudiv | Bvudivi | Bvsdiv | Bvsdivi | Bvurem | Bvsrem | Bvsmod -> MUL
 
 let prec_binop : Ast.no Ast.binop -> prec = function
-  | Eq | Neq -> EQ
+  | Eq -> EQ
   | Bvarith bva -> prec_bvarith bva
   | Bvcomp _ -> COMP
   | Binmem m -> Ast.destr_binmem m
@@ -144,7 +144,6 @@ let pp_binop (b : Ast.no Ast.binop) doc doc' =
   let bin sym doc doc' = doc ^^ space ^^ sym ^^ nbspace ^^ doc' |> nest 4 |> group in
   match b with
   | Eq -> bin equals doc doc' |> group
-  | Neq -> bin !^"!=" doc doc' |> group
   | Bvarith bva -> bin (sym_bvarith bva) doc doc' |> group
   | Bvcomp bvc -> bin (sym_bvcomp bvc) doc doc' |> group
   | Binmem m -> Ast.destr_binmem m

@@ -60,7 +60,6 @@ let eval_bvcomp (b : Ast.bvcomp) v v' =
 let eval_binop (b : Ast.no Ast.binop) v v' =
   match b with
   | Eq -> v = v' |> Value.bool
-  | Neq -> v <> v' |> Value.bool
   | Bvarith bva -> eval_bvarith bva (Value.expect_bv v) (Value.expect_bv v') |> Value.bv
   | Bvcomp bvc -> eval_bvcomp bvc (Value.expect_bv v) (Value.expect_bv v') |> Value.bool
   | Binmem m -> Ast.destr_binmem m
