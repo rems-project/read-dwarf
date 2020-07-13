@@ -2,6 +2,8 @@
 
 include Stdlib.List
 
+let rec repeat n a = if n <= 0 then [] else a :: repeat (n - 1) a
+
 let fold_left_same f l =
   match l with a :: l -> fold_left f a l | [] -> Raise.inv_arg "List.fold_left_same: empty list"
 
@@ -59,6 +61,13 @@ let none_if_empty = function [] -> None | l -> Some l
 
 (** Monadic bind. It's just {!concat_map} *)
 let bind l f = concat_map f l
+
+(** Set the nth value to the new value and return the modified list *)
+let rec set_nth l n v =
+  match l with
+  | [] -> Raise.inv_arg "List.set_nth: invalid index"
+  | _ :: l when n = 0 -> v :: l
+  | a :: l -> a :: set_nth l (n - 1) v
 
 (** Remove the first element matching the predicate.
     Returns [None] if no element matches the predicate *)

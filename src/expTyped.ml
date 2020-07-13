@@ -60,7 +60,7 @@ let unop op (e : ('v, 'm) t) : ('v, 'm) t =
       Unop (op, e, ty)
   | Bvredand | Bvredor ->
       assert (e |> get_type |> is_bv);
-      Unop (op, e, Ty_Bool)
+      Unop (op, e, Ty_BitVec 1)
   | Extract (last, first) ->
       assert (last >= first);
       assert (last < expect_bv (get_type e));

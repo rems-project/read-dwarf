@@ -21,8 +21,8 @@ let eval_unop (u : Ast.unop) v =
   | Not -> v |> Value.expect_bool |> not |> Value.bool
   | Bvnot -> v |> Value.expect_bv |> BitVec.lognot |> Value.bv
   | Bvneg -> v |> Value.expect_bv |> BitVec.neg |> Value.bv
-  | Bvredand -> v |> Value.expect_bv |> BitVec.redand |> Value.bool
-  | Bvredor -> v |> Value.expect_bv |> BitVec.redor |> Value.bool
+  | Bvredand -> v |> Value.expect_bv |> BitVec.redand |> BitVec.of_bool |> Value.bv
+  | Bvredor -> v |> Value.expect_bv |> BitVec.redor |> BitVec.of_bool |> Value.bv
   | Extract (b, a) -> v |> Value.expect_bv |> BitVec.extract a b |> Value.bv
   | ZeroExtend m -> v |> Value.expect_bv |> BitVec.zero_extend m |> Value.bv
   | SignExtend m -> v |> Value.expect_bv |> BitVec.sign_extend m |> Value.bv
@@ -38,9 +38,12 @@ let eval_bvarith (b : Ast.bvarith) v v' =
   | Bvudivi -> udiv v v'
   | Bvsdiv -> sdiv v v'
   | Bvsdivi -> sdiv v v'
-  | Bvurem -> Raise.fail "unimplemented"
-  | Bvsrem -> Raise.fail "unimplemented"
-  | Bvsmod -> Raise.fail "unimplemented"
+  | Bvurem -> urem v v'
+  | Bvuremi -> urem v v'
+  | Bvsrem -> srem v v'
+  | Bvsremi -> srem v v'
+  | Bvsmod -> smod v v'
+  | Bvsmodi -> smod v v'
   | Bvshl -> v lsl v'
   | Bvlshr -> v lsr v'
   | Bvashr -> v asr v'
@@ -77,9 +80,7 @@ let eval_manyop (m : Ast.manyop) vs =
   match m with
   | And -> List.for_all Value.expect_bool vs |> Value.bool
   | Or -> List.exists Value.expect_bool vs |> Value.bool
-  | Concat ->
-      List.fold_left (fun bv v -> v |> Value.expect_bv |> BitVec.concat bv) BitVec.empty vs
-      |> Value.bv
+  | Concat -> vs |> List.map Value.expect_bv |> List.fold_left_same BitVec.concat |> Value.bv
   | Bvmanyarith bvma -> eval_bvmanyarith bvma (List.map Value.expect_bv vs) |> Value.bv
 
 (** Evaluate a concrete expression directly without external tool *)

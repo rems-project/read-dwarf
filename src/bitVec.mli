@@ -3,6 +3,8 @@
     TODO: It could be nice to export this as a separate library on opam at some point
 
     The value of type t is semantically pure.
+
+    The size of bit vectors must always be strictly positive.
 *)
 
 (** The type of a bitvector *)
@@ -22,9 +24,6 @@ val one : size:int -> t
 
 (** The bitvector representing -1 of specified size *)
 val minus_one : size:int -> t
-
-(** The empty bitvector of size 0 *)
-val empty : t
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -143,15 +142,46 @@ val mul : t -> t -> t
 
     Throw {!SizeMismatch} if sizes differ.
 
-    Return 0 in case of division by 0 as it is undefined.
+    Throw {!Division_by_zero} if there is a division by zero.
 *)
 val sdiv : t -> t -> t
+
+(** Take the remainder of the signed division. Result if of the same size as the inputs.
+
+    [ a = sdiv a b * b + srem a b ]
+
+    Throw {!SizeMismatch} if sizes differ.
+
+    Throw {!Division_by_zero} if there is a division by zero.
+*)
+val srem : t -> t -> t
+
+(** Take the signed modulo. The result has the sign of the divisor.
+    Result if of the same size as the inputs.
+
+    Throw {!SizeMismatch} if sizes differ.
+
+    Throw {!Division_by_zero} if there is a division by zero.
+*)
+val smod : t -> t -> t
 
 (** Divide the value as unsigned integers. Result if of the same size as the inputs.
 
     Throw {!SizeMismatch} if sizes differ
+
+    Throw {!Division_by_zero} if there is a division by zero.
 *)
 val udiv : t -> t -> t
+
+(** Get the remainder of the unsigned division. Result if of the same size as the inputs.
+
+    [ a = udiv a b * b + urem a b ]
+
+    Throw {!SizeMismatch} if sizes differ
+
+    Throw {!Division_by_zero} if there is a division by zero.
+*)
+val urem : t -> t -> t
 
 (*****************************************************************************)
 (*****************************************************************************)

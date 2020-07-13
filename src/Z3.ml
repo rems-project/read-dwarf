@@ -121,7 +121,7 @@ let send_smt (serv : server) ?(ppv = PP.erase) smt =
 (** Read a string from the server (A Z3 answer is always a valid sexp) *)
 let read_string (serv : server) =
   let sexp = Files.input_sexp serv.ioserver.input in
-  debug "In context %t, read %s" (fun o -> output_string o (get_context_string ())) sexp;
+  debug "In context %t, read \n%s" (fun o -> output_string o (get_context_string ())) sexp;
   sexp
 
 (** Read a {!smt_ans} from the server *)
@@ -198,6 +198,12 @@ let ensure_started_get () =
       get_server ()
   | Some serv -> serv
 
+(** Reset the Z3 server, forgetting everything. Useful for resetting in a test failure context,
+    but probably shouldn't be used in normal operations*)
+let reset () =
+  ensure_stopped ();
+  start ()
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -223,12 +229,11 @@ let open_context name =
 
 (** Closes current context *)
 let close_context () =
-  if z3_trace then begin
+  if z3_trace then (
     let { name; num } = List.hd !context in
-    debug "Closing context %s at %d at %s" name num
-      (Printexc.get_callstack 100 |> Printexc.raw_backtrace_to_string);
+    debug "Closing context %s at %d" name num;
     context := List.tl !context
-  end;
+  );
   command Ast.Pop
 
 (** Module for handling a context numbering scheme automatically.
@@ -457,49 +462,3 @@ module Make (Var : Var) : S with type var = Var.t = struct
         match check_sat serv e with Some false as f -> f | _ -> None
       )
 end
-
-(*
- * (\*****************************************************************************\)
- * (\*        Tests                                                              *\)
- * (\*****************************************************************************\)
- *
- * let _ = Tests.add_reset "Z3 stop" ensure_stopped
- *
- * let _ =
- *   Tests.add_test "Z3.direct" (fun () ->
- *       let output ochannel =
- *         Printf.fprintf ochannel "(display 42)\n";
- *         flush ochannel
- *       in
- *       let input ichannel = input_line ichannel in
- *       Cmd.io [|!CommonOpt.z3_ref; "-in"|] output input = "42")
- *
- * let _ =
- *   Tests.add_test "Z3" (fun () ->
- *       start ();
- *       stop ();
- *       true)
- *
- * let _ =
- *   Tests.add_test "Z3.simplify" (fun () ->
- *       start ();
- *       let exp = Ast.Op.(bits_smt "#x3" - bits_int ~size:4 1) in
- *       let exp = simplify exp in
- *       stop ();
- *       match exp with Bits (v, _) -> BitVec.to_int v = 2 | _ -> false)
- *
- * let _ =
- *   Tests.add_test "Z3.check_sat" (fun () ->
- *       start ();
- *       let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
- *       let res = check_sat [exp] in
- *       stop ();
- *       Option.value res ~default:false)
- *
- * let _ =
- *   Tests.add_test "Z3.check" (fun () ->
- *       start ();
- *       let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
- *       let res = check exp in
- *       stop ();
- *       Option.value res ~default:false) *)

@@ -69,7 +69,9 @@ let prec_bvarith : Ast.bvarith -> prec = function
   | Bvnor | Bvxnor -> OR
   | Bvsub -> ADD
   | Bvshl | Bvlshr | Bvashr -> SHIFTS
-  | Bvudiv | Bvudivi | Bvsdiv | Bvsdivi | Bvurem | Bvsrem | Bvsmod -> MUL
+  | Bvudiv | Bvudivi | Bvsdiv | Bvsdivi | Bvurem | Bvuremi | Bvsrem | Bvsremi | Bvsmod | Bvsmodi
+    ->
+      MUL
 
 let prec_binop : Ast.no Ast.binop -> prec = function
   | Eq -> EQ
@@ -124,8 +126,11 @@ let sym_bvarith : Ast.bvarith -> document = function
   | Bvsdiv -> !^"s/"
   | Bvsdivi -> !^"s/i"
   | Bvurem -> !^"urem"
+  | Bvuremi -> !^"uremi"
   | Bvsrem -> !^"srem"
+  | Bvsremi -> !^"sremi"
   | Bvsmod -> !^"smod"
+  | Bvsmodi -> !^"smodi"
   | Bvshl -> !^"<<"
   | Bvlshr -> !^"l>>"
   | Bvashr -> !^"a>>"

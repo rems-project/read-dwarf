@@ -42,7 +42,7 @@ let type_unop l (u : unop) (ltt : lrng * ty) : ty =
   | Bvnot | Bvneg -> Ty_BitVec (expect_bv PP.(sprintc @@ pp_unop u) ltt)
   | Bvredand | Bvredor ->
       ignore (expect_bv PP.(sprintc @@ pp_unop u) ltt);
-      Ty_Bool
+      Ty_BitVec 1
   | Extract (b, a) ->
       let n = expect_bv PP.(sprintc @@ pp_unop u) ltt in
       tassert l PP.(sprintc @@ pp_unop u ^^ !^" make no sense") (a <= b);

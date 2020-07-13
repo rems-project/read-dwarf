@@ -23,9 +23,15 @@ let size v = v.size
 
 let to_z v = v.z
 
-let of_z ~size z = { z = Z.signed_extract z 0 size; size }
+let of_z ~size z =
+  if size <= 0 then Raise.inv_arg "BitVec.of_z: Non-positive size %d" size;
+  { z = Z.signed_extract z 0 size; size }
 
-let of_int ~size i = i |> Z.of_int |> of_z ~size
+let check_invariant v = v.z = (of_z ~size:v.size v.z).z
+
+let of_int ~size i =
+  if size <= 0 then Raise.inv_arg "BitVec.of_z: Non-positive size %d" size;
+  i |> Z.of_int |> of_z ~size
 
 (*$= of_int & ~printer:Z.to_string
      (Z.of_int 2) (of_int ~size:3 10 |> to_z)
@@ -38,8 +44,6 @@ let to_uz v = Z.extract v.z 0 v.size
 *)
 
 let zero ~size = of_z ~size Z.zero
-
-let empty = { z = Z.zero; size = 0 }
 
 let one ~size = of_z ~size Z.one
 
@@ -169,25 +173,63 @@ let mul v v' =
   of_z ~size Z.(v.z * v'.z)
 
 let sdiv v v' =
-  if Z.zero = v'.z then v'
-  else
-    let size = get_same_size v v' in
-    of_z ~size Z.(v.z / v'.z)
+  if Z.zero = v'.z then raise Division_by_zero;
+  let size = get_same_size v v' in
+  of_z ~size Z.(v.z / v'.z)
 
 (*$= sdiv & ~printer:to_smt
      (of_int ~size:7 (-3)) (sdiv (of_int ~size:7 10) (of_int ~size:7 (-3)))
+     (of_int ~size:7 3) (sdiv (of_int ~size:7 10) (of_int ~size:7 3))
+*)
+
+let srem v v' =
+  if Z.zero = v'.z then raise Division_by_zero;
+  let size = get_same_size v v' in
+  of_z ~size Z.(rem v.z v'.z)
+
+(*$= srem & ~printer:to_smt
+     (of_int ~size:7 1) (srem (of_int ~size:7 10) (of_int ~size:7 (-3)))
+     (of_int ~size:7 1) (srem (of_int ~size:7 10) (of_int ~size:7 3))
+     (of_int ~size:7 (-1)) (srem (of_int ~size:7 (-10)) (of_int ~size:7 3))
+*)
+
+let smod v v' =
+  let size = get_same_size v v' in
+  match Z.sign v'.z with
+  | 0 -> raise Division_by_zero
+  | 1 -> of_z ~size Z.(erem v.z v'.z)
+  | -1 -> of_z ~size Z.(neg @@ erem (neg v.z) (neg v'.z))
+  | _ -> assert false
+
+(*$= smod & ~printer:to_smt
+     (of_int ~size:7 (-2)) (smod (of_int ~size:7 10) (of_int ~size:7 (-3)))
+     (of_int ~size:7 1) (smod (of_int ~size:7 10) (of_int ~size:7 3))
+     (of_int ~size:7 (-1)) (smod (of_int ~size:7 (-10)) (of_int ~size:7 (-3)))
+     (of_int ~size:7 2) (smod (of_int ~size:7 (-10)) (of_int ~size:7 3))
 *)
 
 let udiv v v' =
-  if Z.zero = v'.z then v'
-  else
-    let size = get_same_size v v' in
-    let zu = to_uz v in
-    let zu' = to_uz v' in
-    of_z ~size Z.(zu / zu')
+  if Z.zero = v'.z then raise Division_by_zero;
+  let size = get_same_size v v' in
+  let zu = to_uz v in
+  let zu' = to_uz v' in
+  of_z ~size Z.(zu / zu')
 
 (*$= udiv & ~printer:to_smt
      (zero ~size:7) (udiv (of_int ~size:7 10) (of_int ~size:7 (-3)))
+     (of_int ~size:7 3) (udiv (of_int ~size:7 10) (of_int ~size:7 3))
+*)
+
+let urem v v' =
+  if Z.zero = v'.z then raise Division_by_zero;
+  let size = get_same_size v v' in
+  let zu = to_uz v in
+  let zu' = to_uz v' in
+  of_z ~size Z.(rem zu zu')
+
+(*$= urem & ~printer:to_smt
+     (of_int ~size:7 10) (urem (of_int ~size:7 10) (of_int ~size:7 (-3)))
+     (of_int ~size:7 1) (urem (of_int ~size:7 10) (of_int ~size:7 3))
 *)
 
 (*****************************************************************************)
@@ -202,30 +244,52 @@ let logxor v v' = of_z_same Z.logxor v v'
 
 let lognot v = { v with z = Z.lognot v.z }
 
-let redor v = if v.z = Z.zero then false else true
+let redor v = not (v.z = Z.zero)
 
-let redand v = if v.z = Z.minus_one then true else false
+let redand v = v.z = Z.minus_one
 
-let shift_left v i = of_z ~size:v.size (Z.shift_left v.z i)
+let shift_left v i =
+  if i > v.size then zero ~size:v.size else of_z ~size:v.size (Z.shift_left v.z i)
 
-let shift_left_bv v v' = shift_left v (to_uint v')
+let shift_left_bv v v' =
+  let uz' = to_uz v' in
+  if Z.fits_int uz' then shift_left v (Z.to_int uz') else zero ~size:v.size
 
-let shift_right_arith v i = { v with z = Z.shift_right v.z i }
+let shift_right_arith v i =
+  if i > v.size then match Z.sign v.z with -1 -> minus_one ~size:v.size | _ -> zero ~size:v.size
+  else
+    let res = { v with z = Z.shift_right v.z i } in
+    assert (check_invariant res);
+    res
 
 (*$= shift_right_arith & ~printer:to_smt
   (minus_one ~size:4) (shift_right_arith (of_smt "#b1100") 2)
 *)
 
-let shift_right_arith_bv v v' = shift_right_arith v (to_uint v')
+let shift_right_arith_bv v v' =
+  let uz' = to_uz v' in
+  if Z.fits_int uz' then shift_right_arith v (Z.to_int uz')
+  else match Z.sign v.z with -1 -> minus_one ~size:v.size | _ -> zero ~size:v.size
 
-let shift_right_logic v i = { v with z = Z.shift_right (to_uz v) i }
+let shift_right_logic v i =
+  assert (check_invariant v);
+  if i > v.size then zero ~size:v.size
+  else if i = 0 then v
+  else
+    let res = { v with z = Z.shift_right (to_uz v) i } in
+    assert (check_invariant res);
+    res
 
-let shift_right_logic_bv v v' = shift_right_logic v (to_uint v')
+let shift_right_logic_bv v v' =
+  let uz' = to_uz v' in
+  if Z.fits_int uz' then shift_right_logic v (Z.to_int uz') else zero ~size:v.size
 
 let concat v v' =
   let u' = to_uz v' in
   let size = v.size + v'.size in
-  { z = Z.((v.z lsl v'.size) lor u'); size }
+  let res = { z = Z.((v.z lsl v'.size) lor u'); size } in
+  assert (check_invariant res);
+  res
 
 (*$= concat & ~printer:to_smt
      (of_smt "#b00100011") (concat (of_smt "#b0010") (of_smt "#b0011"))
@@ -233,7 +297,9 @@ let concat v v' =
 
 let extract off endo v =
   let size = endo - off + 1 in
-  { z = Z.signed_extract v.z off size; size }
+  let res = { z = Z.signed_extract v.z off size; size } in
+  assert (check_invariant res);
+  res
 
 let zero_extend m v = if m > 0 then { z = to_uz v; size = v.size + m } else v
 

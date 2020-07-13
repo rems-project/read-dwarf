@@ -1,4 +1,17 @@
 (test
  (name main)
  (libraries read-dwarf ounit2 qcheck)
- (deps (universe)))
+ (deps (universe) config.toml aarch64.ir))
+
+(rule
+ (action
+  (copy# ../config.toml config.toml)))
+
+(rule
+ (action
+  (copy# ../aarch64.ir aarch64.ir)))
+
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A))))

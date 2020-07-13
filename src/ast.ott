@@ -52,7 +52,10 @@ mem_size :: '' ::=                      {{ ocaml 'm }}
  | int                                  :: :: MSize {{ ocaml Size.of_bytes int }}
 
 
-% bvarith :: '' ::=                       {{ ocaml Isla.bvarith }}
+bvarith :: '' ::=
+  | bvurem_i                            :: :: Bvuremi
+  | bvsrem_i                            :: :: Bvsremi
+  | bvsmod_i                            :: :: Bvsmodi
 
 % bvcomp :: '' ::=                        {{ ocaml Isla.bvcomp }}
 
