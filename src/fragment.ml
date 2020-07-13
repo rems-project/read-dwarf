@@ -31,7 +31,7 @@ module Env = struct
     let frags = Vec.copy env.frags in
     { frags }
 
-  let add_typ ~tenv ~addr typ env ~id =
+  let add_typ ~addr typ env ~id =
     Vec.get env.frags id |> (fun frag -> add frag addr typ) |> Vec.set env.frags id
 
   let adds_frag ?(frag = empty) env = Vec.add_one env.frags frag

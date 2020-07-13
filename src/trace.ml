@@ -119,7 +119,7 @@ let get_var vc i =
 (** Convert an Isla expression to a [Trace] expression by replacing all Isla variable
     by their value in the context. Throw {!OfIslaError} if the substitution fails *)
 let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : exp =
-  let vconv i l = get_var vc i in
+  let vconv i _ = get_var vc i in
   IslaConv.exp_var_subst vconv exp
 
 (** Convert an {!Isla.valu} in a expression *)
@@ -139,12 +139,12 @@ let write_to_valu vc valu exp =
 
 let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
     Isla.revent -> event option = function
-  | Smt (DeclareConst (i, e), l) -> None
-  | Smt (DefineConst (i, e), l) ->
+  | Smt (DeclareConst _, _) -> None
+  | Smt (DefineConst (i, e), _) ->
       (try HashVector.set vc i (exp_conv_subst vc e) with OfIslaError -> ());
       None
-  | Smt (Assert e, l) -> Some (Assert (exp_conv_subst vc e))
-  | Smt (DefineEnum e, l) -> None
+  | Smt (Assert e, _) -> Some (Assert (exp_conv_subst vc e))
+  | Smt (DefineEnum _, _) -> None
   | ReadReg (name, al, valu, l) ->
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
@@ -163,13 +163,13 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
       let value = exp_of_valu l vc valu in
       Hashtbl.add written_registers reg value;
       Some (WriteReg { reg; value })
-  | ReadMem (result, kind, addr, size, l) ->
+  | ReadMem (result, _kind, addr, size, l) ->
       let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
       let size = Ast.Size.of_bytes size in
       let value = Counter.get read_counter in
       write_to_valu vc result (Var (Read value, l));
       Some (ReadMem { addr; size; value })
-  | WriteMem (success, kind, addr, data, size, l) ->
+  | WriteMem (_success, _kind, addr, data, size, l) ->
       let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
       let size = Ast.Size.of_bytes size in
       let value = exp_of_valu l vc data in

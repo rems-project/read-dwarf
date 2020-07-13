@@ -12,7 +12,8 @@ exception Symbolic
 
     This is mostly for testing purposes.
 *)
-let eval_z3 ?(ctxt = fun _ -> failwith "novar") (e : ('a, 'v, Ast.no, Ast.no) Ast.exp) : Value.t =
+let eval_z3 ?ctx:(_ = fun _ -> failwith "novar") (_ : ('a, 'v, Ast.no, Ast.no) Ast.exp) : Value.t
+    =
   failwith "unimplemented"
 
 let eval_unop (u : Ast.unop) v =
@@ -126,7 +127,7 @@ let sum_split_concrete ~size exp =
   let (symterms, concvals) = List.partition_map eval_if_concrete terms in
   let concbvs = List.map Value.expect_bv concvals in
   let concbv = List.fold_left BitVec.( + ) (BitVec.zero ~size) concbvs in
-  let symterm = match symterms with [] -> None | l -> Some (Ast.Op.sum symterms) in
+  let symterm = match symterms with [] -> None | _ :: _ -> Some (Ast.Op.sum symterms) in
   (symterm, concbv)
 
 (** Tells if an expression has a concrete term *)

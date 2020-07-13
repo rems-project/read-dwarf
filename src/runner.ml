@@ -104,7 +104,7 @@ let fetch (runner : t) (pc : int) : slot =
 
     In any case the returned states are unlocked.
 *)
-let execute_normal ?(prelock = fun state -> ()) ~pc runner (instr : Instr.t) state =
+let execute_normal ?(prelock = ignore) ~pc runner (instr : Instr.t) state =
   let dwarf = runner.dwarf in
   let next = instr.length in
   let run_pure () =
@@ -122,7 +122,7 @@ let execute_normal ?(prelock = fun state -> ()) ~pc runner (instr : Instr.t) sta
         state.last_pc <- pc;
         TraceRun.trace_pc_mut ?dwarf ~next state trc.trace;
         [state]
-    | trcs ->
+    | _ ->
         prelock state;
         State.lock state;
         run_pure ()

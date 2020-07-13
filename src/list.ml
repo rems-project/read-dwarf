@@ -71,7 +71,7 @@ let rec remove f = function
     If n is greater than the size of the list, then return the empty list *)
 let rec drop n l =
   assert (n >= 0);
-  match (n, l) with (0, _) -> l | (_, []) -> [] | (_, a :: t) -> drop (n - 1) t
+  match (n, l) with (0, _) -> l | (_, []) -> [] | (_, _ :: t) -> drop (n - 1) t
 
 (** Take the specified number of items from the list, but reverse
     If n is greater than the size of the list, then return the list
@@ -114,7 +114,7 @@ let rec merge_uniq cmp l1 l2 =
       match cmp a1 a2 with
       | 0 -> a1 :: merge_uniq cmp t1 t2
       | x when x < 0 -> a1 :: merge_uniq cmp t1 l2
-      | x -> a2 :: merge_uniq cmp l1 t2
+      | _ -> a2 :: merge_uniq cmp l1 t2
     )
 
 let of_seq_rev s =

@@ -180,7 +180,7 @@ let get_traces (opcode : BytesSeq.t) : Isla.rtrc list =
 (** Get the traces of the nop opcode (The initialization code).
     Use {!IslaServer} if the value is not in the cache *)
 let get_nop () : Isla.rtrc =
-  let (cache, config) = get_cache () in
+  let (cache, _) = get_cache () in
   match IC.get_opt cache None with
   | Some [trc] -> trc
   | Some _ -> fatal "Corrupted cache, nop hasn't exactly one trace"

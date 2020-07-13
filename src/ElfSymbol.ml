@@ -31,7 +31,7 @@ let typ_of_linksem ltyp =
   | 4 -> FILE
   | _ -> UNKNOWN
 
-let linksem_typ (name, (typ, size, addr, data, _)) = typ
+let linksem_typ (_name, (typ, _size, _addr, _data, _)) = typ
 
 (** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded *)
 exception LoadingError of string * int

@@ -3,7 +3,7 @@ open CommonOpt
 
 module Default = struct
   (** Default action to run when no command is set *)
-  let action arch = print_endline "Error: read-dwarf, no command specified. Use --help for help"
+  let action _arch = print_endline "Error: read-dwarf, no command specified. Use --help for help"
 
   (** Global documentation string and name *)
   let info =

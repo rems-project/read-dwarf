@@ -117,7 +117,7 @@ let pre_traces_term = Term.(const get_traces $ instr_term $ isla_run $ reg_types
 let simp_traces simp_traces traces =
   if simp_traces then (
     match traces with
-    | IslaTraces trcs as it -> it
+    | IslaTraces _ -> traces
     | Traces trcs ->
         Z3.ensure_started ();
         Traces (List.map Trace.simplify trcs)

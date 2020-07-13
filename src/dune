@@ -19,7 +19,7 @@
 (env
  (dev
   (flags
-   (:standard -warn-error -A -w -27))))
+   (:standard -warn-error -A))))
 
 (rule
  (target smtIntro.ml)
@@ -86,16 +86,21 @@
  (action
   (with-stdout-to
    ast_base.ott
-   (system
-     "awk -v SECS='terminals,annotations,types,bool,operations' -f extract_sections.awk isla_lang.ott"))))
+   (run awk -v SECS=terminals,annotations,types,bool,operations -f
+     extract_sections.awk isla_lang.ott))))
 
 (rule
  (targets astParser.mly astLexer.mll astOtt.ml astParser_pp.ml)
  (deps ast.ott ast_base.ott)
  (action
-  (run ott -show_sort false -quotient_rules false -aux_style_rules false
-    -merge true -i ast.ott -i ast_base.ott -o astParser.mly -o astLexer.mll
-    -o astOtt.ml)))
+  (progn
+   (run ott -show_sort false -quotient_rules false -aux_style_rules false
+     -merge true -i ast.ott -i ast_base.ott -o astParser.mly -o astLexer.mll
+     -o astOtt.ml)
+   ; HACK to suppress warning 27 (unused variables) from astParser_pp.ml.
+   (run sed
+     "s/open AstOtt/&\\n[@@@ocaml.warning \"-27\" (* unused variables *)]/g"
+     -i astParser_pp.ml))))
 
 (menhir
  (modules astParser ottlib)

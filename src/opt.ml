@@ -5,7 +5,7 @@ include Stdlib.Option
 (*****************************************************************************)
 (** {1 Utility } *)
 
-let take_first o o' = match o with Some v -> o | None -> o'
+let take_first o o' = match o with Some _ -> o | None -> o'
 
 let ( ||| ) = take_first
 

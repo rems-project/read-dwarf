@@ -29,7 +29,7 @@ module Env : sig
   val copy : t -> t
 
   (** Add the provided type at [addr] into a fragment indexed by [id] in the environment *)
-  val add_typ : tenv:Ctype.env -> addr:int -> Ctype.t -> t -> id:int -> unit
+  val add_typ : addr:int -> Ctype.t -> t -> id:int -> unit
 
   (** Add a new fragment to the environment. {!empty} by default. *)
   val adds_frag : ?frag:frag -> t -> unit

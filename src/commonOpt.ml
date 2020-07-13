@@ -69,7 +69,7 @@ let config =
         & opt non_dir_file ConfigPre.config_file
         & info ["c"; "config"] ~env ~docv:"CONFIG_TOML" ~doc))
 
-let arch_val config archopt = Opt.value_fun archopt ~default:ConfigFile.get_arch_name
+let arch_val _config archopt = Opt.value_fun archopt ~default:ConfigFile.get_arch_name
 
 let arch_opt =
   let doc =

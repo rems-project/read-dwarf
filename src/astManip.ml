@@ -32,36 +32,36 @@ let direct_exp_map_exp (f : ('a, 'v, 'b, 'm) exp -> ('a, 'v, 'b, 'm) exp) = func
   | Var _ as v -> v
 
 let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
-  | Unop (u, e, l) -> i e
-  | Binop (b, e, e', l) ->
+  | Unop (_, e, _) -> i e
+  | Binop (_, e, e', _) ->
       i e;
       i e'
-  | Manyop (m, el, l) -> List.iter i el
-  | Ite (c, e, e', l) ->
+  | Manyop (_, el, _) -> List.iter i el
+  | Ite (c, e, e', _) ->
       i c;
       i e;
       i e'
-  | Let (b, bs, e, l) ->
+  | Let (b, bs, e, _) ->
       i (snd b);
-      List.iter (Pair.iter Fun.nop i) bs;
+      List.iter (Pair.iter ignore i) bs;
       i e
-  | Bits (bv, a) -> ()
-  | Bool (b, a) -> ()
-  | Enum (e, a) -> ()
-  | Var (v, a) -> ()
-  | Bound (b, a) -> ()
+  | Bits _ -> ()
+  | Bool _ -> ()
+  | Enum _ -> ()
+  | Var _ -> ()
+  | Bound _ -> ()
 
 let direct_exp_fold_left_exp (f : 'a -> _ exp -> 'a) (v : 'a) = function
-  | Unop (u, e, l) -> f v e
-  | Binop (b, e, e', l) -> f (f v e) e'
-  | Manyop (m, el, l) -> List.fold_left f v el
-  | Ite (c, e, e', l) -> f (f (f v c) e) e'
-  | Let (b, bs, e, l) -> f (List.fold_left (fun v (_, e) -> f v e) (f v (snd b)) bs) e
-  | Bits (bv, a) -> v
-  | Bool (b, a) -> v
-  | Enum (e, a) -> v
-  | Var (_, a) -> v
-  | Bound (b, a) -> v
+  | Unop (_, e, _) -> f v e
+  | Binop (_, e, e', _) -> f (f v e) e'
+  | Manyop (_, el, _) -> List.fold_left f v el
+  | Ite (c, e, e', _) -> f (f (f v c) e) e'
+  | Let (b, bs, e, _) -> f (List.fold_left (fun v (_, e) -> f v e) (f v (snd b)) bs) e
+  | Bits _ -> v
+  | Bool _ -> v
+  | Enum _ -> v
+  | Var _ -> v
+  | Bound _ -> v
 
 let direct_exp_for_all_exp (p : _ exp -> bool) exp =
   direct_exp_fold_left_exp (fun b e -> b && p e) true exp
@@ -89,7 +89,7 @@ let direct_exp_exists_exp (p : _ exp -> bool) exp =
 
 (** iterate a function on all the variable of an expression *)
 let rec exp_iter_var (f : 'v -> unit) : ('a, 'v, 'b, 'm) exp -> unit = function
-  | Var (v, a) -> f v
+  | Var (v, _) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
 
 let rec exp_map_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'vb', 'b, 'm) exp =
@@ -163,15 +163,15 @@ let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) 
     ('a, 'v, 'b2, 'm) exp =
   let ul = unfold_lets ~context in
   match exp with
-  | Bound (b, l) -> Hashtbl.find context b
-  | Let (b, bs, e, l) ->
+  | Bound (b, _) -> Hashtbl.find context b
+  | Let (b, bs, e, _) ->
       List.iter
         (fun (b, e) ->
           let e = ul e in
           Hashtbl.add context b e)
         (b :: bs);
       let res = ul e in
-      List.iter (Pair.iter (Hashtbl.remove context) Fun.nop) (b :: bs);
+      List.iter (Pair.iter (Hashtbl.remove context) ignore) (b :: bs);
       res
   | Bits _ as b -> b
   | Bool _ as b -> b
@@ -243,7 +243,7 @@ let expect_no_mem ?(handler = fun () -> failwith "Expected no mem") :
     TODO I need to sort according to an arbitrary order to be able to compare reliably.
     This will probably be part of a more general simplifier work.*)
 let rec sum_split = function
-  | Manyop (Bvmanyarith Bvadd, l, a) -> List.concat_map sum_split l
+  | Manyop (Bvmanyarith Bvadd, l, _) -> List.concat_map sum_split l
   | Unop (Extract (b, a), e, _) ->
       let l = sum_split e in
       List.map (Ast.Op.extract b a) l

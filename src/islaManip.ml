@@ -70,19 +70,19 @@ let direct_exp_map_exp (f : 'a exp -> 'a exp) = function
   | Var (v, a) -> Var (v, a)
 
 let direct_exp_iter_exp (i : 'a exp -> unit) = function
-  | Unop (u, e, l) -> i e
-  | Binop (b, e, e', l) ->
+  | Unop (_, e, _) -> i e
+  | Binop (_, e, e', _) ->
       i e;
       i e'
-  | Manyop (m, el, l) -> List.iter i el
-  | Ite (c, e, e', l) ->
+  | Manyop (_, el, _) -> List.iter i el
+  | Ite (c, e, e', _) ->
       i c;
       i e;
       i e'
-  | Bits (bv, a) -> ()
-  | Bool (b, a) -> ()
-  | Enum (e, a) -> ()
-  | Var (v, a) -> ()
+  | Bits _ -> ()
+  | Bool _ -> ()
+  | Enum _ -> ()
+  | Var _ -> ()
 
 let direct_smt_map_exp (m : 'a exp -> 'a exp) : 'a smt -> 'a smt = function
   | DefineConst (v, exp) -> DefineConst (v, m exp)
@@ -171,7 +171,7 @@ let direct_valu_map_valu (m : valu -> valu) : valu -> valu = function
 
 (** iterate a function on all the variable of an expression *)
 let rec exp_iter_var (f : int -> unit) : 'a exp -> unit = function
-  | Var (v, a) -> f v
+  | Var (v, _) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
 
 let event_iter_valu = direct_event_iter_valu
@@ -238,7 +238,7 @@ let remove_init : 'a trc -> 'a trc = function
         | [] -> []
         | Cycle _ :: l -> l
         | Smt (v, a) :: l -> Smt (v, a) :: pop_until_cycle l
-        | a :: l -> pop_until_cycle l
+        | _ :: l -> pop_until_cycle l
       in
       Trace (pop_until_cycle l)
 

@@ -176,11 +176,11 @@ let pp_addr (a : natural) = Ml_bindings.hex_string_of_big_int_pad8 a
 let rec list_last xs =
   match xs with
   | [x] -> x
-  | x :: (x' :: xs' as xs'') -> list_last xs''
+  | _ :: (_ :: _ as xs'') -> list_last xs''
   | _ -> raise (Failure "list_last")
 
 let rec list_last_opt xs =
-  match xs with [x] -> Some x | x :: (x' :: xs' as xs'') -> list_last_opt xs'' | _ -> None
+  match xs with [x] -> Some x | _ :: (_ :: _ as xs'') -> list_last_opt xs'' | _ -> None
 
 let char_list_of_string s =
   let n = String.length s in
@@ -264,7 +264,7 @@ let find_sdt_subroutine_by_entry_address (sdt_d : Dwarf.sdt_dwarf) addr :
 let pp_symbol_map (symbol_map : Elf_file.global_symbol_init_info) =
   String.concat ""
     (List.map
-       (fun (name, (typ, size, address, mb, binding)) ->
+       (fun (name, (typ, _size, address, _mb, _binding)) ->
          Printf.sprintf "**** name = %s  address = %s  typ = %d\n" name (pp_addr address)
            (Nat_big_num.to_int typ))
        symbol_map)
@@ -391,7 +391,7 @@ let marshal_from_file filename : test option =
     close_in c;
     Some test
   with
-  | Sys_error s -> None
+  | Sys_error _ -> None
   | e -> raise e
 
 (*****************************************************************************)
@@ -506,7 +506,7 @@ let split_into_sequences
 let split_into_entries (s : evaluated_line_info_sequence) : evaluated_line_info_entry list =
   let rec f acc (remaining_lines : Dwarf.line_number_registers list) =
     match remaining_lines with
-    | l1 :: (l2 :: remaining_lines' as remaining_lines'') ->
+    | l1 :: (l2 :: _ as remaining_lines'') ->
         let elie =
           {
             elie_first = l1.lnr_address;
@@ -752,7 +752,7 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
 let mk_subprogram_name (ds : Dwarf.dwarf_static) elifi : string =
   let lnh = elifi.elifi_entry.elie_lnh in
   let lnr = elifi.elifi_entry.elie_lnr in
-  let ((comp_dir, dir, file), subprogram_name) =
+  let ((_comp_dir, _dir, _file), subprogram_name) =
     let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
     (ufe, Dwarf.subprogram_at_line ds.ds_subprogram_line_extents ufe lnr.lnr_line)
   in
@@ -828,7 +828,7 @@ let dwarf_source_file_line_numbers_by_index test line_info k :
            | elifi ->
                let lnh = elifi.elifi_entry.elie_lnh in
                let lnr = elifi.elifi_entry.elie_lnr in
-               let ((comp_dir, dir, file), subprogram_name) =
+               let ((_comp_dir, _dir, _file), subprogram_name) =
                  let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
                  ( ufe,
                    Dwarf.subprogram_at_line test.dwarf_static.ds_subprogram_line_extents ufe
@@ -845,7 +845,8 @@ let dwarf_source_file_line_numbers_by_index test line_info k :
 
 let elf_symbols_of_address (test : test) (addr : natural) : string list =
   List.filter_map
-    (fun (name, (typ, size, address, mb, binding)) -> if address = addr then Some name else None)
+    (fun (name, (_typ, _size, address, _mb, _binding)) ->
+      if address = addr then Some name else None)
     test.symbol_map
 
 let mk_elf_symbols test instructions : string list array =
@@ -853,14 +854,14 @@ let mk_elf_symbols test instructions : string list array =
 
 let address_of_elf_symbol test (s : string) : addr option =
   find_map
-    (fun (name, (typ, size, address, mb, binding)) -> if s = name then Some address else None)
+    (fun (name, (_typ, _size, address, _mb, _binding)) -> if s = name then Some address else None)
     test.symbol_map
 
 (*****************************************************************************)
 (*        look up address in frame info                                      *)
 (*****************************************************************************)
 
-let aof ((a : natural), (cfa : string), (regs : (string * string) list)) = a
+let aof ((a : natural), (_cfa : string), (_regs : (string * string) list)) = a
 
 let rec f (aof : 'b -> natural) (a : natural) (last : 'b option) (bs : 'b list) : 'b option =
   match (last, bs) with
@@ -876,7 +877,7 @@ let mk_frame_info test instructions :
     (addr (*addr*) * string (*cfa*) * (string (*rname*) * string) (*rinfo*) list) option array =
   Array.map (function i -> f aof i.i_addr None test.dwarf_semi_pp_frame_info) instructions
 
-let pp_frame_info m frame_info k : string =
+let pp_frame_info _m frame_info k : string =
   (* assuming the dwarf_semi_pp_frame_info has monotonically increasing addresses - always true? *)
   match frame_info.(k) with
   | None -> "<no frame info for this address>\n"
@@ -898,7 +899,7 @@ let pp_control_flow_instruction c =
   | C_branch (a, s) -> "b" ^ " " ^ pp_addr a ^ " " ^ s
   | C_branch_and_link (a, s) -> "bl" ^ " " ^ pp_addr a ^ " " ^ s
   | C_branch_cond (is, a, s) -> is ^ " " ^ pp_addr a ^ " " ^ s
-  | C_branch_register r -> "br"
+  | C_branch_register _ -> "br"
   | C_smc_hvc s -> "smc/hvc " ^ s
 
 let pp_control_flow_instruction_short c =
@@ -907,11 +908,11 @@ let pp_control_flow_instruction_short c =
   | C_plain -> "plain"
   | C_ret -> "ret"
   | C_eret -> "eret"
-  | C_branch (a, s) -> "b"
-  | C_branch_and_link (a, s) -> "bl"
-  | C_branch_cond (is, a, s) -> is
-  | C_branch_register r -> "br"
-  | C_smc_hvc s -> "smc/hvc"
+  | C_branch _ -> "b"
+  | C_branch_and_link _ -> "bl"
+  | C_branch_cond (is, _, _) -> is
+  | C_branch_register _ -> "br"
+  | C_smc_hvc _ -> "smc/hvc"
 
 let pp_target_kind_short = function
   | T_plain_successor -> "succ"
@@ -956,7 +957,7 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
   in
 
   (* pull out .rodata section from ELF *)
-  let ((c, rodata_addr, bs) as rodata : Dwarf.p_context * Nat_big_num.num * BytesSeq.t) =
+  let ((_, rodata_addr, bs) as _rodata : Dwarf.p_context * Nat_big_num.num * BytesSeq.t) =
     Dwarf.extract_section_body test.elf_file ".rodata" false
   in
   (* chop into bytes *)
@@ -1125,7 +1126,7 @@ let parse_drop_one s =
         let s' = String.sub s n (String.length s - n) in
         (s1, s'))
   with
-  | (s1, s') -> Some s'
+  | (_, s') -> Some s'
   | exception _ -> None
 
 let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
@@ -1194,9 +1195,9 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
           [(T_branch_and_link_call_noreturn, a, s)]
         else
           [(T_branch_and_link_call, a, s); (T_branch_and_link_successor, succ_addr, "<return>")]
-    | C_branch_cond (is, a, s) ->
+    | C_branch_cond (_is, a, s) ->
         [(T_branch_cond_branch, a, s); (T_branch_cond_successor, succ_addr, "<fallthrough>")]
-    | C_branch_register r1 ->
+    | C_branch_register _ ->
         let addresses =
           try List.assoc addr branch_table_targets
           with Not_found ->
@@ -1211,7 +1212,7 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
                 | a_target -> (T_branch_register, a_target, "<indirect" ^ string_of_int i ^ ">")
               ))
           addresses
-    | C_smc_hvc s -> [(T_smc_hvc_successor, succ_addr, "<C_smc_hvc successor>")]
+    | C_smc_hvc _ -> [(T_smc_hvc_successor, succ_addr, "<C_smc_hvc successor>")]
   in
 
   targets
@@ -1362,7 +1363,7 @@ let pp_indirect_branches indirect_branches =
            | i ->
                pp_addr i.i_addr ^ " -> "
                ^ String.concat ","
-                   (List.map (function (tk, a', k', s) -> pp_addr a' ^ "" ^ s ^ "") i.i_targets)
+                   (List.map (function (_, a', _, s) -> pp_addr a' ^ "" ^ s ^ "") i.i_targets)
                ^ "\n")
          indirect_branches)
 
@@ -1408,7 +1409,7 @@ let mk_come_froms instructions : come_from list array =
           | i ->
               List.iter
                 (function
-                  | (tk, a', k', s) ->
+                  | (tk, _, k', s) ->
                       let come_from =
                         {
                           cf_target_kind = tk;
@@ -1458,7 +1459,7 @@ let read_qemu_log an filename_qemu_log : bool array =
     | Ok lines ->
         let parse_line (s : string) : natural option =
           (*         Printf.printf "%s  " s;*)
-          match Scanf.sscanf s "0x%x:%s" (fun addr s -> addr) with
+          match Scanf.sscanf s "0x%x:%s" (fun addr _ -> addr) with
           | addr ->
               (*Printf.printf "PARSED %s\n" (pp_addr (Nat_big_num.of_int addr));*)
               Some (Nat_big_num.of_int addr)
@@ -1573,7 +1574,7 @@ let inlining_stack_at_index (an : analysis) k =
   let (_, _, xs) = an.inlining.(k) in
   let ys : Dwarf.inlined_subroutine_data_by_range_entry list = List.map snd xs in
   let iss : Dwarf.inlined_subroutine list =
-    List.map (function ((n1, n2), (m, n), is) -> is) ys
+    List.map (function ((_n1, _n2), (_m, _n), is) -> is) ys
   in
   (* the set of current inlining stacks, parent-first in each *)
   let ssss : Dwarf.sdt_subroutine list list =
@@ -1609,7 +1610,7 @@ let inlining_stack_at_index (an : analysis) k =
             | (ss : Dwarf.sdt_subroutine) -> (
                 ( (match ss.ss_name with None -> "no-name" | Some name -> name),
                   match ss.ss_call_site with
-                  | Some (ufe, line, subprogram_name) -> line
+                  | Some (_ufe, line, _subprogram_name) -> line
                   | None -> -3
                   (*Warn.fatal "no call site"*) )
               ))
@@ -1618,7 +1619,7 @@ let inlining_stack_at_index (an : analysis) k =
       let rec shift line nls =
         match nls with [] -> [] | (name', line') :: nls' -> (name', line) :: shift line' nls'
       in
-      match nls with [] -> [] | (name, line) :: nls' -> shift line nls'
+      match nls with [] -> [] | (_name, line) :: nls' -> shift line nls'
     )
   | _ ->
       Warn.nonfatal "inlining_stack_at_index found non-prefix-related inlinings:\n%s"
@@ -1854,7 +1855,7 @@ let html_escape s =
 
 let include_tooltips = true
 
-let mk_ppd_instruction test an label k nesting =
+let mk_ppd_instruction test an label k _nesting =
   if include_tooltips then
     (* TODO: reduce the nasty code duplication between this and pp_instruction *)
     let i = an.instructions.(k) in
@@ -1882,7 +1883,7 @@ let mk_ppd_instruction test an label k nesting =
                   ^ String.concat ","
                       (List.map
                          (function
-                           | (tk, a', k', s) ->
+                           | (_, a', _, s) ->
                                pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
                          i.i_targets)
                   ^ " "
@@ -1913,7 +1914,7 @@ let pp_node_inlining n =
 
 (* make a control-flow graph, starting from start_indices (which should be ELF symbol indices).  If recurse_flat, then recurse (not inlining) on all bl targets  (this option is no longer used).  If inline_all, then recurse (inlining) through all bl targets. Add node_name_prefix to all node names, so that graphs can be unioned. *)
 
-let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all : bool)
+let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all : bool)
     (start_indices : (index * nesting) list) : graph_cfg =
   let colour k =
     let subprogram_names =
@@ -1962,9 +1963,9 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
     | C_plain -> false
     | C_ret -> true
     | C_eret -> true
-    | C_branch (a, s) -> false
-    | C_branch_and_link (a, s) -> true
-    | C_smc_hvc s -> true
+    | C_branch _ -> false
+    | C_branch_and_link _ -> true
+    | C_smc_hvc _ -> true
     | C_branch_cond _ -> true
     | C_branch_register _ -> true
   in
@@ -1988,12 +1989,12 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
     match i.i_control_flow with
     | C_plain -> (
         match i.i_targets with
-        | [(tk, addr', k', s)] -> next_non_start_node_name nesting visited k'
+        | [(_, _, k', _)] -> next_non_start_node_name nesting visited k'
         | _ -> Warn.fatal "non-unique plain targets at %s" (pp_addr i.i_addr)
       )
-    | C_branch (a, s) -> (
+    | C_branch _ -> (
         match i.i_targets with
-        | [(tk, addr', k', s)] ->
+        | [(_, addr', k', _)] ->
             if List.mem k' visited then (node_name nesting addr', k')
               (* TODO: something more useful *)
             else next_non_start_node_name nesting (k' :: visited) k'
@@ -2026,7 +2027,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
   in
 
   (* make the little piece of graph from a start node at k to its first non-start node *)
-  let graphette_start return_target (k, nesting) : graph_cfg * (index * nesting) list
+  let graphette_start _return_target (k, nesting) : graph_cfg * (index * nesting) list
       (* work_list_new *) =
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
@@ -2105,13 +2106,13 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
           },
           [],
           [] )
-    | C_smc_hvc s ->
+    | C_smc_hvc _ ->
         let node = mk_node_simple nesting k CFG_node_smc_hvc "smc/hvc " in
         let (edges, work_list_new) =
           List.split
             (List.filter_map
                (function
-                 | (T_smc_hvc_successor, a', k', s') ->
+                 | (T_smc_hvc_successor, _, k', _) ->
                      let (nn', k'') = next_non_start_node_name nesting [] k' in
                      Some ((node.nc_name, nn', CFG_edge_flow), (k'', nesting))
                  | _ -> None)
@@ -2126,13 +2127,13 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
           },
           work_list_new,
           [] )
-    | C_branch_cond (mnemonic, a, s) ->
+    | C_branch_cond (_mnemonic, _, _) ->
         let node = mk_node_simple nesting k CFG_node_branch_cond "" in
         let (edges, work_list_new) =
           List.split
             (List.map
                (function
-                 | (tk, addr', k', s') ->
+                 | (_, _, k', _) ->
                      let (nn', k'') = next_non_start_node_name nesting [] k' in
                      ((node.nc_name, nn', CFG_edge_flow), (k'', nesting)))
                i.i_targets)
@@ -2153,7 +2154,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
             (List.sort_uniq compare
                (List.map
                   (function
-                    | (tk, addr', k', s') ->
+                    | (_, _, k', _) ->
                         let (nn', k'') = next_non_start_node_name nesting [] k' in
                         ((node.nc_name, nn', CFG_edge_flow), (k'', nesting)))
                   i.i_targets))
@@ -2167,13 +2168,13 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
           },
           work_list_new,
           [] )
-    | C_branch_and_link (a, s) ->
+    | C_branch_and_link (_, s) ->
         let k_call =
           match
             List.filter_map
               (function
-                | (T_branch_and_link_call, a', k', s') -> Some k'
-                | (T_branch_and_link_call_noreturn, a', k', s') -> Some k'
+                | (T_branch_and_link_call, _, k', _) -> Some k'
+                | (T_branch_and_link_call_noreturn, _, k', _) -> Some k'
                 | _ -> None)
               i.i_targets
           with
@@ -2183,7 +2184,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
         let nn_k_successor =
           match
             List.filter_map
-              (function (T_branch_and_link_successor, a', k', s') -> Some k' | _ -> None)
+              (function (T_branch_and_link_successor, _, k', _) -> Some k' | _ -> None)
               i.i_targets
           with
           | [k'] ->
@@ -2219,7 +2220,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
                        | elifi ->
                            let lnh = elifi.elifi_entry.elie_lnh in
                            let lnr = elifi.elifi_entry.elie_lnr in
-                           let ((comp_dir, dir, file) as ufe) =
+                           let ((_comp_dir, _dir, _file) as ufe) =
                              Dwarf.unpack_file_entry lnh lnr.lnr_file
                            in
                            (ufe, Nat_big_num.to_int lnr.lnr_line))
@@ -2232,7 +2233,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
                 &&
                 match ss'.ss_call_site with
                 | None -> false
-                | Some (ufe, line, subprogram_name) -> List.mem (ufe, line) source_lines
+                | Some (ufe, line, _subprogram_name) -> List.mem (ufe, line) source_lines
               in
 
               match
@@ -2296,7 +2297,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (inline_all :
                           | None ->
                               Warn.fatal "no call site2 for\n%s"
                                 (Dwarf.pp_sdt_subroutine (Nat_big_num.of_int 0) ss_current)
-                          | Some (ufe, line, subprogram_name) -> line
+                          | Some (_ufe, line, _subprogram_name) -> line
                         )
                       (*,
                       0*) )
@@ -2468,7 +2469,7 @@ let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg 
         | node ->
             ( node.nc_name,
               List.filter_map
-                (function (nn1, nn2, cek) -> if nn1 = node.nc_name then Some nn2 else None)
+                (function (nn1, nn2, _cek) -> if nn1 = node.nc_name then Some nn2 else None)
                 g.gc_edges ))
       nodes_all
   in
@@ -2494,7 +2495,7 @@ let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg 
   let edges_reachable =
     List.filter
       (function
-        | (nn, nn', cek) -> List.mem nn node_names_reachable && List.mem nn' node_names_reachable)
+        | (nn, nn', _cek) -> List.mem nn node_names_reachable && List.mem nn' node_names_reachable)
       g.gc_edges
   in
   let nodes_reachable_start =
@@ -2607,9 +2608,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
     in
 
     (* filter out targets that we're not going to render *)
-    let targets2 =
-      List.filter (function (tk, a', k', s) -> render_target_kind tk) i.i_targets
-    in
+    let targets2 = List.filter (function (tk, _, _, _) -> render_target_kind tk) i.i_targets in
 
     match targets2 with
     | [] -> None
@@ -2618,13 +2617,13 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
         let targets3 =
           List.sort_uniq
             (function
-              | (tk', a', k', s') -> (
-                  function (tk'', a'', k'', s'') -> compare k' k''
+              | (_, _, k', _) -> (
+                  function (_, _, k'', _) -> compare k' k''
                 ))
             targets2
         in
         (* project out just the index *)
-        let targets4 = List.map (function (tk', a', k', s') -> k') targets3 in
+        let targets4 = List.map (function (_, _, k', _) -> k') targets3 in
 
         let first = min k (List.hd targets4) in
         let last = max k (list_last targets4) in
@@ -2707,7 +2706,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
           match
             largest c' (max_width - 1) (fun c'' ->
                 forall c' c'' (fun c''' ->
-                    match buf.(k).(c''') with Gnone -> true | Gud w -> true | _ -> false))
+                    match buf.(k).(c''') with Gnone -> true | Gud _ -> true | _ -> false))
           with
           | Some c_head ->
               for c'' = c' to c_head do
@@ -2821,7 +2820,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
 
 type call_graph_node = addr * index * string list
 
-let pp_call_graph test (instructions, index_of_address, address_of_index, indirect_branches) =
+let pp_call_graph test (instructions, index_of_address, _address_of_index, _indirect_branches) =
   (* take the nodes to be all the elf symbol addresses of stt_func
      symbol type (each with their list of elf symbol names) together
      with all the other-address bl-targets (of which in Hf there are just
@@ -2830,7 +2829,7 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
     let elf_symbol_addresses =
       List.sort_uniq compare
         (List.filter_map
-           (fun (name, (typ, size, address, mb, binding)) ->
+           (fun (_name, (typ, _size, address, _mb, _binding)) ->
              if typ = Elf_symbol_table.stt_func then Some address else None)
            test.symbol_map)
     in
@@ -2839,7 +2838,7 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
         let names =
           List.sort_uniq compare
             (List.filter_map
-               (fun (name, (typ, size, address', mb, binding)) ->
+               (fun (name, (_typ, _size, address', _mb, _binding)) ->
                  if address' = address && String.length name >= 1 && name.[0] <> '$' then
                    Some name
                  else None)
@@ -2857,7 +2856,7 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
                let bl_targets =
                  List.filter
                    (function
-                     | (tk', a', k', s') -> (
+                     | (tk', _, _, _) -> (
                          match tk' with
                          | T_branch_and_link_call | T_branch_and_link_call_noreturn -> true
                          | _ -> false
@@ -2866,11 +2865,11 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
                in
                List.filter_map
                  (function
-                   | (tk', a', k', s') ->
+                   | (_, a', _, s') ->
                        if
                          not
                            (List.exists
-                              (function (a'', ss'') -> Nat_big_num.equal a' a'')
+                              (function (a'', _) -> Nat_big_num.equal a' a'')
                               elf_symbols)
                        then Some (a', ["FROM BL:" ^ s'])
                        else None)
@@ -2882,7 +2881,7 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
     match axs with
     | [] -> acc
     | (a, x) :: axs' ->
-        if not (List.exists (function (a', x') -> Nat_big_num.equal a a') acc) then
+        if not (List.exists (function (a', _) -> Nat_big_num.equal a a') acc) then
           dedup axs' ((a, x) :: acc)
         else dedup axs' acc
   in
@@ -2892,8 +2891,8 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
   let nodes0 =
     List.sort
       (function
-        | (a, ss) -> (
-            function (a', ss') -> Nat_big_num.compare a a'
+        | (a, _) -> (
+            function (a', _) -> Nat_big_num.compare a a'
           ))
       (elf_symbols @ extra_bl_targets)
   in
@@ -2902,12 +2901,12 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
     List.map (function (a, ss) -> (a, index_of_address a, ss)) nodes0
   in
 
-  let pp_node (a, k, ss) =
+  let pp_node (a, _, ss) =
     pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
   in
 
   let node_of_index k =
-    match List.find_opt (function (a, k', ss) -> k' = k) nodes with
+    match List.find_opt (function (_, k', _) -> k' = k) nodes with
     | Some n -> n
     | None ->
         Warn.nonfatal "node_of_index %d\n" k;
@@ -2927,16 +2926,16 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
           let (bl_targets, non_bl_targets) =
             List.partition
               (function
-                | (tk'', a'', k'', s'') -> (
+                | (tk'', _, _, _) -> (
                     match tk'' with
                     | T_branch_and_link_call | T_branch_and_link_call_noreturn -> true
                     | _ -> false
                   ))
               i.i_targets
           in
-          let bl_target_indices = List.map (function (tk'', a'', k'', s'') -> k'') bl_targets in
+          let bl_target_indices = List.map (function (_, _, k'', _) -> k'') bl_targets in
           let non_bl_target_indices =
-            List.map (function (tk'', a'', k'', s'') -> k'') non_bl_targets
+            List.map (function (_, _, k'', _) -> k'') non_bl_targets
           in
           stupid_reachability (k :: acc_reachable)
             (List.sort_uniq compare (bl_target_indices @ acc_bl_targets))
@@ -2944,13 +2943,13 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
   in
 
   let bl_target_indices k =
-    let (reachable, bl_target_indices) = stupid_reachability [] [] [k] in
+    let (_reachable, bl_target_indices) = stupid_reachability [] [] [k] in
     bl_target_indices
   in
 
   let call_graph =
     List.map
-      (function (a, k, ss) as node -> (node, List.map node_of_index (bl_target_indices k)))
+      (function (_, k, _) as node -> (node, List.map node_of_index (bl_target_indices k)))
       nodes
   in
 
@@ -2964,19 +2963,19 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
       (todo : call_graph_node list) : call_graph_node list =
     match todo with
     | [] -> acc_reachable
-    | ((a, k, ss) as n) :: todo' ->
-        if List.exists (function (a', k', ss') -> k' = k) acc_reachable then
+    | ((_, k, _) as n) :: todo' ->
+        if List.exists (function (_, k', _) -> k' = k) acc_reachable then
           stupid_reachability' acc_reachable todo'
         else
-          let (_, targets) = List.find (function ((a', k', ss'), _) -> k' = k) call_graph in
+          let (_, targets) = List.find (function ((_, k', _), _) -> k' = k) call_graph in
           stupid_reachability' (n :: acc_reachable) (targets @ todo')
   in
 
   let transitive_call_graph =
     List.map
       (function
-        | (a, k, ss) as n ->
-            let (_, targets) = List.find (function ((a', k', ss'), _) -> k' = k) call_graph in
+        | (_, k, _) as n ->
+            let (_, targets) = List.find (function ((_, k', _), _) -> k' = k) call_graph in
             (n, stupid_reachability' [] targets))
       nodes
   in
@@ -2985,8 +2984,8 @@ let pp_call_graph test (instructions, index_of_address, address_of_index, indire
     String.concat ""
       (List.map
          (function
-           | (((a, k, ss) as n), ns) ->
-               (if List.exists (function (a', k', ss') -> k' = k) ns then "RECURSIVE " else "")
+           | (((_, k, _) as n), ns) ->
+               (if List.exists (function (_, k', _) -> k' = k) ns then "RECURSIVE " else "")
                ^ "\n"
                ^ pp_call_graph_entry (n, ns))
          transitive_call_graph)
@@ -3196,19 +3195,19 @@ let pp_ranged_var (prefix : string) (var : ranged_var) : string =
   ^ pp_context context
   ^ ( match svfp.svfp_decl with
     | None -> ""
-    | Some (ufe, line, subprogram_name) -> ":" ^ string_of_int line
+    | Some (_ufe, line, _subprogram_name) -> ":" ^ string_of_int line
     )
   ^ "\n"
 
 let pp_ranged_vars (prefix : string) (vars : ranged_var list) : string =
   String.concat "" (List.map (pp_ranged_var prefix) vars)
 
-let compare_pc_ranges ((n1, n2, ops), var) ((n1', n2', ops'), var') = compare n1 n1'
+let compare_pc_ranges ((n1, _, _), _) ((n1', _, _), _) = compare n1 n1'
 
-let local_by_pc_ranges (((svfp : Dwarf.sdt_variable_or_formal_parameter), context) as var) :
+let local_by_pc_ranges (((svfp : Dwarf.sdt_variable_or_formal_parameter), _context) as var) :
     ranged_var list =
   List.map
-    (function (n1, n2, ops) as pc_range -> (pc_range, var))
+    (function (_n1, _n2, _ops) as pc_range -> (pc_range, var))
     (match svfp.svfp_locations with Some locs -> locs | None -> [])
 
 let locals_by_pc_ranges
@@ -3245,11 +3244,11 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
       if not (Nat_big_num.less addr_prev addr) then
         Warn.fatal "mk_ranged_vars_at_instructions found non-increasing address %s" (pp_addr addr);
       let (still_current, old) =
-        List.partition (function ((n1, n2, ops), var) -> Nat_big_num.less addr n2) prev
+        List.partition (function ((_, n2, _), _) -> Nat_big_num.less addr n2) prev
       in
       let (new', remaining') =
         partition_first
-          (function ((n1, n2, ops), var) as _rv -> Nat_big_num.greater_equal addr n1)
+          (function ((n1, _n2, _ops), _var) as _rv -> Nat_big_num.greater_equal addr n1)
           remaining
       in
       (* TODO: do we need to drop any that have been totally skipped over? *)
@@ -3293,7 +3292,7 @@ let mk_inlining test sdt instructions =
       let addr = i.i_addr in
       let issr_still_current =
         List.filter
-          (function (label, ((n1, n2), (m, n), is)) -> Nat_big_num.less addr n2)
+          (function (_label, ((_n1, n2), (_m, _n), _is)) -> Nat_big_num.less addr n2)
           issr_current
       in
 
@@ -3308,8 +3307,8 @@ let mk_inlining test sdt instructions =
 
       let (issr_starting_here0, issr_rest') =
         find_first
-          (function ((n1, n2), (m, n), is) -> Nat_big_num.less_equal n2 addr)
-          (function ((n1, n2), (m, n), is) -> Nat_big_num.equal n1 addr)
+          (function ((_n1, n2), (_m, _n), _is) -> Nat_big_num.less_equal n2 addr)
+          (function ((n1, _n2), (_m, _n), _is) -> Nat_big_num.equal n1 addr)
           [] issr_rest
       in
 
@@ -3561,7 +3560,7 @@ let pp_instruction m test an k i =
              let folder
                  (*: (int*string) Uutf.String.folder*)
                    ( (n : int (*number of prefix chars still to drop*)),
-                     (s : string (*accumulated string*)) ) (pos : int) um =
+                     (s : string (*accumulated string*)) ) (_pos : int) um =
                if n > 0 then (n - 1, "")
                else
                  match um with
@@ -3704,8 +3703,7 @@ let pp_instruction m test an k i =
              ^ String.concat ","
                  (List.map
                     (function
-                      | (tk, a', k', s) ->
-                          pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
+                      | (_, a', _, s) -> pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
                     i.i_targets)
              ^ " "
          | _ -> ""
@@ -3870,7 +3868,7 @@ let process_file () : unit =
           )
       end;
 
-      match filename_out_file_option with Some f -> close_out c | None -> ()
+      match filename_out_file_option with Some _ -> close_out c | None -> ()
     )
   | (Some filename_elf2, Some filename_objdump_d2, Some filename_branch_tables2) -> (
       match !Globals.cfg_dot_file with
@@ -3956,7 +3954,7 @@ let process_file () : unit =
             (function
               | j -> (
                   function
-                  | line ->
+                  | _line ->
                       if j + 1 = Array.length layout_lines then ()
                       else Printf.fprintf c "%s\n" layout_lines.(j)
                 ))

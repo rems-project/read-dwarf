@@ -232,7 +232,7 @@ module Mem = struct
   (** Write a value [exp] of size [size] in memory at address [addr] in the fragment
       designated by [provenance]. *)
   let write ~provenance mem ~addr ~size ~exp : unit =
-    let (frag, frag_addr) = get_frag_addr ~provenance mem ~addr in
+    let (_, frag_addr) = get_frag_addr ~provenance mem ~addr in
     info "Writing %d bits at %t" (Size.to_bits size) PP.(top Exp.pp addr);
     (* For now bounds are never generated. This would require a great improvement
        in array analysis in the type inference system *)

@@ -57,7 +57,7 @@ let parse (parser : 'a parser) ?(filename = "default") (l : Lexing.lexbuf) : 'a 
   l.lex_curr_p <- { pos_fname = filename; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
   try parser Lexer.token @@ l with
   | Parser.Error -> raise (ParseError (l.lex_start_p, "Syntax error"))
-  | Lexer.Error s -> raise (LexError (l.lex_start_p, "Unexpected character"))
+  | Lexer.Error _ -> raise (LexError (l.lex_start_p, "Unexpected character"))
 
 (** Parse a single Isla expression from a Lexing.lexbuf *)
 let parse_exp : ?filename:string -> Lexing.lexbuf -> rexp = parse Parser.exp_start

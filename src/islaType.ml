@@ -34,7 +34,7 @@ let expect_bv s (l, t) =
 let expect_enum s (l, t) =
   match t with Ty_Enum n -> n | _ -> raise (TypeError (l, "A enumeration was expected :" ^ s))
 
-let type_unop l (u : unop) ((lt, t) as ltt) : ty =
+let type_unop l (u : unop) (ltt : lrng * ty) : ty =
   match u with
   | Not ->
       expect_bool "Not" ltt;
@@ -52,7 +52,7 @@ let type_unop l (u : unop) ((lt, t) as ltt) : ty =
       Ty_BitVec (b + 1 - a)
   | ZeroExtend m | SignExtend m -> Ty_BitVec (expect_bv PP.(sprintc @@ pp_unop u) ltt + m)
 
-let type_binop l (b : binop) ((lt, t) as ltt) ((lt', t') as ltt') : ty =
+let type_binop l (b : binop) ((_, t) as ltt) ((_, t') as ltt') : ty =
   let bv_same () =
     let n = expect_bv PP.(sprintc @@ pp_binop b) ltt in
     let m = expect_bv PP.(sprintc @@ pp_binop b) ltt' in

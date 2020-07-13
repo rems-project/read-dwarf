@@ -28,7 +28,7 @@ let iota_step_up ?(start = 0) ~step ~endi : int t =
 let rec stop_at f (s : 'a t) () =
   match s () with
   | Nil -> Nil
-  | Cons (a, s') when f a -> Nil
+  | Cons (a, _) when f a -> Nil
   | Cons (a, s') -> Cons (a, stop_at f s')
 
 (** Add a new element in front of the sequence. That element will appear first before

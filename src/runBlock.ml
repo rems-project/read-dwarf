@@ -71,15 +71,12 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTbl.sym_offset)) len brea
   let brks =
     List.map (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset) breakpoints
   in
-  let open Opt in
   let start = Elf.SymTbl.to_addr_offset symoffset in
-  let min =
-    let+ l = len in
-    start
-  in
-  let max =
-    let+ l = len in
-    start + l
+  let (min, max) =
+    let open Opt in
+    unlift_pair
+    @@ let+ l = len in
+       (start, start + l)
   in
   let endpred = Block.gen_endpred ?min ?max ~brks () in
   TraceCache.start @@ Arch.get_isla_config ();

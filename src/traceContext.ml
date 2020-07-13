@@ -19,7 +19,7 @@ let make_context ?dwarf state =
   { state; reg_writes; mem_reads; dwarf }
 
 (** Expand a Trace variable to a State expression, using the context *)
-let expand_var ~(ctxt : t) (v : Trace.Var.t) (a : Ast.lrng) : State.exp =
+let expand_var ~(ctxt : t) (v : Trace.Var.t) (_ : Ast.lrng) : State.exp =
   match v with
   | Register reg -> State.get_reg_exp ctxt.state reg
   | Read i -> (HashVector.get ctxt.mem_reads i).exp

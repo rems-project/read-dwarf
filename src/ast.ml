@@ -58,7 +58,7 @@ let parse (parser : 'a parser) (conv : 'b -> lexbuf) ?(filename = "default") (i 
   l.lex_curr_p <- { pos_fname = filename; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
   try parser Lexer.token @@ l with
   | Parser.Error -> raise (ParseError (l.lex_start_p, "Syntax error"))
-  | Lexer.Error s -> raise (LexError (l.lex_start_p, "Unexpected character"))
+  | Lexer.Error _ -> raise (LexError (l.lex_start_p, "Unexpected character"))
 
 let from_string = Lexing.from_string ~with_positions:true
 
@@ -190,7 +190,7 @@ end
 
 (** Equality for expression. Polymorphic equality will fail.
     I love boilerplate code and love Ocaml! *)
-let rec equal_exp ?(annot = fun a b -> true) ~var ?(bnd = fun a b -> true) e e' =
+let rec equal_exp ?(annot = fun _ _ -> true) ~var ?(bnd = fun _ _ -> true) e e' =
   let eqe = equal_exp ~annot ~var ~bnd in
   match (e, e') with
   | (Var (v, a), Var (v', a')) -> var v v' && annot a a'

@@ -171,7 +171,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
       | Write (mb, e) ->
           Block.iter_exp f mb;
           f e
-      | Read (mb, v) -> Block.iter_exp f mb
+      | Read (mb, _) -> Block.iter_exp f mb
 
     let pp : t -> PP.document =
       let open PP in
@@ -261,7 +261,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
         (* Find a matching SElem with same symbolic value given the range block.bounds *)
         let (start, endp) = Opt.unlift_pair block.bounds in
         let seq = SCache.to_seq ?start ?endp frag.scache in
-        let check_one (addr, (selem : SElem.t)) =
+        let check_one (_, (selem : SElem.t)) =
           if Exp.equal selem.base bbase then CCache.sub ~pos:block.offset ~len selem.offsets
           else None
         in
@@ -270,7 +270,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
         (* Concrete access: Look in ccache *)
         CCache.sub ~pos:block.offset ~len frag.ccache
 
-  let try_read_naive frag (block : Block.t) = Raise.todo ()
+  let try_read_naive (_ : t) (_ : Block.t) = Raise.todo ()
 
   let read_sym frag block var = { frag with trace = Read (block, var) :: frag.trace }
 
@@ -300,7 +300,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
                   let selem = SElem.expand_bound selem Int.max_int in
                   let selem = SElem.write selem ~pos:block.offset ~len exp in
                   (Int.min_int / 2, selem)
-              | Some (bstart, bend) ->
+              | Some (bstart, _) ->
                   let npos = min bstart pos in
                   let nend = max pos (SElem.len selem) in
                   let nlen = nend - npos in
@@ -326,7 +326,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
         let scache = SCache.clear frag.scache ~pos:block.offset ~len in
         { frag with trace; ccache; scache }
 
-  let check_cache frag = Raise.todo ()
+  let check_cache (_ : t) = Raise.todo ()
 
   let is_empty frag = frag.trace = []
 

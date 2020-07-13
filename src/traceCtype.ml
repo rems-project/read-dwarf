@@ -111,12 +111,12 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
          then it stays a pointer.*)
       match List.hd tvals with
       | {
-       exp = Unop (Extract (m, n), _, _);
+       exp = Unop (Extract (_, _), _, _);
        ctyp = Some ({ unqualified = Ptr { fragment = Global; offset; _ }; _ } as ctyp);
       } -> (
           match offset with
           | Somewhere -> Some ctyp
-          | Const off -> (
+          | Const _ -> (
               try
                 let new_int =
                   constexpr_to_int ~ctxt (Ast.Op.concat (List.map (fun t -> t.exp) tvals))
@@ -134,22 +134,22 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
 let rec expr ~ctxt (exp : Trace.exp) : Ctype.t option =
   let ctyp =
     match exp with
-    | Var (Register reg, l) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
-    | Var (Read r, l) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
-    | Bits (bv, l) ->
+    | Var (Register reg, _) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
+    | Var (Read r, _) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
+    | Bits (bv, _) ->
         let size = BitVec.size bv in
         if size mod 8 = 0 || size = Arch.address_size then
           Ctype.machine ~constexpr:true (size / 8) |> Opt.some
         else None
-    | Bool (_, l) -> None
-    | Enum (_, l) -> None
-    | Unop (u, e, l) -> expr_tval ~ctxt e |> unop u
-    | Binop (b, e, e', l) ->
+    | Bool _ -> None
+    | Enum _ -> None
+    | Unop (u, e, _) -> expr_tval ~ctxt e |> unop u
+    | Binop (b, e, e', _) ->
         let te = expr_tval ~ctxt e in
         let te' = expr_tval ~ctxt e' in
         binop ~ctxt b te te'
-    | Manyop (m, el, l) -> List.map (expr_tval ~ctxt) el |> manyop ~ctxt m
-    | Ite (c, e, e', l) -> None
+    | Manyop (m, el, _) -> List.map (expr_tval ~ctxt) el |> manyop ~ctxt m
+    | Ite _ -> None
     | Bound _ -> .
     | Let _ -> .
   in
@@ -213,7 +213,8 @@ let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size :
 (*****************************************************************************)
 (** {1 Memory Write} *)
 
-let fragment_write_at ~(dwarf : Dw.t) ~fenv ~(ctyp : Ctype.t) (frag : Ctype.fragment) at : unit =
+let fragment_write_at ~dwarf:(_ : Dw.t) ~fenv ~(ctyp : Ctype.t) (frag : Ctype.fragment) at : unit
+    =
   match frag with
   | DynFragment i ->
       debug "Writing at %t in %d: %t" (PP.top PP.shex at) i (PP.top Ctype.pp ctyp);

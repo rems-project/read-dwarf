@@ -52,4 +52,4 @@ let of_exp (exp : 'v exp) : 'v t =
   match exp with
   | Manyop (Bvmanyarith Bvadd, el, _) ->
       el |> List.map Term.of_exp |> List.fold_left add_term nullptr
-  | e -> of_term (Term.of_exp exp)
+  | _ -> of_term (Term.of_exp exp)

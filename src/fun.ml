@@ -17,9 +17,6 @@ let ( $ ) = ( @@ )
 *)
 let ( %> ) f g x = x |> f |> g
 
-(** The function that does nothing. Useful for high-order programming *)
-let nop _ = ()
-
 (** When you want to run some imperative code on a value before continuing the pipeline *)
 let tee f a =
   f a;
@@ -32,7 +29,7 @@ let curry f a b = f (a, b)
 let uncurry f (a, b) = f a b
 
 (** Shorthand for [const true] *)
-let ctrue a = true
+let ctrue _ = true
 
 (** Shorthand for [const false] *)
-let cfalse a = false
+let cfalse _ = false

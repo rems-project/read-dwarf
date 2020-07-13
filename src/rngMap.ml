@@ -141,7 +141,7 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
 
   let next t addr = IMap.find_first_opt (fun a -> a > addr) t
 
-  let next_beg t addr = match next t addr with Some (a, obj) -> a | None -> Int.max_int
+  let next_beg t addr = match next t addr with Some (a, _) -> a | None -> Int.max_int
 
   let prev t addr = IMap.find_last_opt (fun a -> a <= addr) t
 
@@ -167,15 +167,13 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
     | None -> raise Not_found
 
   let update f t addr =
-    match prev t addr with
-    | None -> t
-    | Some (objaddr, obj) -> IMap.update objaddr (Option.map f) t
+    match prev t addr with None -> t | Some (objaddr, _) -> IMap.update objaddr (Option.map f) t
 
   let map = IMap.map
 
   let mapi = IMap.mapi
 
-  let iter f m = IMap.iter (fun i a -> f a) m
+  let iter f m = IMap.iter (fun _ a -> f a) m
 
   let iteri = IMap.iter
 
@@ -207,7 +205,7 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
     let endp = pos + len in
     let rec remove_until t seq endp =
       match seq () with
-      | Seq.Cons ((addr, obj), seq) when addr < endp -> remove_until (IMap.remove addr t) seq endp
+      | Seq.Cons ((addr, _), seq) when addr < endp -> remove_until (IMap.remove addr t) seq endp
       | _ -> t
     in
     remove_until t seq endp

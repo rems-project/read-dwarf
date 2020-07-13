@@ -65,7 +65,7 @@ let exp_of_valu l vc : Isla.valu -> State.exp = function
 (** This function write an expression to symbolic variable.
     The write is ignored if the variable was already set because
     isla guarantee that it would be the same value (Trusting Isla here) *)
-let write_to_var l vc var exp = HashVector.set vc var exp
+let write_to_var _ vc var exp = HashVector.set vc var exp
 
 (** This function write an expression to an {!Isla.valu}.
 
@@ -85,8 +85,8 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
            a register or memory, then the system would actually fail at that point *)
       try write_to_var l vc i (exp_conv_subst vc e) with RunError _ -> ()
     )
-  | Smt (Assert e, l) -> State.push_assert state (exp_conv_subst vc e)
-  | Smt (DefineEnum e, l) -> ()
+  | Smt (Assert e, _) -> State.push_assert state (exp_conv_subst vc e)
+  | Smt (DefineEnum _, _) -> ()
   | ReadReg (name, al, valu, l) ->
       debug "Reading Reg %s at %t from %t" name PP.(top pp_accessor_list al) PP.(top pp_valu valu);
       let string_path = IslaManip.string_of_accessor_list al in
@@ -101,13 +101,13 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
       let reg = Reg.of_path (name :: string_path) in
       let exp : State.exp = exp_of_valu l vc valu in
       Reg.Map.set state.regs reg (State.Tval.make exp)
-  | ReadMem (result, kind, addr, size, l) ->
+  | ReadMem (result, _kind, addr, size, l) ->
       debug "Reading Mem";
       (* TODO stop ignoring kind *)
       let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
       let size = State.Mem.Size.of_bytes size in
       write_to_valu l vc result (State.read_noprov state ~addr ~size)
-  | WriteMem (success, kind, addr, data, size, l) ->
+  | WriteMem (_success, _kind, addr, data, size, l) ->
       debug "Writing Mem";
       (* TODO stop ignoring kind *)
       let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in

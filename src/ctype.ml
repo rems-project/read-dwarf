@@ -229,14 +229,14 @@ let ptr_update ptr update =
 (** Set a arbitrary new offset in a pointer *)
 let ptr_set ptr noffset =
   match ptr.unqualified with
-  | Ptr { fragment; offset; provenance } ->
+  | Ptr { fragment; offset = _; provenance } ->
       { ptr with unqualified = Ptr { fragment; offset = Const noffset; provenance } }
   | _ -> Raise.inv_arg "ptr_set: not a pointer"
 
 (** Make a pointer forget it's offset *)
 let ptr_forget ptr =
   match ptr.unqualified with
-  | Ptr { fragment; offset; provenance } ->
+  | Ptr { fragment; offset = _; provenance } ->
       { ptr with unqualified = Ptr { fragment; offset = Somewhere; provenance } }
   | _ -> Raise.inv_arg "ptr_forget: not a pointer"
 
@@ -259,7 +259,7 @@ let rec sizeof_unqualified = function
   | Cbool -> 1
   | Ptr _ -> ptr_size
   | Struct { size; _ } -> size
-  | Enum i -> enum_size
+  | Enum _ -> enum_size
   | Array { elem; dims } ->
       let num = dims |> List.map (Option.value ~default:0) |> List.fold_left ( * ) 1 in
       num * sizeof elem
@@ -289,7 +289,7 @@ let len = sizeof
 type conversion_context = { env : env; potential_link_name : string option }
 
 (** Get the id of a linksem [cupdie] *)
-let ids_of_cupdie ((cu, p, die) : Dwarf.cupdie) : cupdie_id =
+let ids_of_cupdie ((cu, _, die) : Dwarf.cupdie) : cupdie_id =
   (Z.to_int cu.cu_header.cuh_offset, Z.to_int die.die_offset)
 
 (** Pretty print the dwarf decl type
@@ -406,7 +406,7 @@ and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : 
             name
     )
 
-and enum_of_linksem ~cc name llabels : enum =
+and enum_of_linksem ~cc:_ name llabels : enum =
   let labels = Hashtbl.create 5 in
   List.iter (fun (_, name, value) -> Hashtbl.add labels (Z.to_int value) name) llabels;
   { name; labels }
@@ -430,14 +430,14 @@ and enum_type_of_linksem ~cc ~cupdie ~mname ~decl : unqualified =
 
 (** Convert an unqualified type. Union are just [Machine n] where n is their size *)
 and unqualified_of_linksem ?(force_complete = false) ~cc : linksem_t -> unqualified = function
-  | CT (CT_base (cupdie, name, encoding, size)) -> base_type_of_linksem ~encoding ?size name
+  | CT (CT_base (_, name, encoding, size)) -> base_type_of_linksem ~encoding ?size name
   | CT (CT_pointer (_, Some t)) -> ptr @@ of_linksem_cc ~cc t
   | CT (CT_pointer (_, None)) -> voidstar
   | CT (CT_array (_, elem, l)) ->
       Array { elem = of_linksem_cc ~cc elem; dims = List.map Fun.(fst %> Option.map Z.to_int) l }
   | CT (CT_struct_union (cupdie, Atk_structure, mname, _, decl, _)) ->
       struct_type_of_linksem ~force_complete ~cc ~cupdie ~mname ~decl
-  | CT (CT_struct_union (_, Atk_union, name, size, decl, _)) ->
+  | CT (CT_struct_union (_, Atk_union, _, size, decl, _)) ->
       let size =
         match size with
         | Some s -> Z.to_int s
@@ -510,7 +510,7 @@ let env_of_linksem (lenv : linksem_env) : env =
   let env = make_env llenv in
   List.iter
     (function
-      | CT (CT_struct_union (cupdie, Atk_structure, mname, msize, _, _)) ->
+      | CT (CT_struct_union (_, Atk_structure, mname, msize, _, _)) ->
           Opt.(
             let+! name = mname and+ size = msize in
             if not @@ IdMap.mem env.structs name then
@@ -544,7 +544,7 @@ let rec pp typ =
 
 and pp_unqualified = function
   | Machine i -> dprintf "M%d" i
-  | Cint { name; signed; size; ischar } ->
+  | Cint { name; signed; size; ischar = _ } ->
       !^name ^^ lparen ^^ pp_signed signed ^^ int (8 * size) ^^ rparen
   | Cbool -> !^"bool"
   | Ptr { fragment; offset; provenance } ->
@@ -574,7 +574,7 @@ and pp_arr elem dims =
 
 and pp_arr_dim dim = PP.(lbracket ^^ Option.fold ~none:empty ~some:int dim ^^ rbracket)
 
-let pp_field ?env { fname; offset; typ; size } =
+let pp_field { fname; offset = _; typ; size = _ } =
   let name = Option.value fname ~default:"_" in
   infix 2 1 $ colon $ !^name $ pp typ
 
@@ -582,7 +582,8 @@ let pp_struct { layout; name; size; complete } =
   let fields = FieldMap.bindings layout |> List.map (Pair.map PP.ptr @@ pp_field) in
   PP.(mapping (if complete then name else name ^ "?") (fields @ [(PP.ptr size, !^"end")]))
 
-let pp_enums { name; labels } = PP.(hashtbl ptr (Opt.fold ~none:underscore ~some:string) labels)
+let pp_enums { name = _; labels } =
+  PP.(hashtbl ptr (Opt.fold ~none:underscore ~some:string) labels)
 
 (** Print the whole environement (not the linksem indexed environment) *)
 let pp_env env =

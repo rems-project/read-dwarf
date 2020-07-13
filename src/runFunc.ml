@@ -32,19 +32,16 @@ let run_func elfname name dump no_run entry len breakpoints loop =
       match func.sym with
       | None -> fail "Function %s exists in DWARF data but do not have any code" name
       | Some sym ->
-          let open Opt in
           let brks =
             List.map
               (Elf.SymTbl.of_position_string elf.symbols %> Elf.SymTbl.to_addr_offset)
               breakpoints
           in
-          let min =
-            let+ l = len in
-            sym.addr
-          in
-          let max =
-            let+ l = len in
-            sym.addr + l
+          let (min, max) =
+            let open Opt in
+            unlift_pair
+            @@ let+ l = len in
+               (sym.addr, sym.addr + l)
           in
           let endpred = Block.gen_endpred ?min ?max ?loop ~brks () in
           let runner = Runner.of_dwarf dwarf in
