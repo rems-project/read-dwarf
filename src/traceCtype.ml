@@ -50,7 +50,7 @@ let unop (u : Ast.unop) tval : Ctype.t option =
 
 let constexpr_to_int ~ctxt e =
   try
-    let vctxt v = expand_var ~ctxt v Ast.unknown |> ConcreteEval.eval_direct in
+    let vctxt v = expand_var ~ctxt v (Trace.Var.ty v) |> ConcreteEval.eval_direct in
     e |> ConcreteEval.eval_direct ~ctxt:vctxt |> Value.expect_bv |> BitVec.to_int
   with ConcreteEval.Symbolic ->
     err "Expression %t was typed as constexpr but is not constant" (PP.top Trace.pp_exp e);
@@ -119,10 +119,10 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
           | Const _ -> (
               try
                 let new_int =
-                  constexpr_to_int ~ctxt (Ast.Op.concat (List.map (fun t -> t.exp) tvals))
+                  constexpr_to_int ~ctxt (ExpTyped.concat (List.map (fun t -> t.exp) tvals))
                 in
                 debug "concat hack: %x = %t" new_int
-                  (PP.top Trace.pp_exp (Ast.Op.concat (List.map (fun t -> t.exp) tvals)));
+                  (PP.top Trace.pp_exp (ExpTyped.concat (List.map (fun t -> t.exp) tvals)));
                 Some (Ctype.ptr_set ctyp new_int)
               with ConcreteEval.Symbolic -> Ctype.ptr_forget ctyp |> Opt.some
             )
@@ -135,7 +135,7 @@ let rec expr ~ctxt (exp : Trace.exp) : Ctype.t option =
   let ctyp =
     match exp with
     | Var (Register reg, _) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
-    | Var (Read r, _) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
+    | Var (Read (r, _), _) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
     | Bits (bv, _) ->
         let size = BitVec.size bv in
         if size mod 8 = 0 || size = Arch.address_size then

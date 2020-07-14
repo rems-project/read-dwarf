@@ -44,14 +44,22 @@ type id = Id.t
 (** This module provide state variables *)
 module Var = struct
   (** The type of a variable in the state *)
-  type t = Register of Id.t * Reg.t | ReadVar of Id.t * int | Arg of int | RetArg | RetAddr
+  type t =
+    | Register of Id.t * Reg.t
+    | ReadVar of Id.t * int * Ast.Size.t
+    | Arg of int
+    | RetArg
+    | RetAddr
 
   (** Convert the variable to the string encoding. For parsing infrastructure reason,
       the encoding must always contain at least one [:]. *)
   let to_string = function
     | Register (state, reg) ->
         Printf.sprintf "reg:%s:%s" (state |> Id.to_string) (Reg.to_string reg)
-    | ReadVar (state, num) -> Printf.sprintf "read:%s:%i" (state |> Id.to_string) num
+    | ReadVar (state, num, size) ->
+        if size = Ast.Size.B64 then Printf.sprintf "read:%s:%i" (state |> Id.to_string) num
+        else
+          Printf.sprintf "read:%s:%i:%dbits" (state |> Id.to_string) num (Ast.Size.to_bits size)
     | Arg num -> Printf.sprintf "arg:%i" num
     | RetArg -> "retarg:"
     | RetAddr -> "retaddr:"
@@ -63,7 +71,7 @@ module Var = struct
 
   (** Expect a read variable and return the corresponding index. Throw otherwise. *)
   let expect_readvar = function
-    | ReadVar (_, rv) -> rv
+    | ReadVar (_, rv, _) -> rv
     | v -> Raise.inv_arg "Expected read variable but got %s" (to_string v)
 
   (** The opposite of {!to_string}. Will raise [Invalid_argument] when the string don't match *)
@@ -76,7 +84,12 @@ module Var = struct
     | ["read"; state; num] ->
         let state : Id.t = state |> Id.of_string in
         let num = int_of_string num in
-        ReadVar (state, num)
+        ReadVar (state, num, Ast.Size.B64)
+    | ["read"; state; num; size] ->
+        let state : Id.t = state |> Id.of_string in
+        let num = int_of_string num in
+        let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
+        ReadVar (state, num, size)
     | ["arg"; num] -> Arg (int_of_string num)
     | ["retarg"; ""] -> RetArg
     | ["retaddr"; ""] -> RetAddr
@@ -88,17 +101,28 @@ module Var = struct
   let equal v v' =
     match (v, v') with
     | (Register (st, reg), Register (st', reg')) -> Id.equal st st' && Reg.equal reg reg'
-    | (ReadVar (st, num), ReadVar (st', num')) -> Id.equal st st' && num = num'
+    | (ReadVar (st, num, size), ReadVar (st', num', size')) ->
+        Id.equal st st' && num = num' && size = size'
     | (Arg num, Arg num') -> num = num'
     | (RetArg, RetArg) -> true
     | (RetAddr, RetAddr) -> true
     | _ -> false
+
+  (** Hashing function for variable. For now it's polymorphic but this may stop at any time *)
+  let hash = Hashtbl.hash
 
   (** Basically [to_string] in pp mode *)
   let pp sv = sv |> to_string |> PP.string
 
   (** Pretty prints but with bars around *)
   let pp_bar sv = PP.(bar ^^ pp sv ^^ bar)
+
+  let ty = function
+    | Register (_, r) -> Reg.reg_type r
+    | ReadVar (_, _, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
+    | Arg _ -> Ast.Ty_BitVec 64
+    | RetArg -> Ast.Ty_BitVec 64
+    | RetAddr -> Ast.Ty_BitVec 64
 end
 
 type var = Var.t
@@ -110,20 +134,9 @@ type var = Var.t
 
 (** Module for state expressions *)
 module Exp = struct
-  (** The instantiation of {!Ast.exp} for state expressions *)
-  type t = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
-
-  let equal (e : t) (e' : t) = Ast.equal_exp ~var:Var.equal e e'
-
-  let of_var : Var.t -> t = Ast.Op.var
+  include Exp.Make (Var)
 
   let of_reg id reg = Var.of_reg id reg |> of_var
-
-  (** Pretty print the expression in human readable format. See module {!PPExp} *)
-  let pp (exp : t) = PPExp.pp_exp Var.pp_bar exp
-
-  (** Pretty print the expression in a SMTLIB format *)
-  let pp_smt (exp : t) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
 end
 
 type exp = Exp.t
@@ -216,7 +229,7 @@ module Mem = struct
     | Main -> (mem.main, addr)
     | Restricted i ->
         let (term, frag) = Vec.get mem.frags i in
-        (frag, AstManip.smart_substract ~size:52 (* HACK *) ~equal_var:Var.equal ~term addr)
+        (frag, Sums.smart_substract ~equal:Exp.equal ~term addr)
 
   (** Read a value of size [size] in memory at address [addr] in the fragment designated
       by [provenance] into variable [var]. If the read can be resolved from previous writes,
@@ -296,7 +309,7 @@ type t = {
   base_state : t option;  (** The immediate dominator state in the control flow graph *)
   mutable locked : bool;  (** Tells if the state is locked *)
   mutable regs : Tval.t Reg.Map.t;
-  read_vars : (ty * Tval.t) Vec.t;
+  read_vars : Tval.t Vec.t;
   mutable asserts : exp list;  (** Only asserts since base_state *)
   mem : Mem.t;
   elf : Elf.File.t option;
@@ -423,30 +436,19 @@ let push_assert (s : t) (e : exp) =
 let map_mut_exp (f : exp -> exp) s : unit =
   assert (not @@ is_locked s);
   Reg.Map.map_mut_current (Tval.map_exp f) s.regs;
-  Vec.map_mut (Pair.map Fun.id (Tval.map_exp f)) s.read_vars;
+  Vec.map_mut (Tval.map_exp f) s.read_vars;
   s.asserts <- List.map f s.asserts;
   Mem.map_mut_exp f s.mem
 
 (** Iterates a function on all the expressions of a state *)
 let iter_exp (f : exp -> unit) s =
   Reg.Map.iter (Tval.iter_exp f) s.regs;
-  Vec.iter (Pair.iter ignore (Tval.iter_exp f)) s.read_vars;
+  Vec.iter (Tval.iter_exp f) s.read_vars;
   List.iter f s.asserts;
   Mem.iter_exp f s.mem
 
 (** Iterates a function on all the variables of a state *)
 let iter_var (f : var -> unit) s = iter_exp (AstManip.exp_iter_var f) s
-
-(** Return the type of a state variable *)
-let var_type (var : Var.t) =
-  match var with
-  | Register (_, r) -> Reg.reg_type r
-  | ReadVar (id, i) ->
-      let state = of_id id in
-      Vec.get state.read_vars i |> fst
-  | Arg _ -> Ast.Ty_BitVec 64
-  | RetArg -> Ast.Ty_BitVec 64
-  | RetAddr -> Ast.Ty_BitVec 64
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -454,15 +456,16 @@ let var_type (var : Var.t) =
 (** {1 State memory accessors } *)
 
 (** Create a new Extra symbolic variable by mutating the state *)
-let make_read (s : t) ?ctyp (ty : ty) : var =
+let make_read (s : t) ?ctyp (size : Mem.Size.t) : var =
   assert (not @@ is_locked s);
   let len = Vec.length s.read_vars in
-  let var = Var.ReadVar (s.id, len) in
-  Vec.add_one s.read_vars (ty, { ctyp; exp = Exp.of_var var });
+  let var = Var.ReadVar (s.id, len, size) in
+  Vec.add_one s.read_vars { ctyp; exp = Exp.of_var var };
   var
 
 let set_read (s : t) (read_num : int) (exp : Exp.t) =
-  Vec.update s.read_vars read_num @@ Pair.map Fun.id (Tval.map_exp (Fun.const exp))
+  assert (ExpTyped.get_type exp = ExpTyped.get_type (Vec.get s.read_vars read_num |> Tval.exp));
+  Vec.update s.read_vars read_num @@ Tval.map_exp (Fun.const exp)
 
 (** Read memory from rodata.
 
@@ -477,7 +480,7 @@ let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option
         if sym.writable then None
         else
           (* Assume little endian here *)
-          Some (Ast.Op.bits (BytesSeq.getbvle ~size sym.data offset))
+          Some (ExpTyped.bits (BytesSeq.getbvle ~size sym.data offset))
       with Not_found ->
         warn "Reading global at 0x%x which is not in a global symbol" int_addr;
         None
@@ -496,8 +499,7 @@ let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option
     This function is for case with [provenance] information is known.*)
 let read ~provenance ?ctyp (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t =
   assert (not @@ is_locked s);
-  let ty = Mem.Size.to_bv size in
-  let var = make_read ?ctyp s ty in
+  let var = make_read ?ctyp s size in
   let exp = Mem.read s.mem ~provenance ~var ~addr ~size in
   let exp = if provenance = Main && exp = None then read_from_rodata ~addr ~size s else exp in
   Opt.iter (set_read s (Var.expect_readvar var)) exp;
@@ -562,7 +564,7 @@ let update_reg_exp (s : t) (reg : Reg.t) (f : exp -> exp) =
 
 (** Set the PC to a concrete value and keep it's type appropriate *)
 let set_pc ~(pc : Reg.t) (s : t) (pcval : int) =
-  let exp = Ast.Op.bits_int ~size:64 pcval in
+  let exp = ExpTyped.bits_int ~size:64 pcval in
   let ctyp = Ctype.of_frag Ctype.Global ~offset:pcval ~constexpr:true in
   set_reg s pc @@ Tval.make ~ctyp exp
 
@@ -594,7 +596,7 @@ let pp s =
       ("last_pc", ptr s.last_pc);
       ("regs", Reg.Map.pp Tval.pp s.regs);
       ("fenv", Fragment.Env.pp s.fenv);
-      ("read_vars", Vec.ppi (fun (_, tv) -> Tval.pp tv) s.read_vars);
+      ("read_vars", Vec.ppi Tval.pp s.read_vars);
       ("memory", Mem.pp s.mem);
       ("asserts", separate_map hardline (fun e -> prefix 2 1 !^"assert:" @@ Exp.pp e) s.asserts);
     ]
@@ -615,9 +617,7 @@ let pp_partial ~regs s =
            List.map (fun reg -> (Reg.pp reg, Reg.Map.get s.regs reg |> Tval.pp)) regs
            |> PP.mapping "" |> some );
          ("fenv", Fragment.Env.pp s.fenv |> some);
-         ( "read_vars",
-           guardn (Vec.length s.read_vars = 0) @@ Vec.ppi (fun (_, tv) -> Tval.pp tv) s.read_vars
-         );
+         ("read_vars", guardn (Vec.length s.read_vars = 0) @@ Vec.ppi Tval.pp s.read_vars);
          ("memory", guardn (Mem.is_empty s.mem) @@ Mem.pp s.mem);
          ( "asserts",
            guardn (s.asserts = [])

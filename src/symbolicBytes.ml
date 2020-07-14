@@ -25,36 +25,11 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-(** This is the type signature for variable required by this module *)
-module type Var = sig
-  (** The type of variables *)
-  type t
-
-  (** Equality predicate that will be passed to expressions *)
-  val equal : t -> t -> bool
-
-  (** Pretty printer to be used, both for memory pretty printing and for sending memory to Z3 *)
-  val pp : t -> PP.document
-end
-
 module type S = sig
   (** The type of variables used *)
   type var
 
-  (** The module for manipulated expressions *)
-  module Exp : sig
-    (** The type of expression in the fragment *)
-    type t = (Ast.lrng, var, Ast.no, Ast.no) Ast.exp
-
-    (** Equality on expressions derived from the provided equality on variable {!Var.equal} *)
-    val equal : t -> t -> bool
-
-    (** Pretty print the expression in human readable format. See module {!PPExp} *)
-    val pp : t -> PP.document
-
-    (** Pretty print the expression in a SMTLIB format *)
-    val pp_smt : t -> PP.document
-  end
+  type exp = (var, Ast.no) ExpTyped.t
 
   (** The type of symbolic bytes. *)
   type t
@@ -64,23 +39,23 @@ module type S = sig
 
   (** Extract an expression in [\[pos:pos+len)]. If any bytes in the range is undefined,
       Then [None] is returned, otherwise a expression is returned *)
-  val sub : pos:int -> len:int -> t -> Exp.t option
+  val sub : pos:int -> len:int -> t -> exp option
 
   (** Write the expresion on the interval [\[pos:pos +len)] of the bytes.
       The expression must be a bitvector of size exactly [8 * len].
 
       TODO check it when values are type annotated *)
-  val blit_exp : Exp.t -> pos:int -> len:int -> t -> t
+  val blit_exp : exp -> pos:int -> len:int -> t -> t
 
   (** Clear a range of the symbolic bytes, making all those bytes undefined again.
       If a bound is missing, it means up to infinity in that direction *)
   val clear_bounds : ?start:int -> ?endp:int -> t -> t
 
   (** Map a function over all the contained expressions *)
-  val map_exp : (Exp.t -> Exp.t) -> t -> t
+  val map_exp : (exp -> exp) -> t -> t
 
   (** Iter a function over all the contained expressions *)
-  val iter_exp : (Exp.t -> unit) -> t -> unit
+  val iter_exp : (exp -> unit) -> t -> unit
 
   (** Pretty prints the symbolic bytes *)
   val pp : t -> PP.document
@@ -90,18 +65,12 @@ end
 (*        Implementation                                                     *)
 (*****************************************************************************)
 
-module Make (Var : Var) : S with type var = Var.t = struct
+module Make (Var : Exp.Var) : S with type var = Var.t = struct
   type var = Var.t
 
-  module Exp = struct
-    type t = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
+  module Exp = Exp.Make (Var)
 
-    let equal (e : t) (e' : t) = Ast.equal_exp ~var:Var.equal e e'
-
-    let pp (exp : t) = PPExp.pp_exp (fun v -> PP.(bar ^^ Var.pp v ^^ bar)) exp
-
-    let pp_smt (exp : t) = Ast.pp_exp Var.pp (AstManip.allow_lets @@ AstManip.allow_mem exp)
-  end
+  type exp = Exp.t
 
   include RngMap.Make (RngMap.PairLenObject (Exp))
 
@@ -110,7 +79,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
     assert (len > 0);
     assert (pos >= 0);
     assert (pos + len <= elen);
-    (Ast.Op.extract (8 * (pos + len)) (8 * pos) e, len)
+    (ExpTyped.extract ~last:((8 * (pos + len)) - 1) ~first:(8 * pos) e, len)
 
   (* Warning: This code is complicated because of all the indices. I tried to make diagrams
      to explain *)
@@ -135,7 +104,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
              *)
           let next = pos + off_len in
           let* rest = sub_list ~pos:next ~len:(len - next) sb in
-          let nexp = Ast.Op.extract (8 * elen) (8 * off) e in
+          let nexp = ExpTyped.extract ~last:((8 * elen) - 1) ~first:(8 * off) e in
           Some (nexp :: rest)
         else
           (* off_len >= len *)
@@ -149,10 +118,10 @@ module Make (Var : Var) : S with type var = Var.t = struct
              |<----taken_len---->|
              *)
           let taken_len = off + len in
-          Some [Ast.Op.extract (8 * taken_len) (8 * off) e]
+          Some [ExpTyped.extract ~last:((8 * taken_len) - 1) ~first:(8 * off) e]
     in
     let+ list = sub_list ~pos ~len sb in
-    Ast.Op.concat list
+    ExpTyped.concat list
 
   let blit_exp exp ~pos ~len sb =
     assert (len > 0);

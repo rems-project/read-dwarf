@@ -257,7 +257,7 @@ let get_abi api =
     let stack_frag_id = Fragment.Env.add_frag ~frag:repr.stack_fragment state.fenv in
     let stack_provenance =
       State.Mem.new_frag state.mem
-        (State.get_reg_exp state sp |> Ast.Op.extract (address_size - 1) 0)
+        (State.get_reg_exp state sp |> ExpTyped.extract ~last:(address_size - 1) ~first:0)
     in
     State.set_reg_type state sp
       (Ctype.of_frag ~provenance:stack_provenance @@ DynFragment stack_frag_id);
@@ -265,11 +265,11 @@ let get_abi api =
       (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) RetAddr);
     let sp_exp = State.Exp.of_reg state.id sp in
     (* Assert that Sp is 16 bytes aligned *)
-    State.push_assert state Ast.Op.(extract 3 0 sp_exp = bits_int ~size:4 0);
+    State.push_assert state ExpTyped.(extract ~last:3 ~first:0 sp_exp = bits_int ~size:4 0);
     (* Assert that Sp has zero top bits *)
-    State.push_assert state Ast.Op.(extract 63 52 sp_exp = bits_int ~size:12 0);
+    State.push_assert state ExpTyped.(extract ~last:63 ~first:52 sp_exp = bits_int ~size:12 0);
     (* Assert that there is enough stack space *)
-    State.push_assert state Ast.Op.(comp Ast.Bvuge sp_exp (bits_int ~size:64 0x1000));
+    State.push_assert state ExpTyped.(comp Ast.Bvuge sp_exp (bits_int ~size:64 0x1000));
     State.lock state;
     state
   in

@@ -45,7 +45,7 @@ let expect_bv ?size r =
   | (None, _) -> Raise.fail "Expected bit vector but got %s" (to_string r)
 
 (** Convert to a constant expression *)
-let to_exp : t -> (Ast.lrng, 'v, 'b, 'm) Ast.exp = function
-  | Bool b -> Bool (b, Ast.unknown)
-  | Enum enum -> Enum (enum, Ast.unknown)
-  | Bv bv -> Bits (bv, Ast.unknown)
+let to_exp : t -> ('v, 'm) ExpTyped.t = function
+  | Bool b -> ExpTyped.bool b
+  | Enum enum -> ExpTyped.enum enum
+  | Bv bv -> ExpTyped.bits bv

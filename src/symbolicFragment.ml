@@ -18,18 +18,6 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-(** This is the type signature for variable required by this module *)
-module type Var = sig
-  (** The type of variables *)
-  type t
-
-  (** Equality predicate that will be passed to expressions *)
-  val equal : t -> t -> bool
-
-  (** Pretty printer to be used, both for memory pretty printing and for sending memory to Z3 *)
-  val pp : t -> PP.document
-end
-
 (** The signature of a memory fragment module *)
 module type S = sig
   (** The type of variables used *)
@@ -37,20 +25,7 @@ module type S = sig
 
   module Size = Ast.Size
 
-  (** The module for manipulated expressions *)
-  module Exp : sig
-    (** The type of expression in the fragment *)
-    type t = (Ast.lrng, var, Ast.no, Ast.no) Ast.exp
-
-    (** Equality on expressions derived from the provided equality on variable {!Var.equal} *)
-    val equal : t -> t -> bool
-
-    (** Pretty print the expression in human readable format. See module {!PPExp} *)
-    val pp : t -> PP.document
-
-    (** Pretty print the expression in a SMTLIB format *)
-    val pp_smt : t -> PP.document
-  end
+  type exp = (var, Ast.no) ExpTyped.t
 
   (** This module provide the concept of memory block, as used by a fragment.
 
@@ -61,7 +36,7 @@ module type S = sig
   module Block : sig
     (** The type for representing memory blocks *)
     type t = private {
-      base : Exp.t option;  (** The symbolic base. If [None] the block is concrete *)
+      base : exp option;  (** The symbolic base. If [None] the block is concrete *)
       offset : int;  (** The concrete part of the address *)
       size : Size.t;
       bounds : (int * int) option;  (** Optional bounds: [(min, max)] means [\[min:max)] *)
@@ -69,7 +44,7 @@ module type S = sig
 
     (** Make the block from an address and a size. The address is automatically split
         between a symbolic and concrete part.*)
-    val make_split : ?bounds:int * int -> Exp.t -> Size.t -> t
+    val make_split : ?bounds:int * int -> exp -> Size.t -> t
   end
 
   (** The type of a memory fragment *)
@@ -84,7 +59,7 @@ module type S = sig
   (** Try to read a expression in a block. If one can provide a symbolic expression
       representing the content of the block then [Some] is returned,
       otherwise [None] is returned.*)
-  val try_read : t -> Block.t -> Exp.t option
+  val try_read : t -> Block.t -> exp option
 
   (** Same semantic as {!try_read} but ignores the caches. Is supposed to be slower.
 
@@ -92,7 +67,7 @@ module type S = sig
       then [try_read_naive] must return the same value.
       It's possible that try_read_naive give a result when {!try_read} don't
   *)
-  val try_read_naive : t -> Block.t -> Exp.t option
+  val try_read_naive : t -> Block.t -> exp option
 
   (** Read a symbolic variable from a block. This bound this symbolic variable to the
       The content of the block in the current memory state.contents
@@ -100,16 +75,16 @@ module type S = sig
   val read_sym : t -> Block.t -> var -> t
 
   (** Write a symbolic expression at a block *)
-  val write : t -> Block.t -> Exp.t -> t
+  val write : t -> Block.t -> exp -> t
 
   (** Map a function over all contained expressions. This function
       must not change the semantic meaning of symbolic expressions in any way.
       It is intended to be used with simplifying functions and the like *)
-  val map_exp : (Exp.t -> Exp.t) -> t -> t
+  val map_exp : (exp -> exp) -> t -> t
 
   (** Iter a function over all contained expression. Expression may appear more or less
       than anticipated because of various caching. *)
-  val iter_exp : (Exp.t -> unit) -> t -> unit
+  val iter_exp : (exp -> unit) -> t -> unit
 
   (** Check cache integrity. Throw if something is wrong *)
   val check_cache : t -> unit
@@ -126,19 +101,21 @@ end
 (*****************************************************************************)
 
 (** A functor to make a memory fragment module from a variable module {!Var} *)
-module Make (Var : Var) : S with type var = Var.t = struct
+module Make (Var : Exp.Var) : S with type var = Var.t = struct
   type var = Var.t
 
   module CCache = SymbolicBytes.Make (Var)
   module Size = Ast.Size
-  module Exp = CCache.Exp
+  module Exp = Exp.Make (Var)
+
+  type exp = Exp.t
 
   module Block = struct
     type t = { base : Exp.t option; offset : int; size : Size.t; bounds : (int * int) option }
 
     let make_split ?bounds addr size : t =
-      let (base, bvoffset) = ConcreteEval.sum_split_concrete ~size:52 addr in
-      assert (not @@ Opt.exists ConcreteEval.has_concrete_term base);
+      let (base, bvoffset) = Sums.split_concrete addr in
+      assert (not @@ Opt.exists Sums.has_concrete_term base);
       let offset = BitVec.to_int bvoffset in
       { base; offset; size; bounds }
 
@@ -191,7 +168,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
 
     let make ?(end_bound = Int.max_int) base =
       debug "New selem with base %t" PP.(top Exp.pp_smt base);
-      assert (not @@ ConcreteEval.has_concrete_term base);
+      assert (not @@ Sums.has_concrete_term base);
       { base; end_bound; offsets = CCache.empty }
 
     let expand_bound se nb =

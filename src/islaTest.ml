@@ -209,7 +209,7 @@ let processing preprocessing pmode (filename, input, (config : IslaServer.config
   let simp state =
     Z3.start ();
     State.unsafe_unlock state;
-    State.map_mut_exp SMT.simplify state;
+    StateSimplify.ctxfull state;
     State.lock state;
     base "Simplified state:\n%t\n" (PP.topi State.pp state);
     Z3.stop ();

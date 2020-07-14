@@ -120,17 +120,3 @@ let rec is_concrete (exp : _ Ast.exp) : bool =
 (** Evaluate an expression if it's concrete and returns [None] otherwise *)
 let eval_if_concrete (exp : _ Ast.exp) : Value.t option =
   try eval_direct exp |> Opt.some with Symbolic -> None
-
-(** Split the sum between a concrete bitvector term, and symbolic term *)
-let sum_split_concrete ~size exp =
-  let terms = AstManip.sum_split exp in
-  let (symterms, concvals) = List.partition_map eval_if_concrete terms in
-  let concbvs = List.map Value.expect_bv concvals in
-  let concbv = List.fold_left BitVec.( + ) (BitVec.zero ~size) concbvs in
-  let symterm = match symterms with [] -> None | _ :: _ -> Some (Ast.Op.sum symterms) in
-  (symterm, concbv)
-
-(** Tells if an expression has a concrete term *)
-let has_concrete_term exp =
-  let terms = AstManip.sum_split exp in
-  List.exists is_concrete terms

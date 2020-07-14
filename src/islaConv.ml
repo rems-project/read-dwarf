@@ -84,6 +84,21 @@ let rec exp_var_subst (vconv : int -> 'a -> ('a, 'v, 'b, 'm) Ast.exp) :
   | Var (i, a) -> vconv i a
   | e -> direct_exp_no_var (exp_var_subst vconv) e
 
+(** Convert directly from an untyped isla expression to an {!ExpTyped} by
+    substituing isla variables with already typed expressions *)
+let rec exp_add_type_var_subst (vconv : int -> 'a -> ('v, 'm) ExpTyped.t) (exp : 'a Isla.exp) :
+    ('v, 'm) ExpTyped.t =
+  let at = exp_add_type_var_subst vconv in
+  match exp with
+  | Var (v, a) -> vconv v a
+  | Bits (bv, _) -> ExpTyped.bits_smt bv
+  | Bool (b, _) -> ExpTyped.bool b
+  | Enum (e, _) -> ExpTyped.enum e
+  | Unop (op, e, _) -> ExpTyped.unop (unop op) (at e)
+  | Binop (op, e, e', _) -> ExpTyped.binop (binop op) (at e) (at e')
+  | Manyop (op, el, _) -> ExpTyped.manyop (manyop op) (List.map at el)
+  | Ite (cond, e, e', _) -> ExpTyped.ite ~cond:(at cond) (at e) (at e')
+
 let smt_var_conv (vconv : int -> 'v) : 'a Isla.smt -> ('a, 'v, 'b, 'm) Ast.smt = function
   | DeclareConst (i, t) -> DeclareConst (vconv i, ty t)
   | DefineConst (i, e) -> DefineConst (vconv i, exp_var_conv vconv e)

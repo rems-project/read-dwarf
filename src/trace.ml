@@ -21,27 +21,48 @@ module Var = struct
   (** A trace variable *)
   type t =
     | Register of Reg.t  (** The value of the register at the beginning of the trace *)
-    | Read of int  (** The result of that memory reading operation *)
+    | Read of int * Ast.Size.t  (** The result of that memory reading operation *)
 
   (** Convert the variable to the string encoding. For parsing infractructure reason,
       the encoding must always contain at least one [:]. *)
   let to_string = function
     | Register r -> Printf.sprintf "reg:%s" (Reg.to_string r)
-    | Read i -> Printf.sprintf "read:%d" i
+    | Read (num, size) ->
+        if size = Ast.Size.B64 then Printf.sprintf "read:%i" num
+        else Printf.sprintf "read:%i:%dbits" num (Ast.Size.to_bits size)
 
   (** Inverse of {!to_string} *)
   let of_string s =
     match String.split_on_char ':' s with
     | ["reg"; reg] -> Register (Reg.of_string reg)
-    | ["read"; num] -> Read (int_of_string num)
+    | ["read"; num] -> Read (int_of_string num, Ast.Size.B64)
+    | ["read"; num; size] ->
+        let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
+        Read (int_of_string num, size)
     | _ -> Raise.inv_arg "%s is not a Trace.Var.t" s
 
   (** Pretty prints the variable *)
   let pp v = v |> to_string |> PP.string
+
+  let equal = ( = )
+
+  let hash = Hashtbl.hash
+
+  let ty = function
+    | Register reg -> Reg.reg_type reg
+    | Read (_, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
+
+  let of_reg reg = Register reg
 end
 
 (** A trace expression. No let bindings, no memory operations *)
-type exp = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.exp
+module Exp = struct
+  include Exp.Make (Var)
+
+  let of_reg reg = Var.of_reg reg |> of_var
+end
+
+type exp = Exp.t
 
 type event =
   | WriteReg of { reg : Reg.t; value : exp }
@@ -50,12 +71,6 @@ type event =
   | Assert of exp
 
 type t = event list
-
-(** Allow all feature in an expression *)
-let exp_allow (e : exp) = e |> AstManip.allow_lets |> AstManip.allow_mem
-
-(** Restrict the features of an expression to make it usable in this module again *)
-let exp_restrict e = e |> AstManip.expect_no_mem
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -120,15 +135,15 @@ let get_var vc i =
     by their value in the context. Throw {!OfIslaError} if the substitution fails *)
 let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : exp =
   let vconv i _ = get_var vc i in
-  IslaConv.exp_var_subst vconv exp
+  IslaConv.exp_add_type_var_subst vconv exp
 
 (** Convert an {!Isla.valu} in a expression *)
 let exp_of_valu l vc : Isla.valu -> exp = function
   | Val_Symbolic i -> get_var vc i
-  | Val_Bool b -> Bool (b, l)
-  | Val_Bits bv -> Bits (BitVec.of_smt bv, l)
-  | Val_I (int, size) -> Bits (BitVec.of_int ~size int, l)
-  | Val_Enum (n, a) -> Enum ((n, a), l)
+  | Val_Bool b -> ExpTyped.bool b
+  | Val_Bits bv -> ExpTyped.bits_smt bv
+  | Val_I (int, size) -> ExpTyped.bits_int ~size int
+  | Val_Enum (n, a) -> ExpTyped.enum (n, a)
   | valu ->
       Raise.fail "%t Can't convert %t to a trace expression" (PP.tos PP.lrng l)
         (PP.tos Isla.pp_valu valu)
@@ -145,7 +160,7 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
       None
   | Smt (Assert e, _) -> Some (Assert (exp_conv_subst vc e))
   | Smt (DefineEnum _, _) -> None
-  | ReadReg (name, al, valu, l) ->
+  | ReadReg (name, al, valu, _) ->
       let string_path = IslaManip.string_of_accessor_list al in
       let valu = IslaManip.valu_get valu string_path in
       let reg = Reg.of_path (name :: string_path) in
@@ -153,7 +168,7 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
          symbolic variable *)
       ( match Hashtbl.find_opt written_registers reg with
       | Some exp -> write_to_valu vc valu exp
-      | None -> write_to_valu vc valu (Var (Register reg, l))
+      | None -> write_to_valu vc valu (Exp.of_reg reg)
       );
       None
   | WriteReg (name, al, valu, l) ->
@@ -164,13 +179,17 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
       Hashtbl.add written_registers reg value;
       Some (WriteReg { reg; value })
   | ReadMem (result, _kind, addr, size, l) ->
-      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
+      let addr =
+        exp_of_valu l vc addr |> ExpTyped.extract ~last:(Arch.address_size - 1) ~first:0
+      in
       let size = Ast.Size.of_bytes size in
       let value = Counter.get read_counter in
-      write_to_valu vc result (Var (Read value, l));
+      write_to_valu vc result (Exp.of_var @@ Var.Read (value, size));
       Some (ReadMem { addr; size; value })
   | WriteMem (_success, _kind, addr, data, size, l) ->
-      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
+      let addr =
+        exp_of_valu l vc addr |> ExpTyped.extract ~last:(Arch.address_size - 1) ~first:0
+      in
       let size = Ast.Size.of_bytes size in
       let value = exp_of_valu l vc data in
       Some (WriteMem { addr; size; value })
@@ -202,35 +221,33 @@ module TraceSimpContext = Z3.ContextCounter (struct
   let str = "Trace simplification"
 end)
 
+module Z3Tr = Z3.Make (Var)
+
 (** Simplify a trace by using Z3. Perform both local expression simplification and
     global assertion removal (when an assertion is always true) *)
 let simplify events =
-  let exp_simplify exp : exp =
-    exp |> exp_allow |> Z3.simplify_gen ~ppv:Var.pp ~vofs:Var.of_string |> exp_restrict
-  in
+  let serv = Z3.ensure_started_get () in
+  let exp_simplify exp : exp = Z3Tr.simplify serv exp in
   let event_simplify = function
     | WriteReg wr -> Some (WriteReg { wr with value = exp_simplify wr.value })
     | ReadMem rm ->
-        Z3.command ~ppv:Var.pp (Ast.DeclareConst (Read rm.value, Ast.Size.to_bv rm.size));
+        Z3Tr.declare_var_always serv (Read (rm.value, rm.size));
         Some (ReadMem { rm with addr = exp_simplify rm.addr })
     | WriteMem wm ->
         Some (WriteMem { wm with addr = exp_simplify wm.addr; value = exp_simplify wm.value })
     | Assert exp -> (
         let nexp = exp_simplify exp in
-        match Z3.check_gen ~ppv:Var.pp (nexp |> exp_allow) with
+        match Z3Tr.check_both serv nexp with
         | Some true -> None
+        | Some false -> Raise.fail "TODO implement trace deletion in that case"
         | _ ->
-            Z3.command ~ppv:Var.pp (Ast.Assert (nexp |> exp_allow));
+            Z3Tr.send_assert serv nexp;
             Some (Assert nexp)
       )
   in
-  let declare_regs () =
-    let serv = Z3.get_server () in
-    Reg.iter (fun _ reg ty ->
-        Z3.send_smt serv ~ppv:Var.pp (DeclareConst (Register reg, ty |> AstManip.ty_allow_mem)))
-  in
   TraceSimpContext.openc ();
-  declare_regs ();
+  (* declare all registers *)
+  Reg.iter (fun _ reg _ -> Z3Tr.declare_var_always serv (Register reg));
   let events = List.filter_map event_simplify events in
   TraceSimpContext.closec ();
   events

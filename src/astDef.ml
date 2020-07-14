@@ -17,6 +17,13 @@ module Size = struct
     | 8 -> B64
     | bytes -> Raise.fail "%d bytes is not a valid memory size" bytes
 
+  let of_bits = function
+    | 8 -> B8
+    | 16 -> B16
+    | 32 -> B32
+    | 64 -> B64
+    | bits -> Raise.fail "%d bits is not a valid memory size" bits
+
   let to_bytes = function B8 -> 1 | B16 -> 2 | B32 -> 4 | B64 -> 8
 
   let to_bits size = 8 * to_bytes size

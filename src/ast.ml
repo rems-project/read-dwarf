@@ -98,7 +98,7 @@ let is_atomic = function
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Desctructor }
+(** {1 Destructors }
 
     Aparently I overestimated ocaml type-system in it's handling of empty types.
 
@@ -116,72 +116,20 @@ let destr_binmem : no binmem -> 'a = function Select _ -> . | Store _ -> .
 
 let expect_bits : _ exp -> BitVec.t = function
   | Bits (bv, _) -> bv
-  | _ -> Raise.fail "expected a bitvector expression"
+  | _ -> Raise.inv_arg "Expected a constant bitvector expression"
+
+let ty_expect_bv : _ ty -> int = function
+  | Ty_BitVec i -> i
+  | _ -> Raise.inv_arg "Expected a bitvector type"
 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Operators }
-    Those are operators to construct expression, not do any evaluation.
-    In particular the equal in there builds an equality expression, and do not
-    test for expression equality (To do that use {!equal})
-*)
+(** {1 Construtors } *)
 
-module Op = struct
-  let add a b = Manyop (Bvmanyarith Bvadd, [a; b], unknown)
+let assert_smt e = Assert e
 
-  let ( + ) a b = add a b
-
-  let sum = function
-    | [] -> Raise.inv_arg "Cannot sum the empty list"
-    | [e] -> e
-    | l -> Manyop (Bvmanyarith Bvadd, l, unknown)
-
-  let sub a b = Binop (Bvarith Bvsub, a, b, unknown)
-
-  let ( - ) a b = sub a b
-
-  let mul a b = Manyop (Bvmanyarith Bvmul, [a; b], unknown)
-
-  let ( * ) a b = add a b
-
-  let sdiv a b = Binop (Bvarith Bvsdiv, a, b, unknown)
-
-  let not a = Unop (Not, a, unknown)
-
-  let neg a = Unop (Bvneg, a, unknown)
-
-  let extract a b e = Unop (Extract (a, b), e, unknown)
-
-  let var v = Var (v, unknown)
-
-  let eq a b = Binop (Eq, a, b, unknown)
-
-  let ( = ) = eq
-
-  let bits bv = Bits (bv, unknown)
-
-  let bits_int ~size i = bits (BitVec.of_int ~size i)
-
-  let bits_smt s = bits (BitVec.of_smt s)
-
-  let zero ~size = bits (BitVec.zero ~size)
-
-  let true_exp = Bool (true, unknown)
-
-  let false_exp = Bool (false, unknown)
-
-  let concat = function
-    | [] -> Raise.inv_arg "Cannot concatenate the empty list"
-    | [e] -> e
-    | l -> Manyop (Concat, l, unknown)
-
-  let assert_op e = Assert e
-
-  let simplify ?(flags = []) e = Simplify (e, flags)
-
-  let comp comp a b = Binop (Bvcomp comp, a, b, unknown)
-end
+let simplify_smt ?(flags = []) e = Simplify (e, flags)
 
 (*****************************************************************************)
 (*****************************************************************************)

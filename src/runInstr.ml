@@ -153,7 +153,7 @@ let run_instr dump_init norun simp_state traces =
         List.map
           (fun state ->
             State.unsafe_unlock state;
-            State.map_mut_exp Z3.simplify state;
+            StateSimplify.ctxfull state;
             State.lock state;
             state)
           states

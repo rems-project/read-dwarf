@@ -90,7 +90,7 @@ let run_bb norun simp_state bb =
     if simp_state then begin
       Z3.ensure_started ();
       State.unsafe_unlock state;
-      State.map_mut_exp Z3.simplify state;
+      StateSimplify.ctxfull state;
       State.lock state
     end;
     base "Final state:\n%t\n" (PP.topi State.pp state)

@@ -44,7 +44,7 @@ let get_var l vc i =
     If a variable is not bound, throw {!RunError} *)
 let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : State.exp =
   let vconv i l = get_var l vc i in
-  IslaConv.exp_var_subst vconv exp
+  IslaConv.exp_add_type_var_subst vconv exp
 
 (** Give the {!State.exp} that represents the input {!Isla.valu}.
 
@@ -56,10 +56,10 @@ let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : State.exp =
     If the value is not convertible to a state expression, throw a {!RunError} *)
 let exp_of_valu l vc : Isla.valu -> State.exp = function
   | Val_Symbolic i -> get_var l vc i
-  | Val_Bool b -> Bool (b, l)
-  | Val_Bits bv -> Bits (BitVec.of_smt bv, l)
-  | Val_I (int, size) -> Bits (BitVec.of_int ~size int, l)
-  | Val_Enum (n, a) -> Enum ((n, a), l)
+  | Val_Bool b -> ExpTyped.bool b
+  | Val_Bits bv -> ExpTyped.bits_smt bv
+  | Val_I (int, size) -> ExpTyped.bits_int ~size int
+  | Val_Enum (n, a) -> ExpTyped.enum (n, a)
   | valu -> run_error l "Can't convert %t to a state expression" (PP.tos pp_valu valu)
 
 (** This function write an expression to symbolic variable.
@@ -104,13 +104,17 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
   | ReadMem (result, _kind, addr, size, l) ->
       debug "Reading Mem";
       (* TODO stop ignoring kind *)
-      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
+      let addr =
+        exp_of_valu l vc addr |> ExpTyped.extract ~last:(Arch.address_size - 1) ~first:0
+      in
       let size = State.Mem.Size.of_bytes size in
       write_to_valu l vc result (State.read_noprov state ~addr ~size)
   | WriteMem (_success, _kind, addr, data, size, l) ->
       debug "Writing Mem";
       (* TODO stop ignoring kind *)
-      let addr = exp_of_valu l vc addr |> Pointer.to_ptr_size in
+      let addr =
+        exp_of_valu l vc addr |> ExpTyped.extract ~last:(Arch.address_size - 1) ~first:0
+      in
       let size = State.Mem.Size.of_bytes size in
       let data = exp_of_valu l vc data in
       State.write_noprov state ~addr ~size data

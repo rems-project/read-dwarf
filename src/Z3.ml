@@ -143,16 +143,26 @@ let command ?(ppv = PP.erase) smt =
 (** Expect a version answer and fails if it is not the case *)
 let expect_version : Ast.rsmt_ans -> string = function
   | Version s -> s
-  | _ -> failwith "expected version from Z3"
+  | _ -> Raise.fail "expected version from Z3 in %s" (get_context_string ())
 
 (** Expect an expression answer and fails if it is not the case *)
 let expect_exp : Ast.rsmt_ans -> Ast.rexp = function
   | Exp e -> e
-  | _ -> failwith "expected expression from Z3"
+  | _ -> Raise.fail "expected expression from Z3 in %s" (get_context_string ())
 
 (** Get the Z3 version string *)
 let get_version () =
   match request Ast.GetVersion with Version s -> s | _ -> failwith "Z3 version, protocol error"
+
+(** Check if the current context is sat *)
+let is_context_sat serv =
+  send_smt serv Ast.CheckSat;
+  match read_smt_ans serv with
+  | Error s -> Raise.fail "Z3: error %s on check_sat in %s" s (get_context_string ())
+  | Sat -> Some true
+  | Unsat -> Some false
+  | Unknown -> None
+  | _ -> Raise.fail "Z3 protocol error on check_sat in %s" (get_context_string ())
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -228,7 +238,6 @@ let close_context () =
     Then you can use it with
     [Whatever.openc ()] and [Whatever.closec ()].
     You can get the current instance number with [Whatever.num()] at any time.*)
-
 module ContextCounter (S : Logs.String) = struct
   let counter = Counter.make 0
 
@@ -250,187 +259,247 @@ end
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Medium-level interaction }
+(** {1 High level interaction }
 
-    This section allow medium level Z3 interaction.
-    One can do calls to simplify an expression or check that a property is true or false
-    in the current context. All requests do not affect the context.
-    The context must contain declaration of all variable used and all hypothesis in the
-    case of a {!check_gen} or {!check_sat_gen}
-*)
+    This section provide functors that can be instantiated to get easy to use SMT functionality *)
 
-(** The type of input expression. No let bindings *)
-type ('a, 'v) in_exp = ('a, 'v, Ast.no, Ast.Size.t) Ast.exp
+(** The functors in this section require a bit more support from variable than plain {!Exp.Var} *)
+module type Var = sig
+  include Exp.Var
 
-(** The type of input expression. No let bindings *)
-type 'v out_exp = (Ast.lrng, 'v, Ast.no, Ast.Size.t) Ast.exp
+  (** Hashing function to store variable in [Hashtbl]s. Must be compatible with {!equal} *)
+  val hash : t -> int
 
-(** Simplify an expression in the context. The context must already have been declared *)
-let simplify_gen ~ppv ~vofs (exp : ('a, 'v) in_exp) : 'v2 out_exp =
-  let serv = get_server () in
-  exp |> AstManip.allow_lets
-  |> Ast.Op.simplify ~flags:serv.config.simplify_opts
-  |> request ~ppv |> expect_exp |> AstManip.unfold_lets |> AstManip.exp_conv_var vofs
+  (** Parser from a string. Must be the inverse of {!pp} *)
+  val of_string : string -> t
+end
 
-(** Check the correctness of a property in the current context.
-    The context must already have been declared
-    Do not modify the context (It creates a subcontext) *)
-let check_gen ~ppv (exp : ('a, 'v) in_exp) =
-  open_context "check";
-  command ~ppv (exp |> AstManip.allow_lets |> Ast.Op.not |> Ast.Op.assert_op);
-  let r = request CheckSat in
-  close_context ();
-  match r with
-  | Error s -> Raise.fail "Z3: error %s on check in %s" s (get_context_string ())
-  | Sat -> Some false
-  | Unsat -> Some true
-  | Unknown -> None
-  | _ -> Raise.fail "Z3 protocol error on check in %s" (get_context_string ())
+module type S = sig
+  type var
 
-(** Check the satisfiability of a property in the current context.
-    The context must already have been declared
-    Do not modify the context (It creates a subcontext) *)
-let check_sat_gen ~ppv (exp : ('a, 'v) in_exp) =
-  open_context "check_sat";
-  command ~ppv (exp |> AstManip.allow_lets |> Ast.Op.assert_op);
-  let r = request CheckSat in
-  close_context ();
-  match r with
-  | Error s -> Raise.fail "Z3: error %s on check_sat in %s" s (get_context_string ())
-  | Sat -> Some true
-  | Unsat -> Some false
-  | Unknown -> None
-  | _ -> Raise.fail "Z3 protocol error on check_sat in %s" (get_context_string ())
+  (** {1 Variable declarations }
 
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 High level interaction with state }
+      The goal of those operation is to declare variables with their types to the SMT solver.
+      The {!Htbl} allow to declare every variable only once.
+  *)
+  type exp = (var, Ast.no) ExpTyped.t
 
-    Those requests can be made at any time and do not require any special context to be declared.
-*)
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (*****************************************************************************)
 
-let exp_conv exp = exp |> AstManip.allow_mem |> AstManip.allow_lets
+  (** Hash tables over variables *)
+  module Htbl : Hashtbl.S with type key = var
 
-(** Declare all the variables in exp in the (declare-const ...) format on the
-    [out_channel]
+  (** Declare the variable regardless of whether it has already been declared *)
+  val declare_var_always : server -> var -> unit
 
-    If declared is given, use it to know which variable are already declared.
-*)
-let declare_vars ?(declared = Hashtbl.create 10) serv (exp : State.exp) : unit =
-  let process_var (var : State.var) =
-    if not @@ Hashtbl.mem declared @@ State.Var.to_string var then begin
-      let decl = Ast.DeclareConst (var, State.var_type var |> AstManip.ty_allow_mem) in
-      send_smt serv ~ppv:State.Var.pp decl;
-      Hashtbl.add declared (State.Var.to_string var) ()
-    end
-  in
-  AstManip.exp_iter_var process_var exp
+  (** Declare the variable if it's not in [declared]. In that case, it also
+      add it to [declared] *)
+  val declare_var : server -> declared:unit Htbl.t -> var -> unit
+
+  (** Declare all not yet declared the variable in the expression,
+      then add them to [declared] *)
+  val declare_vars : server -> declared:unit Htbl.t -> exp -> unit
+
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (** {1 Simplification } *)
+
+  (** Simplify the expression in the current context. All the variable
+      must already have been declared. *)
+  val simplify : server -> exp -> exp
+
+  (** Literally just {!declare_vars} then {!simplify} *)
+  val simplify_decl : server -> declared:unit Htbl.t -> exp -> exp
+
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (** {1 SMT checking } *)
+
+  (** Assert that expression in the current context *)
+  val send_assert : server -> exp -> unit
+
+  (** Literally just {!declare_vars} then {!send_assert} *)
+  val send_assert_decl : server -> declared:unit Htbl.t -> exp -> unit
+
+  (** Check if this expression is always true in the current context.
+      [None] is returned when the SMT solver didn't know *)
+  val check : server -> exp -> bool option
+
+  (** Check if this expression is true on at least one assignment of the variables.ioserver
+      [None] is returned when the SMT solver didn't know *)
+  val check_sat : server -> exp -> bool option
+
+  (** Check if this expression is always true of always false.
+      [None] is returned if neither can be proven.
+
+      This results in two calls to the SMT solver. one with {!check} and one with {!check_sat} *)
+  val check_both : server -> exp -> bool option
+
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (** {1 Context less operation }
+      Those operations do not require a context to operate. They require not setup and
+      tear-down. They are standalone and fully automated.
+
+      On the other hand doing multiple one of those in sequence if much less efficient than
+      using properly the functions of previous section.
+  *)
+
+  (** Do a standalone simplification in it's own context. Do not need anything
+      to be already declared or any context to be opened.*)
+  val simplify_full : exp -> exp
+
+  (** Do a standalone check of whether the expression is implied by the list of hypothesis. *)
+  val check_full : ?hyps:exp list -> exp -> bool option
+
+  (** Do a standalone check of whether the set of assertion is sat *)
+  val check_sat_full : exp list -> bool option
+end
 
 module SimpContext = ContextCounter (struct
   let str = "Simplification"
 end)
 
-(** Simplify an expression using Z3 [simplify] command. This is a context-free simplification*)
-let simplify (exp : State.exp) : State.exp =
-  let serv = ensure_started_get () in
-  SimpContext.openc ();
-  declare_vars serv exp;
-  let res_exp =
-    exp |> AstManip.allow_mem
-    |> simplify_gen ~ppv:State.Var.pp ~vofs:State.Var.of_string
-    |> AstManip.expect_no_mem
-  in
-  SimpContext.closec ();
-  res_exp
-
-module SatContext = ContextCounter (struct
-  let str = "Check sat"
-end)
-
-(** Check that a set of assertion is satisfiable. If the answer is [None] then Z3 didn't know*)
-let check_sat asserts : bool option =
-  let serv = ensure_started_get () in
-  SatContext.openc ();
-  let declared = Hashtbl.create 100 in
-  List.iter (declare_vars ~declared serv) asserts;
-  List.iter (fun e -> send_smt ~ppv:State.Var.pp serv (Assert (e |> exp_conv))) asserts;
-  let a = request CheckSat in
-  SatContext.closec ();
-  match a with
-  | Error s -> Raise.fail "Z3 encountered an error on check_sat %d : %s" (SatContext.num ()) s
-  | Sat -> Some true
-  | Unsat -> Some false
-  | Unknown -> None
-  | _ -> Raise.fail "Z3 protocol error on check_sat %d" (SatContext.num ())
-
 module CheckContext = ContextCounter (struct
   let str = "Check"
 end)
 
-(** Check that a property always holds under a set of hypothesis ([hyps]).
+module Make (Var : Var) : S with type var = Var.t = struct
+  type var = Var.t
 
-    All unquantified variable in property are implicitly universally quantified.
+  module Exp = Exp.Make (Var)
 
-    If the answer is [None] then Z3 didn't know *)
-let check ?(hyps = []) property =
-  let serv = ensure_started_get () in
-  CheckContext.openc ();
-  let declared = Hashtbl.create 100 in
-  List.iter (declare_vars ~declared serv) hyps;
-  declare_vars ~declared serv property;
-  List.iter (fun e -> send_smt ~ppv:State.Var.pp serv (Assert (e |> exp_conv))) hyps;
-  send_smt ~ppv:State.Var.pp serv (Assert (property |> exp_conv |> Ast.Op.not));
-  let a = request CheckSat in
-  close_context ();
-  match a with
-  | Error s -> Raise.fail "Z3 encountered an error on check %d : %s" (CheckContext.num ()) s
-  | Sat -> Some false
-  | Unsat -> Some true
-  | Unknown -> None
-  | _ -> Raise.fail "Z3 protocol error on check %d" (CheckContext.num ())
+  type exp = Exp.t
 
-(*****************************************************************************)
-(*        Tests                                                              *)
-(*****************************************************************************)
+  module Htbl = Hashtbl.Make (Var)
 
-let _ = Tests.add_reset "Z3 stop" ensure_stopped
+  let declare_var_always serv var =
+    let decl = Ast.DeclareConst (var, Var.ty var |> AstManip.ty_allow_mem) in
+    send_smt serv ~ppv:Var.pp decl
 
-let _ =
-  Tests.add_test "Z3.direct" (fun () ->
-      let output ochannel =
-        Printf.fprintf ochannel "(display 42)\n";
-        flush ochannel
-      in
-      let input ichannel = input_line ichannel in
-      Cmd.io [|!CommonOpt.z3_ref; "-in"|] output input = "42")
+  let declare_var serv ~declared var =
+    if not @@ Htbl.mem declared @@ var then begin
+      declare_var_always serv var;
+      Htbl.add declared var ()
+    end
 
-let _ =
-  Tests.add_test "Z3" (fun () ->
-      start ();
-      stop ();
-      true)
+  let declare_vars serv ~declared exp = AstManip.exp_iter_var (declare_var serv ~declared) exp
 
-let _ =
-  Tests.add_test "Z3.simplify" (fun () ->
-      start ();
-      let exp = Ast.Op.(bits_smt "#x3" - bits_int ~size:4 1) in
-      let exp = simplify exp in
-      stop ();
-      match exp with Bits (v, _) -> BitVec.to_int v = 2 | _ -> false)
+  let simplify serv (e : Exp.t) : Exp.t =
+    e |> AstManip.allow_mem |> AstManip.allow_lets
+    |> Ast.simplify_smt ~flags:serv.config.simplify_opts
+    |> request ~ppv:Var.pp |> expect_exp |> AstManip.unfold_lets
+    |> AstManip.exp_conv_var Var.of_string
+    |> AstManip.expect_no_mem
+    |> ExpTyped.add_type ~ty_of_var:(Fun.const Var.ty)
 
-let _ =
-  Tests.add_test "Z3.check_sat" (fun () ->
-      start ();
-      let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
-      let res = check_sat [exp] in
-      stop ();
-      Option.value res ~default:false)
+  let simplify_decl serv ~declared (e : Exp.t) : Exp.t =
+    declare_vars serv ~declared e;
+    simplify serv e
 
-let _ =
-  Tests.add_test "Z3.check" (fun () ->
-      start ();
-      let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
-      let res = check exp in
-      stop ();
-      Option.value res ~default:false)
+  let simplify_full (e : Exp.t) : Exp.t =
+    let serv = ensure_started_get () in
+    SimpContext.openc ();
+    let declared = Htbl.create 10 in
+    let res = simplify_decl serv ~declared e in
+    SimpContext.closec ();
+    res
+
+  let send_assert serv (e : Exp.t) : unit =
+    e |> AstManip.allow_mem |> AstManip.allow_lets |> Ast.assert_smt |> send_smt serv ~ppv:Var.pp
+
+  let send_assert_decl serv ~declared (e : Exp.t) : unit =
+    declare_vars serv ~declared e;
+    send_assert serv e
+
+  let check serv (e : Exp.t) : bool option =
+    open_context "check";
+    send_assert serv (ExpTyped.not e);
+    let res = is_context_sat serv |> Opt.map not in
+    close_context ();
+    res
+
+  let check_full ?(hyps : Exp.t list = []) (e : Exp.t) : bool option =
+    let serv = ensure_started_get () in
+    CheckContext.openc ();
+    let declared = Htbl.create 100 in
+    List.iter (send_assert_decl ~declared serv) hyps;
+    send_assert_decl ~declared serv (ExpTyped.not e);
+    let res = is_context_sat serv |> Opt.map not in
+    CheckContext.closec ();
+    res
+
+  let check_sat serv (e : Exp.t) : bool option =
+    open_context "check_sat";
+    send_assert serv e;
+    let res = is_context_sat serv in
+    close_context ();
+    res
+
+  let check_sat_full (asserts : Exp.t list) : bool option =
+    let serv = ensure_started_get () in
+    CheckContext.openc ();
+    let declared = Htbl.create 100 in
+    List.iter (send_assert_decl ~declared serv) asserts;
+    let res = is_context_sat serv in
+    CheckContext.closec ();
+    res
+
+  let check_both serv (e : Exp.t) : bool option =
+    match check serv e with
+    | Some true as t -> t
+    | _ -> (
+        match check_sat serv e with Some false as f -> f | _ -> None
+      )
+end
+
+(*
+ * (\*****************************************************************************\)
+ * (\*        Tests                                                              *\)
+ * (\*****************************************************************************\)
+ *
+ * let _ = Tests.add_reset "Z3 stop" ensure_stopped
+ *
+ * let _ =
+ *   Tests.add_test "Z3.direct" (fun () ->
+ *       let output ochannel =
+ *         Printf.fprintf ochannel "(display 42)\n";
+ *         flush ochannel
+ *       in
+ *       let input ichannel = input_line ichannel in
+ *       Cmd.io [|!CommonOpt.z3_ref; "-in"|] output input = "42")
+ *
+ * let _ =
+ *   Tests.add_test "Z3" (fun () ->
+ *       start ();
+ *       stop ();
+ *       true)
+ *
+ * let _ =
+ *   Tests.add_test "Z3.simplify" (fun () ->
+ *       start ();
+ *       let exp = Ast.Op.(bits_smt "#x3" - bits_int ~size:4 1) in
+ *       let exp = simplify exp in
+ *       stop ();
+ *       match exp with Bits (v, _) -> BitVec.to_int v = 2 | _ -> false)
+ *
+ * let _ =
+ *   Tests.add_test "Z3.check_sat" (fun () ->
+ *       start ();
+ *       let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
+ *       let res = check_sat [exp] in
+ *       stop ();
+ *       Option.value res ~default:false)
+ *
+ * let _ =
+ *   Tests.add_test "Z3.check" (fun () ->
+ *       start ();
+ *       let exp = Ast.Op.(bits_int ~size:4 1 = bits_smt "#x1") in
+ *       let res = check exp in
+ *       stop ();
+ *       Option.value res ~default:false) *)
