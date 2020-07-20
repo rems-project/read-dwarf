@@ -1,0 +1,520 @@
+(*****************************************************************************)
+(** compute control-flow abstraction of instructions, from objdump and branch table data *)
+
+(*****************************************************************************)
+
+(** basic pp for control-flow abstraction                                    *)
+open AnalyseUtils
+
+open AnalyseElfTypes
+open AnalyseControlFlowTypes
+
+let pp_control_flow_instruction c =
+  match c with
+  | C_no_instruction -> "no instruction"
+  | C_plain -> "plain"
+  | C_ret -> "ret"
+  | C_eret -> "eret"
+  | C_branch (a, s) -> "b" ^ " " ^ pp_addr a ^ " " ^ s
+  | C_branch_and_link (a, s) -> "bl" ^ " " ^ pp_addr a ^ " " ^ s
+  | C_branch_cond (is, a, s) -> is ^ " " ^ pp_addr a ^ " " ^ s
+  | C_branch_register _ -> "br"
+  | C_smc_hvc s -> "smc/hvc " ^ s
+
+let pp_control_flow_instruction_short c =
+  match c with
+  | C_no_instruction -> "no instruction"
+  | C_plain -> "plain"
+  | C_ret -> "ret"
+  | C_eret -> "eret"
+  | C_branch _ -> "b"
+  | C_branch_and_link _ -> "bl"
+  | C_branch_cond (is, _, _) -> is
+  | C_branch_register _ -> "br"
+  | C_smc_hvc _ -> "smc/hvc"
+
+let pp_target_kind_short = function
+  | T_plain_successor -> "succ"
+  | T_branch -> "b"
+  | T_branch_and_link_call -> "bl"
+  | T_branch_and_link_call_noreturn -> "bl-noreturn"
+  | T_branch_and_link_successor -> "bl-succ"
+  | T_branch_cond_branch -> "b.cc"
+  | T_branch_cond_successor -> "b.cc-succ"
+  | T_branch_register -> "br"
+  | T_smc_hvc_successor -> "smc-hvc-succ"
+
+(*****************************************************************************)
+(**   find targets of each entry of a branch-table description file          *)
+
+(*****************************************************************************)
+
+let branch_table_target_addresses test filename_branch_table : (addr * addr list) list =
+  (* read in and parse branch-table description file *)
+  let branch_data :
+      (natural (*a_br*) * (natural (*a_table*) * natural (*size*) * string (*shift*) * natural))
+      (*offset*)
+      list =
+    match read_file_lines filename_branch_table with
+    | MyFail s ->
+        Warn.fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
+    | Ok lines ->
+        let parse_line (s : string) : (natural * (natural * natural * string * natural)) option =
+          match
+            Scanf.sscanf s " %x: %x %x %s %x #" (fun a_br a_table n shift a_offset ->
+                (a_br, a_table, n, shift, a_offset))
+          with
+          | (a_br, a_table, n, shift, a_offset) ->
+              Some
+                ( Nat_big_num.of_int a_br,
+                  ( Nat_big_num.of_int a_table,
+                    Nat_big_num.of_int n,
+                    shift,
+                    Nat_big_num.of_int a_offset ) )
+          | exception _ -> Warn.fatal "couldn't parse branch table data file line: \"%s\"\n" s
+        in
+        List.filter_map parse_line (List.tl (Array.to_list lines))
+  in
+
+  (* pull out .rodata section from ELF *)
+  let ((_, rodata_addr, bs) as _rodata : Dwarf.p_context * Nat_big_num.num * BytesSeq.t) =
+    Dwarf.extract_section_body test.elf_file ".rodata" false
+  in
+  (* chop into bytes *)
+  let rodata_bytes : char array = BytesSeq.to_array bs in
+
+  (* chop into 4-byte words - as needed for branch offset tables,
+     though not for all other things in .rodata *)
+  let rodata_words : (natural * natural) list = Dwarf.words_of_byte_sequence rodata_addr bs [] in
+
+  let read_rodata_b addr =
+    Elf_types_native_uint.natural_of_byte
+      rodata_bytes.(Nat_big_num.to_int (Nat_big_num.sub addr rodata_addr))
+  in
+  let read_rodata_h addr =
+    Nat_big_num.add (read_rodata_b addr)
+      (Nat_big_num.mul (Nat_big_num.of_int 256)
+         (read_rodata_b (Nat_big_num.add addr (Nat_big_num.of_int 1))))
+  in
+
+  let sign_extend_W n =
+    let half = Nat_big_num.mul (Nat_big_num.of_int 65536) (Nat_big_num.of_int 32768) in
+    let whole = Nat_big_num.mul half (Nat_big_num.of_int 2) in
+    if Nat_big_num.greater_equal n half then Nat_big_num.sub n whole else n
+  in
+
+  let read_rodata_W addr =
+    sign_extend_W
+      (Nat_big_num.add (read_rodata_b addr)
+         (Nat_big_num.add
+            (Nat_big_num.mul (Nat_big_num.of_int 256)
+               (read_rodata_b (Nat_big_num.add addr (Nat_big_num.of_int 1))))
+            (Nat_big_num.add
+               (Nat_big_num.mul (Nat_big_num.of_int 65536)
+                  (read_rodata_b (Nat_big_num.add addr (Nat_big_num.of_int 2))))
+               (Nat_big_num.mul (Nat_big_num.of_int 16777216)
+                  (read_rodata_b (Nat_big_num.add addr (Nat_big_num.of_int 3)))))))
+  in
+
+  let rec natural_assoc_opt n nys =
+    match nys with
+    | [] -> None
+    | (n', y) :: nys' -> if Nat_big_num.equal n n' then Some y else natural_assoc_opt n nys'
+  in
+
+  (* this is the evaluator for a little stack-machine language used in the hafnium.branch-table files to describe the access pattern for each branch table *)
+  (*
+   n          push the index into the table
+   s in 0..9  left-shift the stack head by 2^s
+   r          push the branch table-base address
+   o          push the branch table offset address
+   +          replace the top two elements by their sum
+   b          read byte from the branch table
+   h          read two bytes from the branch table
+   W          read four byte from the branch table and sign-extend
+                                                            *)
+  let rec eval_shift_expression (shift : string) (a_table : Nat_big_num.num)
+      (a_offset : Nat_big_num.num) (i : Nat_big_num.num) (stack : Nat_big_num.num list) (pc : int)
+      =
+    if pc = String.length shift then
+      match stack with
+      | [a] -> a
+      | _ -> Warn.fatal "eval_shift_expression terminated with non-singleton stack"
+    else
+      let command = shift.[pc] in
+      if command = 'n' then
+        (* push i *)
+        let stack' = i :: stack in
+        eval_shift_expression shift a_table a_offset i stack' (pc + 1)
+      else if Char.code command >= Char.code '0' && Char.code command <= Char.code '9' then
+        (* left shift head by 2^n *)
+        match stack with
+        | a :: stack' ->
+            let a' =
+              Nat_big_num.mul a
+                (Nat_big_num.pow_int_positive 2 (Char.code command - Char.code '0'))
+            in
+            eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
+        | _ -> Warn.fatal "eval_shift_expression shift empty stack"
+      else if command = 'r' then
+        (* push rodata branch table base address *)
+        let stack' = a_table :: stack in
+        eval_shift_expression shift a_table a_offset i stack' (pc + 1)
+      else if command = 'o' then
+        (* push offset address *)
+        let stack' = a_offset :: stack in
+        eval_shift_expression shift a_table a_offset i stack' (pc + 1)
+      else if command = '+' then
+        (* plus *)
+        match stack with
+        | a1 :: a2 :: stack' ->
+            let a' = Nat_big_num.add a1 a2 in
+            eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
+        | _ -> Warn.fatal "eval_shift_expression plus emptyish stack"
+      else if command = 'b' then
+        (* read byte from branch table *)
+        match stack with
+        | a :: stack' ->
+            let a' = read_rodata_b a in
+            eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
+        | _ -> Warn.fatal "eval_shift_expression b empty stack"
+      else if command = 'h' then
+        (* read halfword from branch table *)
+        match stack with
+        | a :: stack' ->
+            let a' = read_rodata_h a in
+            eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
+        | _ -> Warn.fatal "eval_shift_expression h empty stack"
+      else if command = 'W' then
+        (* read word from branch table and sign-extend *)
+        match stack with
+        | a :: stack' ->
+            let a' = read_rodata_W a in
+            eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
+        | _ -> Warn.fatal "eval_shift_expression W empty stack"
+      else Warn.fatal "eval_shift_expression unknown command"
+  in
+
+  let branch_table_target_addresses =
+    List.map
+      (function
+        | (a_br, (a_table, size, shift, a_offset)) ->
+            let rec f i =
+              if i > Nat_big_num.to_int size then []
+              else
+                let a_target =
+                  if shift = "2" then
+                    let table_entry_addr = Nat_big_num.add a_table (Nat_big_num.of_int (4 * i)) in
+                    match natural_assoc_opt table_entry_addr rodata_words with
+                    | None ->
+                        Warn.fatal "no branch table entry for address %s\n"
+                          (pp_addr table_entry_addr)
+                    | Some table_entry ->
+                        let a_target =
+                          Nat_big_num.modulus
+                            (Nat_big_num.add a_table table_entry)
+                            (Nat_big_num.pow_int_positive 2 32)
+                        in
+                        (* that 32 is good for the sign-extended negative 32-bit offsets we see
+                 in the old hafnium-playground-src branch tables *)
+                        a_target
+                  else eval_shift_expression shift a_table a_offset (Nat_big_num.of_int i) [] 0
+                in
+                a_target :: f (i + 1)
+            in
+            (a_br, f 0))
+      branch_data
+  in
+  branch_table_target_addresses
+
+(*****************************************************************************)
+(**  parse control-flow instruction asm from objdump                         *)
+
+(*****************************************************************************)
+
+(* hacky parsing of AArch64 assembly from objdump -d to identify control-flow instructions and their arguments *)
+
+let parse_addr (s : string) : natural = Scanf.sscanf s "%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
+
+let parse_target s =
+  match Scanf.sscanf s " %s %s" (fun s1 s2 -> (s1, s2)) with
+  | (s1, s2) -> Some (parse_addr s1, s2)
+  | exception _ -> None
+
+let parse_drop_one s =
+  match
+    Scanf.sscanf s " %s %n" (fun s1 n ->
+        let s' = String.sub s n (String.length s - n) in
+        (s1, s'))
+  with
+  | (_, s') -> Some s'
+  | exception _ -> None
+
+let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
+  (*   Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic (String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic))) s';flush stdout;*)
+  let c =
+    if List.mem mnemonic [".word"] then C_no_instruction
+    else if List.mem mnemonic ["ret"] then C_ret
+    else if List.mem mnemonic ["eret"] then C_eret
+    else if List.mem mnemonic ["br"] then C_branch_register mnemonic
+    else if
+      (String.length mnemonic >= 2 && String.sub mnemonic 0 2 = "b.")
+      || List.mem mnemonic ["b"; "bl"]
+    then
+      match parse_target s' with
+      | None -> raise (Failure ("b./b/bl parse error for: \"" ^ s ^ "\"\n"))
+      | Some (a, s) ->
+          if mnemonic = "b" then C_branch (a, s)
+          else if mnemonic = "bl" then C_branch_and_link (a, s)
+          else C_branch_cond (mnemonic, a, s)
+    else if List.mem mnemonic ["cbz"; "cbnz"] then
+      match parse_drop_one s' with
+      | None -> raise (Failure ("cbz/cbnz 1 parse error for: " ^ s ^ "\n"))
+      | Some s' -> (
+          match parse_target s' with
+          | None -> raise (Failure ("cbz/cbnz 2 parse error for: " ^ s ^ "\n"))
+          | Some (a, s) -> C_branch_cond (mnemonic, a, s)
+        )
+    else if List.mem mnemonic ["tbz"; "tbnz"] then
+      match parse_drop_one s' with
+      | None -> raise (Failure ("tbz/tbnz 1 parse error for: " ^ s ^ "\n"))
+      | Some s'' -> (
+          match parse_drop_one s'' with
+          | None -> raise (Failure ("tbz/tbnz 2 parse error for: " ^ s ^ "\n"))
+          | Some s''' -> (
+              match parse_target s''' with
+              | None -> raise (Failure ("tbz/tbnz 3 parse error for: " ^ s ^ "\n"))
+              | Some (a, s'''') ->
+                  (*                Printf.printf "s=%s mnemonic=%s s'=%s s''=%s s'''=%s s''''=%s\n"s mnemonic s' s'' s''' s'''';*)
+                  C_branch_cond (mnemonic, a, s'''')
+            )
+        )
+    else if List.mem mnemonic ["smc"; "hvc"] then C_smc_hvc s'
+    else C_plain
+  in
+  (*Printf.printf "%s\n" (pp_control_flow_instruction c);*)
+  c
+
+(*****************************************************************************)
+(**  compute targets of an instruction                                       *)
+
+(*****************************************************************************)
+
+let targets_of_control_flow_insn_without_index branch_table_targets (addr : natural)
+    (opcode_bytes : int list) (c : control_flow_insn) : (target_kind * addr * string) list =
+  let succ_addr = Nat_big_num.add addr (Nat_big_num.of_int (List.length opcode_bytes)) in
+  let targets =
+    match c with
+    | C_no_instruction -> []
+    | C_plain -> [(T_plain_successor, succ_addr, "")]
+    | C_ret -> []
+    | C_eret -> []
+    | C_branch (a, s) -> [(T_branch, a, s)]
+    | C_branch_and_link (a, s) ->
+        (* special-case non-return functions to have no successor target of calls *)
+        (* TODO: pull this from the DWARF attributes *)
+        if List.mem s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then
+          [(T_branch_and_link_call_noreturn, a, s)]
+        else
+          [(T_branch_and_link_call, a, s); (T_branch_and_link_successor, succ_addr, "<return>")]
+    | C_branch_cond (_is, a, s) ->
+        [(T_branch_cond_branch, a, s); (T_branch_cond_successor, succ_addr, "<fallthrough>")]
+    | C_branch_register _ ->
+        let addresses =
+          try List.assoc addr branch_table_targets
+          with Not_found ->
+            Warn.fatal
+              "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
+              (pp_addr addr)
+        in
+        List.mapi
+          (function
+            | i -> (
+                function
+                | a_target -> (T_branch_register, a_target, "<indirect" ^ string_of_int i ^ ">")
+              ))
+          addresses
+    | C_smc_hvc _ -> [(T_smc_hvc_successor, succ_addr, "<C_smc_hvc successor>")]
+  in
+
+  targets
+
+let targets_of_control_flow_insn index_of_address branch_table_targets (addr : natural)
+    (opcode_bytes : int list) (c : control_flow_insn) : target list =
+  (*Printf.printf "targets_of_control_flow_insn addr=%s\n" (pp_addr addr); flush stdout;*)
+  List.map
+    (function
+      | (tk, a'', s'') ->
+          (*       Printf.printf "%s" ("foo " ^ pp_addr addr ^ " " ^ pp_control_flow_instruction c ^ " " ^ pp_target_kind_short tk ^ " " ^ pp_addr a'' ^ " " ^ s'' ^ "\n");*)
+          (tk, a'', index_of_address a'', s''))
+    (targets_of_control_flow_insn_without_index branch_table_targets addr opcode_bytes c)
+
+let pp_opcode_bytes arch (opcode_bytes : int list) : string =
+  match arch with
+  | AArch64 -> String.concat "" (List.map (function b -> Printf.sprintf "%02x" b) opcode_bytes)
+  | X86 -> String.concat " " (List.map (function b -> Printf.sprintf "%02x" b) opcode_bytes)
+
+(*****************************************************************************)
+(**       pull disassembly out of an objdump -d file                         *)
+
+(*****************************************************************************)
+
+(* objdump -d output format, from GNU objdump (GNU Binutils for Ubuntu) 2.30: 
+x86:
+  400150:\t48 83 ec 10          \tsub    $0x10,%rsp
+  400160:	48 8d 05 99 0e 20 00 	lea    0x200e99(%rip),%rax        # 601000 <x>
+ 
+AArch64: 
+   10000:\t90000088 \tadrp\tx8, 20000 <x>
+   10004:	52800129 	mov	w9, #0x9                   	// #9
+ *)
+
+let objdump_line_regexp =
+  Str.regexp " *\\([0-9a-fA-F]+\\):\t\\([0-9a-fA-F ]+\\)\t\\([^ \t]+\\) *\\(.*\\)$"
+
+type objdump_instruction = natural * int list (*opcode bytes*) * string (*mnemonic*) * string
+
+(*args etc*)
+
+let parse_objdump_line arch (s : string) : objdump_instruction option =
+  let parse_hex_int64 s' =
+    try Scanf.sscanf s' "%Lx" (fun i64 -> i64)
+    with _ -> Warn.fatal "cannot parse address in objdump line %s\n" s
+  in
+  let parse_hex_int s' =
+    try Scanf.sscanf s' "%x" (fun i -> i)
+    with _ -> Warn.fatal "cannot parse opcode byte in objdump line %s\n" s
+  in
+  if Str.string_match objdump_line_regexp s 0 then
+    let addr_int64 = parse_hex_int64 (Str.matched_group 1 s) in
+    let addr = Nat_big_num.of_int64 addr_int64 in
+    let op = Str.matched_group 2 s in
+    let opcode_byte_strings =
+      match arch with
+      | AArch64 -> [String.sub op 0 2; String.sub op 2 2; String.sub op 4 2; String.sub op 6 2]
+      | X86 -> List.filter (function s' -> s' <> "") (String.split_on_char ' ' op)
+    in
+    let opcode_bytes = List.map parse_hex_int opcode_byte_strings in
+    let mnemonic = Str.matched_group 3 s in
+    let operands = Str.matched_group 4 s in
+    Some (addr, opcode_bytes, mnemonic, operands)
+  else None
+
+let parse_objdump_lines arch lines : objdump_instruction list =
+  List.filter_map (parse_objdump_line arch) (Array.to_list lines)
+
+let parse_objdump_file arch filename_objdump_d : objdump_instruction array =
+  match read_file_lines filename_objdump_d with
+  | MyFail s -> Warn.fatal "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
+  | Ok lines -> Array.of_list (parse_objdump_lines arch lines)
+
+(*****************************************************************************)
+(**  parse control-flow instruction asm from objdump and branch table data   *)
+
+(*****************************************************************************)
+
+let mk_instructions test filename_objdump_d filename_branch_table :
+    instruction array * (addr -> index) * (addr -> index option) * (index -> addr) =
+  let objdump_instructions : objdump_instruction array =
+    parse_objdump_file test.arch filename_objdump_d
+  in
+
+  (* TODO: check the objdump opcode_bytes against the ELF *)
+  let branch_table_targets : (addr * addr list) list =
+    branch_table_target_addresses test filename_branch_table
+  in
+
+  let (index_of_address, index_option_of_address) =
+    let tbl = Hashtbl.create (Array.length objdump_instructions) in
+    Array.iteri
+      (function
+        | k -> (
+            function (addr, _, _, _) -> Hashtbl.add tbl addr k
+          ))
+      objdump_instructions;
+    ( (function
+      | addr -> (
+          try Hashtbl.find tbl addr
+          with _ -> Warn.fatal "index_of_address didn't find %s\n" (pp_addr addr)
+        )),
+      function
+      | addr -> (
+          try Some (Hashtbl.find tbl addr) with _ -> None
+        ) )
+  in
+
+  let instructions =
+    Array.map
+      (function
+        | (addr, opcode_bytes, mnemonic, operands) ->
+            let c : control_flow_insn =
+              parse_control_flow_instruction ("objdump line " ^ pp_addr addr) mnemonic operands
+            in
+
+            let targets =
+              targets_of_control_flow_insn index_of_address branch_table_targets addr opcode_bytes
+                c
+            in
+            {
+              i_addr = addr;
+              i_opcode = opcode_bytes;
+              i_mnemonic = mnemonic;
+              i_operands = operands;
+              i_control_flow = c;
+              i_targets = targets;
+            })
+      objdump_instructions
+  in
+
+  let address_of_index k = instructions.(k).i_addr in
+
+  (instructions, index_of_address, index_option_of_address, address_of_index)
+
+(* pull out indirect branches *)
+let mk_indirect_branches instructions =
+  List.filter
+    (function
+      | i -> (
+          match i.i_control_flow with C_branch_register _ -> true | _ -> false
+        ))
+    (Array.to_list instructions)
+
+let pp_indirect_branches indirect_branches =
+  "\n************** indirect branch targets *****************\n"
+  ^ String.concat ""
+      (List.map
+         (function
+           | i ->
+               pp_addr i.i_addr ^ " -> "
+               ^ String.concat ","
+                   (List.map (function (_, a', _, s) -> pp_addr a' ^ "" ^ s ^ "") i.i_targets)
+               ^ "\n")
+         indirect_branches)
+
+let highlight c =
+  match c with
+  | C_no_instruction -> false
+  | C_plain | C_ret | C_eret | C_branch_and_link (_, _) | C_smc_hvc _ -> false
+  | C_branch (_, _) | C_branch_cond (_, _, _) | C_branch_register _ -> true
+
+(* highlight branch targets to earlier addresses*)
+let pp_target_addr_wrt (addr : natural) (c : control_flow_insn) (a : natural) =
+  (if highlight c && Nat_big_num.less a addr then "^" else "") ^ pp_addr a
+
+(* highlight branch come-froms from later addresses*)
+let pp_come_from_addr_wrt (addr : natural) (c : control_flow_insn) (a : natural) =
+  (if highlight c && Nat_big_num.greater a addr then "v" else "") ^ pp_addr a
+
+(*  
+let pp_branch_targets (xs : (addr * control_flow_insn * (target_kind * addr * int * string) list) list)
+    =
+  String.concat ""
+    (List.map
+       (function
+         | (a, c, ts) ->
+             pp_addr a ^ ":  " ^ pp_control_flow_instruction c ^ " -> "
+             ^ String.concat ","
+                 (List.map (function (tk, a', k', s) -> pp_addr a' ^ "" ^ s ^ "") ts)
+             ^ "\n")
+       xs)
+ *)

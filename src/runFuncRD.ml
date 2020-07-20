@@ -29,14 +29,14 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
   base "Computing entry state";
   let start = Init.state () |> State.copy ~elf |> abi.init in
   base "Loading %s for Analyse" elfname;
-  let analyse_test = Analyse.parse_elf_file elfname in
+  let analyse_test = AnalyseElf.parse_elf_file elfname in
   base "Analysing %s for Analyse" elfname;
-  let analyse_analysis = Analyse.mk_analysis analyse_test objdump_d branchtables in
+  let analyse_analysis = AnalyseCollected.mk_analysis analyse_test objdump_d branchtables in
   let print_analyse_instruction pc =
     let pc = Z.of_int pc in
     let index = analyse_analysis.index_of_address pc in
     let instr = analyse_analysis.instructions.(index) in
-    Analyse.pp_instruction Types.Ascii analyse_test analyse_analysis index instr
+    AnalysePp.pp_instruction Types.Ascii analyse_test analyse_analysis index instr
   in
   base "Entry state:\n%t" PP.(topi State.pp start);
   match func.sym with
@@ -89,7 +89,7 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
       Vec.iter
         (fun funcaddr ->
           let sym = Elf.SymTbl.of_addr elf.symbols funcaddr in
-          Analyse.pp_instruction_init ();
+          AnalysePp.pp_instruction_init ();
           Seq.iota_step_up ~start:funcaddr ~step:4 ~endi:(funcaddr + sym.size)
           |> Seq.iter (fun pc ->
                  Hashtbl.find_all instr_data pc
