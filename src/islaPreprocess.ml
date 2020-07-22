@@ -77,7 +77,7 @@ let simplify_trc (Trace events : rtrc) : rtrc =
         HashVector.set simplify_context i (Processed new_val);
         debug "New id is %d" new_val;
         let new_exp = simplify_exp exp in
-        debug "New exp is %t" PP.(fun o -> fprint o $ pp_exp new_exp);
+        debug "New exp is %t" PP.(top pp_exp new_exp);
         push_smt loc (DefineConst (new_val, new_exp));
         new_val
     | Processed v -> v

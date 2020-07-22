@@ -19,7 +19,7 @@ let nop_int : Int32.t = 0xd503201fl
 
 (** All the internal data that should be loaded *)
 type t = {
-  config : ConfigFile.Arch.t;
+  config : ConfigFile.ArchConf.t;
   reg_map : dwarf_reg_map;
   local_regs : bool Reg.Map.t;
   nop : BytesSeq.t;
@@ -284,7 +284,7 @@ let assemble_to_elf instr =
   let obj_file = Filename.concat (Filename.get_temp_dir_name ()) (Printf.sprintf "%d.o" num) in
   let elf_file = Filename.concat (Filename.get_temp_dir_name ()) (Printf.sprintf "%d.elf" num) in
   let prefix = ".global instr\n.type instr, @function\n.size instr,4\ninstr:" in
-  Cmd.output_string [|assembler; "-g"; "-o"; obj_file|] (prefix ^ instr ^ "\n");
-  Cmd.cmd [|linker; obj_file; "--entry=instr"; "-o"; elf_file|];
+  Cmd.call_send_string [|assembler; "-g"; "-o"; obj_file|] (prefix ^ instr ^ "\n");
+  Cmd.call [|linker; obj_file; "--entry=instr"; "-o"; elf_file|];
   Sys.remove obj_file;
   elf_file

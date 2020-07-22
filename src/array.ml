@@ -1,7 +1,10 @@
-(** This module is for extending the [Array] module of the standard library *)
+(** This module is for extending the
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Array.html}[Array]}
+    module of the standard library *)
 
 include Stdlib.Array
 
+(** Mutate the array by replacing each value [x] by [f x] *)
 let map_mut f arr =
   let len = length arr in
   for i = 0 to len - 1 do

@@ -1,0 +1,19 @@
+{0 Configuration}
+
+{1 Compile time configuration}
+
+From a module point of view, compile time configuration is provided from the
+{!Config} module. In pratice it is pulled from a [config.ml] at the root, and
+from [default_config.ml] as a fallback.
+
+Furthermore, since {!Config} define the {!Config.Arch} module that is used by
+the {!Arch} module, any module before {!Arch} in the dependency chain cannot use
+{!Config}. To solve that problem, there is also {!ConfigPre} that is exactly the
+same as {!Config} but without the {!Config.Arch} module.
+
+{1 Runtime configuration}
+
+Runtime configuration is loaded from toml file at runtime and handled by the
+{!ConfigFile} module. The location of the file (and the side effect of loading)
+is determined by the {!CommonOpt.config} option. The various fields can then be
+accessed by {!ConfigFile.acc}.

@@ -173,6 +173,7 @@ let fragment_at ~(dwarf : Dw.t) ~fenv ~size (frag : Ctype.fragment) at : Ctype.t
   | Single t -> Ctype.type_at ~env ~size t at
   | DynArray t ->
       let at = at mod Ctype.sizeof t in
+      (* TODO fix for padding *)
       Ctype.type_at ~env ~size t at
   | DynFragment i ->
       let frag = Fragment.Env.get fenv i in

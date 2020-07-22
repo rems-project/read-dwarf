@@ -6,9 +6,9 @@ open Cmdliner
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Option helper functions }
+(** {1 Command line option helper functions }
 
-    Some Cmdliner helper functions.
+    Some [Cmdliner] helper functions.
 *)
 
 (** Return a unit [Term] that evaluates the input term and
@@ -53,8 +53,14 @@ let exits =
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Config options } *)
+(** {1 Config options }
 
+    This section is to manage the configuration file.
+    See {!ConfigFile} to see how the configuration file works
+*)
+
+(** Passing [--config=FILE] on the CLI will setup the {!ConfigFile} module to
+    load that file as the configuration file.*)
 let config =
   let doc =
     Printf.sprintf "Overrides the default location of the configuration file (%s)"
@@ -113,26 +119,40 @@ let z3 =
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Logging options } *)
+(** {1:logs Logging options }
+
+    This section provide option to control the {!Logs} output.*)
 
 let quiet_ref = ref false
 
+(** Passing [--quiet] on the CLI will disable all {!Logs.level} except {!Logs.Base}
+    for all modules *)
 let quiet =
   let doc = "Remove all errors and warnings from the output" in
   Arg.(value & flag & info ["q"; "quiet"] ~doc)
 
+(** Passing [-v] or [--verbose] on the CLI will enable {!Logs.Info} level logs.
+    If passed twice of more, it will also enable {!Logs.Debug} logs.
+
+    This is for all modules *)
 let verbose =
   let doc = "Log more stuff. When set twice, output all debugging logs" in
   Arg.(value & flag_all & info ["v"; "verbose"] ~doc)
 
+(** Passing [--info=MODULE] on the CLI will set that precise module
+    at log level {!Logs.Info} *)
 let infoopt : string list Term.t =
   let doc = "Set a precise OCaml module in info-logging mode" in
   Arg.(value & opt_all string [] & info ["info"] ~doc ~docv:"MODULE")
 
+(** Passing [--debug=MODULE] on the CLI will set that precise module
+    at log level {!Logs.Debug} *)
 let debug =
   let doc = "Set a precise OCaml module in debug-logging mode" in
   Arg.(value & opt_all string [] & info ["debug"] ~doc ~docv:"MODULE")
 
+(** Passing [--stdout-level=LEVEL] on the CLI will redirect all log message
+    below or equal to that level to [stdout] instead of [stderr] *)
 let stdout_level =
   let doc = "Set the log level below which the message go on stdout" in
   Arg.(value & opt Logs.level_conv Base & info ["stdout-level"] ~doc ~docv:"LEVEL")

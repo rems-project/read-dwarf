@@ -1,0 +1,75 @@
+{0 Utility}
+
+{1 Standard library extensions}
+
+- {!Opt}: extension of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Option.html}
+    [Stdlib.Option]}.
+- {!Array}: extension of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Array.html}
+    [Stdlib.Array]}
+- {!List}: extension of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html}
+    [Stdlib.List]}
+- {!Fun}: extension of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Fun.html}[Stdlib.Fun]}
+- {!Pair}: A module to lift operation over pairs
+- {!Seq}: extension of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Seq.html}[Stdlib.Seq]}
+- {!String}: extension of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/String.html}
+    [Stdlib.String]}
+
+{1 Bits and Bytes manipulation}
+
+- {!Bits}: Intends to provide the same interface as
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Bytes.html}
+    [Stdlib.Bytes]}
+    but at the individual bit level. The external type is explicitely [bytes].
+- {!IntBits}: Same interface as {!Bits} but on an integer. This provides
+    understandable ways of moving set of bits around directly in integers
+    without having to think about shifts.
+- {!BitVec}: Concrete bitvector library based on [zarith].
+- {!BytesSeq}: Implement a view over a [bytes]. This view can be restricted in
+    a pure interface without requiring to copy the [bytes].
+- {!RngMap}: Map structure that allow to index value by range of addresses.
+    You can bind a whole interval of addresses to a value.
+
+{1 Resizable array and related data structures}
+
+- {!Vec}: Main resizable array module. Layer on top of the [res] library.
+- {!FullVec}: Conceptually a array/vector that binds all the integers to values.
+    It's implemented by a vector and a generator.
+- {!HashVector}: A Data structure to use a vector as small int to something
+    hashtable. Implemented as a ['a option Vec.t]
+- {!IdMap}: A hashmap that numbers the bindings such that each binding can be
+    identified by either the key of the integer identifier. Useful for doing
+    symbol numbering for example.
+
+{1 Weak data structures}
+
+This module is about addition to the
+{{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Weak.html}[Stdlib.Weak]}
+module of the standard library. Those are data structures that do not retain
+GC ownership of their values, which mean the GC can delete them at any moment.
+
+- {!WeakPtr}: A single weak pointer whose pointee can be garbage collected if
+    nothing else points to it.
+- {!WeakMap}: A Hash map which own the keys but not the values.
+    When a value is cleared by the GC, the binding dissapears entirely from the
+    map.
+
+{1 Exception management}
+
+- {!Protect}: An improvement over
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Fun.html#VALprotect}
+    [protect]}.
+- {!Raise}: Convenience function to raise and manage exception in an easier way.
+
+{1 File and socket management}
+
+- {!Files}: Various IO facilities around IO channel and file management
+- {!Cmd}: Library for easily calling external programs and also for keeping them
+    running as background servers.
+- {!Cache}: Generic library to implement a caching system in the form of a
+    persistent hash table structure on disk.

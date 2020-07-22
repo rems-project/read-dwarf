@@ -40,7 +40,7 @@ let cons (v : 'a) (s : 'a t) () = Seq.Cons (v, s)
 (** Applies the specified function to the elements of the sequence in order,
     and returns the first result of the form [Some v], or [None] if no such result was returned.
 
-    See {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html#VALfind_map} List.find_map}
+    See {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html#VALfind_map} [List.find_map]}
 *)
 let rec find_map f seq =
   match seq () with

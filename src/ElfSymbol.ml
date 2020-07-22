@@ -52,7 +52,7 @@ let of_linksem segs (name, (typ, size, addr, data, _)) =
   let writable = segment.write in
   let data =
     data
-    |> Opt.value_fun ~default:(fun () -> Segment.get_addr (BytesSeq.sub_getter size) segment addr)
+    |> Opt.value_fun ~default:(fun () -> Segment.get_addr (BytesSeq.getbs ~len:size) segment addr)
   in
   { name; other_names = []; typ; size; addr; data; writable }
 
@@ -86,5 +86,5 @@ let pp_raw sym =
            ("addr", ptr sym.addr);
            ("size", ptr sym.size);
            ("writable", bool sym.writable);
-           ("data", BytesSeq.pp32le sym.data);
+           ("data", BytesSeq.ppby ~by:4 sym.data);
          ])

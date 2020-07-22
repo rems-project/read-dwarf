@@ -1,6 +1,10 @@
-(** This module extends the base OCaml API of Option.
+(** This module extends the base OCaml API of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Option.html}[Option]}.
 
-    In particular, it adds monadic bindings and option merging.
+    In particular, it adds:
+    - Monadic bindings
+    - Option merging
+    - Option lifting of list and pairs.
 *)
 
 include module type of Stdlib.Option
@@ -11,14 +15,13 @@ include module type of Stdlib.Option
 (** {1 Utility } *)
 
 (** Take the value in the first argument if there is one, otherwise
-    take the value in the second argument, otherwise None *)
+    take the value in the second argument, otherwise [None] *)
 val take_first : 'a option -> 'a option -> 'a option
 
-(** Take_first as an operator:
+(** {!take_first} as an operator:
 
-    Behave like lazy or but keep the value of the option that gave true.
-    This is associative
-*)
+    Behave like boolean or but keep the value of the first option that gave true.
+    This is associative but obviously not commutative.*)
 val ( ||| ) : 'a option -> 'a option -> 'a option
 
 (** Take the value of the first [Some] in the list. returns [None] if all the option were [None] *)
@@ -29,7 +32,7 @@ val take_all : 'a option -> 'b option -> ('a * 'b) option
 
 (** Take_all as an operator:
 
-    Behave like lazy and but keep all the value of the options that gave true.
+    Behave like boolean and but keep all the value of the options
     This is not associative because at type level (a * b) * c is not a * (b * c).
     Using monadic bindings is recommended for more that 2 operands.*)
 val ( &&& ) : 'a option -> 'b option -> ('a * 'b) option
@@ -54,10 +57,10 @@ val for_all : ('a -> bool) -> 'a option -> bool
 (** [exists p o = fold ~none:false ~some:p]*)
 val exists : ('a -> bool) -> 'a option -> bool
 
-(** Return the second argument if the first is true, otherwise [None] *)
+(** Return the second argument if the first is [true], otherwise [None] *)
 val guard : bool -> 'a -> 'a option
 
-(** Return the second argument if the first is false, otherwise [None] *)
+(** Return the second argument if the first is [false], otherwise [None] *)
 val guardn : bool -> 'a -> 'a option
 
 (*****************************************************************************)
@@ -72,12 +75,12 @@ val ( let+ ) : 'a option -> ('a -> 'b) -> 'b option
 
 (** Applicative and.
 
-    [let+ x = mx and y = my in e] give Some e if both mx and my were somes. *)
+    [let+ x = mx and+ y = my in e] give [Some e] if both [mx] and [my] were [Some]s. *)
 val ( and+ ) : 'a option -> 'b option -> ('a * 'b) option
 
 (** Iter applicative let.
 
-    [let+! x = mx in e] runs e if mx contained a value i.e Option.iter (fun x -> e) mx *)
+    [let+! x = mx in e] runs [e] if [mx] contained a value i.e [Option.iter (fun x -> e) mx] *)
 val ( let+! ) : 'a option -> ('a -> unit) -> unit
 
 (** Monadic let: [let* x = mx in e] is [Option.bind mx (fun x -> e)] *)
@@ -91,7 +94,11 @@ val ( and* ) : 'a option -> 'b option -> ('a * 'b) option
 (*****************************************************************************)
 (** {1 Lists } *)
 
-(** Commute the list and the option. If the list contains one [None] then the result is [None] *)
+(** Commute the list and the option. If the list contains one [None] then the result is [None].
+    If you want to keep all the [Some] value, use {!List.filter_map}.
+
+    This can be condidered as a list-wide {!take_all}. A list-wide {!take_first} would be
+    {!List.find_map} *)
 val lift : 'a option list -> 'a list option
 
 (** The same as a List.map and then a {!lift} *)
@@ -102,7 +109,7 @@ val map_lift : ('a -> 'b option) -> 'a list -> 'b list option
 (*****************************************************************************)
 (** {1 Pairs } *)
 
-(** Lift a pair of options to an option of pair *)
+(** Lift a pair of options to an option of pair. It is the same as {!take_all}. *)
 val lift_pair : 'a option * 'b option -> ('a * 'b) option
 
 (** Unlift an option of pair to a pair of options *)

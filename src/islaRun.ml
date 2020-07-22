@@ -36,7 +36,7 @@ type value_context = State.exp HashVector.t
 let get_var l vc i =
   match HashVector.get_opt vc i with
   | Some exp -> exp
-  | None -> run_error l "v%d is not bound in %t" i (PP.tos (PPI.hvector State.Exp.pp) vc)
+  | None -> run_error l "v%d is not bound in %t" i (PP.tos (HashVector.pp State.Exp.pp) vc)
 
 (** Convert an {!Isla} expression to an {!Ast} by substituing
     all free variable with the bound expression in the {!value_context}.

@@ -7,11 +7,11 @@
 module Int = IntBits
 
 (** [check_index length i] Check that the index [i] is valid to index an bytes of length [length].
-    Throw {!invalid_argument} if not *)
+    Throw [Invalid_argument] if not *)
 val check_index : int -> int -> unit
 
 (** [check_range length i l] Check that the range [\[i;i+l)] is inside a bytes of length [length].
-    Throw {!invalid_argument} if not *)
+    Throw [Invalid_argument] if not *)
 val check_range : int -> int -> int -> unit
 
 (** Gives the length of a [bytes] in bits *)
@@ -21,7 +21,7 @@ val length : bytes -> int
 val create : int -> bytes
 
 (** Create a [bytes] large enough to store the specified amount of bits and
-    initialize them as the boolean *)
+    initialize them as specified by the boolean *)
 val make : int -> bool -> bytes
 
 (** Unsafe version of {!get} *)
@@ -51,8 +51,8 @@ val setb : bytes -> int -> bool -> unit
 (** Unsafe version of {!blit_to_int} *)
 val unsafe_blit_to_int : bytes -> int -> Int.t -> int -> int -> Int.t
 
-(** [blit_to_int src isrc dest idest len] blits the bits in range [\[isrc;isrc+len)] or src
-    to the range [\[idest;idest + len)] of dest and returns the result.
+(** [blit_to_int src isrc dest idest len] blits the bits in range [\[isrc;isrc+len)] of [src]
+    to the range [\[idest;idest + len)] of [dest] and returns the result.
     See {!unsafe_blit_to_int}.*)
 val blit_to_int : bytes -> int -> Int.t -> int -> int -> Int.t
 

@@ -1,3 +1,5 @@
+(* The documentation is in the mli file *)
+
 open Logs.Logger (struct
   let str = __MODULE__
 end)
@@ -8,7 +10,7 @@ end)
 
    The normalized representation is between -2^(size -1) and 2^(size -1) -1.
 *)
-type t = { z : Z.t; size : int }
+type t = { size : int; z : Z.t }
 
 exception SizeMismatch of int * int
 

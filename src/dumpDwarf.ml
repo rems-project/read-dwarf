@@ -9,7 +9,7 @@ open CommonOpt
 
 let dump_dwarf file =
   let dw = Dw.of_file file in
-  PP.(println $ Dw.pp_raw dw)
+  PP.(println @@ Dw.pp_raw dw)
 
 let elf =
   let doc = "ELF file whose dwarf is to be dumped" in

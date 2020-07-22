@@ -63,5 +63,5 @@ let pp ?(name = "") ~keys ~vals m =
   PP.(
     mapping name
     @@ map_to_list
-         (fun key id value -> (group (prefix 2 1 $ int id ^^ dot $ keys key), vals value))
+         (fun key id value -> (group (prefix 2 1 (int id ^^ dot) (keys key)), vals value))
          m)

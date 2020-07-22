@@ -1,4 +1,6 @@
-(** More functional combinator *)
+(** More functional combinator.
+    This module extends the base OCaml API of
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Fun.html}[Fun]}.*)
 
 include Stdlib.Fun
 

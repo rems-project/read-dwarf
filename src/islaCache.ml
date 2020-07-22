@@ -55,13 +55,13 @@ module Opcode (*: Cache.Key *) = struct
         if BytesSeq.length bs < BytesSeq.int_bytes then ()
         else
           let keyfile = Cache.to_keyfile file in
-          BytesSeq.write keyfile bs
+          Files.write_bin BytesSeq.output keyfile bs
 
   let of_file hash file =
     if hash = 0 then None
     else if IntBits.get hash IntBits.back then
       let keyfile = Cache.to_keyfile file in
-      Some (BytesSeq.read keyfile)
+      Some (Files.read BytesSeq.input keyfile)
     else
       let data = IntBits.sub hash 0 (IntBits.back - 3) in
       let size = IntBits.sub hash (IntBits.back - 3) 3 in
@@ -99,7 +99,7 @@ end
     The Epoch also include the digest of the Isla configuration. Any change of configuration
     will wipe out the cache.
 *)
-let epoch = 3
+let epoch = 4
 
 module Epoch (*: Cache.Epoch*) = struct
   type t = string * int * string (* config digest *)

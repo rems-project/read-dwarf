@@ -1,0 +1,192 @@
+{0 read-dwarf }
+
+read-dwarf is badly named C translation validator that happen to read and use
+DWARF information as it's main source of information on the analysed binary
+files.
+
+This a documentation of the internal code of read-dwarf.
+
+{1 Overview }
+
+Currently read-dwarf has not yet the actual infrastructure to find a simulation
+relation between two binaries, however it already has all the necessary
+infrastructure to run symbolicaly a binaries through any control flow path, and
+infer the C type along the way. The exact C-like type-system used is a bit more
+advanced than C.
+
+I'll attempts here to give a pipeline overview of what happens when you want to
+run a function symbolically. All of this is done by the {!RunFunc} module that
+provide a CLI to run a single function symbolically.
+
+ - The binary is parsed by the linksem library using the {!Elf} and {!Dw}
+   modules. In this phase C-Type linking happens as described in
+   {!Ctype.ctyplink}
+ - The function name is found and used in the {!DwFunc} format.
+ - The API and ABI of the function are computed according to the current
+   achitecture. The generic {!Architecture} interface is defined in {!ArchSig} but
+   the only implementation is in {!AArch64}. This is all centralized in {!Arch}
+ - If we suppose the instruction caches are empty, the {!IslaServer} will be
+   started and used by {!Init} to fetch the machine initial {!State}. This will
+   call [isla] to get the trace of the [nop] instruction. See {!IslaPipeline}
+ - The function entry {!State} can be computed from the machine initial state
+   and the ABI.
+ - We load the symbolic execution engine {!Runner} with the DWARF information
+   and initialize it.
+ - We create a {!Block} which is a piece of code that can run a delimited block
+   of code. We give to it the end conditions provided by the command line like
+   potential breakpoints. Then we run it.
+ - The {!Block} call the {!Runner} on each instruction as need to move forward
+   and build the tree ({!StateTree}) of possible states. For each instruction,
+   the whole {!InstructionPipeline} is run to generate a set of {!Trace}s and
+   this set of traces is run on a {!State} to get the next state. 
+   See {!SymbolicExecution}
+ - The we pretty print the results using {!PP} and {!Logs}. See {!Printing}
+
+
+{1 Dependencies}
+
+Here is a list of the dependency library that are used,
+and links to their documentations (for those what have one)
+
+- [linksem] : ELF and DWARF Parser and analyzer
+- [isla-lang]: Isla traces parser
+- {{:https://erratique.ch/software/cmdliner/doc/Cmdliner}[cmdliner]}:
+  Library to parse the command line. It's open in any module in {!cli}
+- {{:http://cambium.inria.fr/~fpottier/pprint/doc/pprint/PPrint/index.html}
+   [pprint]}: Pretty-printing library. Use it via the {!PP} module.
+- {{:https://antoinemine.github.io/Zarith/doc/latest/index.html}[zarith]}:
+  Big integer library. Used by [linksem] and all [linksem] interacting modules, and by
+  {!BitVec}.
+- {{:http://mmottl.github.io/res/api/res/}[res]}: Resizable array.
+  Use it via the {!Vec} module
+- {{:http://ocamlgraph.lri.fr/doc/}[ocamlgraph]}: Graph library.
+  Only used in {!Analyse} for now, may be used elsewhere later.
+- {{:http://ocaml-toml.github.io/To.ml/} [toml]} Toml Parsing library. Only used
+  in {!Config} to parse the config file. It should not be used elsewhere.
+- {{:https://erratique.ch/software/uutf/doc/Uutf} [uutf]} : Unicode library. 
+  Only used to do UTF-8 character folding in {!Analyse}. Those utility function
+  should probably move to {!String} to be accessible elsewhere.
+
+
+{1 Detailled pages}
+
+Here is a list of top level pages that explain a subgroup of functionality:
+
+ - {!Utility}: List of modules that provide generic functionality
+ - {!Printing}: Generic information about printing and logging
+ - {!Configuration}: Configuration organisation
+ - {!SymbolicExpressions}: All module related to symbolic expression manipulation
+ - {!Architecture}: All modules related to achitecture representation
+ - {!InstructionPipeline}: All module related to instruction semantics processing.
+ - {!BinaryAnalysis}: All module about reading ELF and DWARF information
+ - {!TypeInference}: All modules about the C type system and type inference.
+ - {!SymbolicExecution}: All module related to top-level symbolic execution.
+ - {!CLI}: All the modules defining the command line interfaces.
+
+{1 Alphabetical index}
+
+Here is an alphabetical list of all modules. Use [make list] to regenerate.
+
+{!modules:
+AArch64
+Analyse
+Arch
+ArchSig
+ArchType
+Array
+Ast
+AstDef
+AstLexer
+AstManip
+AstOtt
+AstParser
+AstParser_pp
+BB
+BitVec
+Bits
+Block
+BytesSeq
+Cache
+Cmd
+CommonOpt
+ConcreteEval
+Config
+ConfigFile
+ConfigPre
+Counter
+Ctype
+Debug
+DumpDwarf
+DumpSym
+Dw
+DwFunc
+DwVar
+Elf
+ElfFile
+ElfSymTable
+ElfSymbol
+Exp
+ExpTyped
+Files
+Fragment
+FullVec
+Fun
+Globals
+HashVector
+IdMap
+Init
+Instr
+IntBits
+Isla
+IslaCache
+IslaConv
+IslaManip
+IslaPreprocess
+IslaRun
+IslaServer
+IslaTest
+IslaType
+List
+Loc
+Logs
+Opt
+PP
+PPExp
+PPI
+Pair
+Protect
+Raise
+ReadDwarf
+Reg
+RngMap
+RunBB
+RunBlock
+RunFunc
+RunFuncRD
+RunInstr
+Runner
+Segment
+Seq
+Smt
+SmtIntro
+State
+StateSimplify
+StateTree
+String
+Sums
+SymbolicBytes
+SymbolicFragment
+Tests
+Trace
+TraceCache
+TraceContext
+TraceCtype
+TraceRun
+Types
+Value
+Vec
+Warn
+WeakMap
+WeakPtr
+Z3}
+

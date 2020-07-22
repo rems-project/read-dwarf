@@ -36,7 +36,7 @@ let from_binary (code : BytesSeq.t) : t =
     in
     code |> IslaCache.get_traces |> get_normal
   in
-  let main = code |> BytesSeq.to_list32bs |> List.map process |> Array.of_list in
+  let main = code |> BytesSeq.to_listbs ~len:4 |> List.map process |> Array.of_list in
   { main }
 
 (* Sequence of the second test:

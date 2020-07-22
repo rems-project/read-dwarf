@@ -1,0 +1,22 @@
+{0 Instruction Pipeline}
+
+This page describe the whole instruction pipeline from how isla is called, to
+how to run them on {!State}s.
+
+{1 Isla}
+
+{2 Calling isla}
+
+{2 Preprocessing of isla traces}
+
+{2 Isla traces caching}
+
+{2 Typing and register learning}
+
+{2 Running Isla traces directly}
+
+{1 Trace and Instr}
+
+{2 New trace format}
+
+{2 Instruction representation}

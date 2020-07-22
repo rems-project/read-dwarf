@@ -74,21 +74,20 @@ let type_manyop l (m : manyop) ltl : ty =
   tassert l "Manyops must have at least 1 element" (ltl != []);
   match m with
   | And | Or ->
-      List.iter (expect_bool PP.(sprintc $ !^"inside " ^^ pp_manyop m)) ltl;
+      List.iter (expect_bool PP.(sprintc @@ !^"inside " ^^ pp_manyop m)) ltl;
       Ty_Bool
   | Bvmanyarith _ ->
-      let sizes = List.map (expect_bv PP.(sprintc $ !^"inside " ^^ pp_manyop m)) ltl in
+      let sizes = List.map (expect_bv PP.(sprintc @@ !^"inside " ^^ pp_manyop m)) ltl in
       let size = List.hd sizes in
       tassert l
         PP.(
-          sprintc
-          $ !^"All bitvectors in " ^^ pp_manyop m
-            ^^ !^" must have same size but I got:"
-            ^^ space ^^ list int sizes)
+          sprintc @@ !^"All bitvectors in " ^^ pp_manyop m
+          ^^ !^" must have same size but I got:"
+          ^^ space ^^ list int sizes)
         (List.for_all (( = ) size) sizes);
       Ty_BitVec size
   | Concat ->
-      let sizes = List.map (expect_bv PP.(sprintc $ !^"inside " ^^ pp_manyop m)) ltl in
+      let sizes = List.map (expect_bv PP.(sprintc @@ !^"inside " ^^ pp_manyop m)) ltl in
       Ty_BitVec (List.fold_left ( + ) 0 sizes)
 
 let rec type_valu loc (cont : type_context) : valu -> (Reg.Path.t * Reg.ty) list =

@@ -44,7 +44,7 @@ let of_dwarf dwarf = of_elf ~dwarf dwarf.elf
 let load_sym runner (sym : Elf.Sym.t) =
   info "Loading symbol %s in %s" sym.name runner.elf.filename;
   Vec.add_one runner.funcs sym.addr;
-  let opcode_list = BytesSeq.to_list32bs sym.data in
+  let opcode_list = BytesSeq.to_listbs ~len:4 sym.data in
   List.iteri
     (fun index code ->
       let addr = sym.addr + (4 * index) in

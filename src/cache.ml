@@ -17,7 +17,10 @@ end)
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Utility } *)
+(** {1 Utility }
+
+    This section is not part of the external API,
+    but creating an mli file here seemed needlessly annoying.*)
 
 (** The name of the read-dwarf cache. [.rdcache] for now. *)
 let base_dir = ".rdcache"
@@ -46,7 +49,7 @@ let find_dir () : string =
       Unix.mkdir new_cache 0o777;
       new_cache
 
-(** Remove a directory and all it's content.contents
+(** Remove a directory and all it's content.
 
     TODO: Make that Windows friendly
 
@@ -426,7 +429,7 @@ module type SingleS = sig
   val clear : t -> unit
 end
 
-(** The function to make a single cached value. This do not support epochs (Yet) *)
+(** The functor is to make a single cached value. This do not support epochs (Yet) *)
 module Single (Value : Value) : SingleS with type value = Value.t = struct
   type value = Value.t
 
@@ -464,11 +467,13 @@ module Cmd = struct
   open Cmdliner
   open CommonOpt
 
+  (** This module provide a int -> string cache for testing pruposes.
+      It can be tested with [read-dwarf cache --test] *)
   module Test = struct
     module Key : Key with type t = int = struct
       type t = int
 
-      (* Artificially create collision for testing purposes *)
+      (* Artificially create collisions for testing purposes *)
       let hash i = i mod 10
 
       let equal i j = i = j
@@ -517,12 +522,13 @@ module Cmd = struct
     Arg.(value & pos 0 (some string) None & info [] ~docv:"CACHE_NAME" ~doc)
 
   let fake =
-    let doc = "Fake the caching and do not write or read anything from disk" in
+    let doc = "With --test: Fake the caching and do not write or read anything from disk" in
     Arg.(value & flag & info ["f"; "fake"] ~doc)
 
+  (** The cache operataion to run *)
   type operation = CLEAR | LIST | TEST
 
-  (** Input flag to mode conversion *)
+  (** Input flags to mode conversion *)
   let op_f2m clear list test : operation Term.ret =
     match (clear, list, test) with
     | (false, false, false) ->
@@ -534,6 +540,7 @@ module Cmd = struct
 
   let operation_term = Term.(ret (const op_f2m $ clear $ list $ test))
 
+  (** The testing mini command line to test the {!Test} cache *)
   let test fake =
     let c = Test.Cache.make ~fake "test" () in
     let sing = Test.Single.make ~fake "testsingle" in
@@ -569,6 +576,7 @@ module Cmd = struct
       print_newline ();
       print_endline "Goodbye and good luck on your future testing adventures!"
 
+  (** Do the caching operation [op] *)
   let dostuff op all arg fake =
     match (op, arg) with
     | (CLEAR, Some c) -> if all then clear_all_caches () else clear_cache c

@@ -1,7 +1,6 @@
 (** This module provides a representation of a complex block of code.
 
-    The block must stay inside a single symbol and the end of the block is decided by an
-    arbitrary predicate on the pc
+    The end of the block is decided by an arbitrary predicate on the pc
 
 *)
 

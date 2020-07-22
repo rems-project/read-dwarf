@@ -1,15 +1,47 @@
-(** Extension of the list module of the standard library *)
+(** Extension of the
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html}[List]}
+    module of the standard library.
+
+    It port forward function of ocaml 4.10 among others.
+
+
+*)
 
 include Stdlib.List
 
+(** [repeat n a] return a list of [n] [a]s. *)
 let rec repeat n a = if n <= 0 then [] else a :: repeat (n - 1) a
 
+(** Set the nth value to the new value and return the modified list *)
+let rec set_nth l n v =
+  match l with
+  | [] -> Raise.inv_arg "List.set_nth: invalid index"
+  | _ :: l when n = 0 -> v :: l
+  | a :: l -> a :: set_nth l (n - 1) v
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Iterators } *)
+
+(** Same as fold_left, but do not require a start element, instead the function
+    start with the first element of the list:
+    [fold_left_same f [b1; ...; bn] = f (... (f (f b1 b2) ...) bn].
+
+    It will fail with [Invalid_argument] if the list is empty.
+
+    It can also be written as [fold_left_same f l = fold_left f (hd l) (tl l)] *)
 let fold_left_same f l =
   match l with a :: l -> fold_left f a l | [] -> Raise.inv_arg "List.fold_left_same: empty list"
 
-(** [of_list_map f l = of_array (Array.map f l) = map f (of_array l)] *)
+(** Map a function at the same time as we are creating a list from an array
+
+    Warning: The function is mapped from the right to the left (in case it has side-effects).
+
+   [of_array_map f l = of_array (Array.map f l) = map f (of_array l)] *)
 let of_array_map f a = Stdlib.Array.fold_right (fun a l -> f a :: l) a []
 
+(** Same as {!of_array_map} but with the index *)
 let of_array_mapi f a =
   let l = Stdlib.Array.length a in
   let rec from acc i =
@@ -17,6 +49,7 @@ let of_array_mapi f a =
   in
   from [] (l - 1)
 
+(** Same as {!concat_map} then {!rev} *)
 let concat_map_rev f l =
   let rec aux f acc = function
     | [] -> acc
@@ -26,12 +59,24 @@ let concat_map_rev f l =
   in
   aux f [] l
 
-(* This is defined in OCaml 4.10, TODO find a clean way of doing conditional compilation,
-   otherwise this will shadow the official concat_map in 4.10*)
-let concat_map f l = rev @@ concat_map_rev f l
+(** Same as [map] then [concat].
+
+    TODO: find a clean way of doing conditional compilation,
+    otherwise this will shadow the official
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html#VALconcat_map}[concat_map]}
+    in 4.10 *)
+let concat_map f l : _ t = rev @@ concat_map_rev f l
 
 (* This is defined in OCaml 4.10, TODO find a clean way of doing conditional compilation,
    otherwise this will shadow the official find_map in 4.10*)
+
+(** [find_map f l] applies [f] to the elements of [l] in order,
+    and returns the first result of the form [Some v], or [None] if [f] always return [None]
+
+    TODO: find a clean way of doing conditional compilation,
+    otherwise this will shadow the official
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html#VALfind_map}[find_map]}
+    in 4.10 *)
 let rec find_map f = function
   | [] -> None
   | x :: l -> (
@@ -56,18 +101,10 @@ let rec partition_map (f : 'a -> 'b option) : 'a list -> 'a list * 'b list = fun
       match f a with Some b -> (main, b :: newl) | None -> (a :: main, newl)
     )
 
-(** Return [None] if the list is empty, and [Some list] if the list is not empty *)
-let none_if_empty = function [] -> None | l -> Some l
-
-(** Monadic bind. It's just {!concat_map} *)
-let bind l f = concat_map f l
-
-(** Set the nth value to the new value and return the modified list *)
-let rec set_nth l n v =
-  match l with
-  | [] -> Raise.inv_arg "List.set_nth: invalid index"
-  | _ :: l when n = 0 -> v :: l
-  | a :: l -> a :: set_nth l (n - 1) v
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Removing elements } *)
 
 (** Remove the first element matching the predicate.
     Returns [None] if no element matches the predicate *)
@@ -83,10 +120,9 @@ let rec drop n l =
   match (n, l) with (0, _) -> l | (_, []) -> [] | (_, _ :: t) -> drop (n - 1) t
 
 (** Take the specified number of items from the list, but reverse
-    If n is greater than the size of the list, then return the list
+    If n is greater than the size of the list, then return the list reversed
 
     Tail-recursive
-
 *)
 let take_rev n l =
   assert (n >= 0);
@@ -108,13 +144,16 @@ let take n l = take_rev n l |> rev
 (** [sub l pos len] return the sub-list of l starting at pos of length len *)
 let sub ~pos ~len l = take len (drop pos l)
 
-(** Same as [combine] but if a list is shorter then the element of the longest
-    list are discarded *)
-let rec short_combine l1 l2 =
-  match (l1, l2) with (a1 :: t1, a2 :: t2) -> (a1, a2) :: short_combine t1 t2 | _ -> []
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Sorted list manipulation } *)
 
-(** Same as [merge] but duplicate elements are deleted. It is assumed that element
-    are not duplicate in the argument (like if sorted with [sort_uniq] *)
+(** Same as
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html#VALmerge}[merge]}
+    but duplicate elements are deleted. It is assumed that element
+    are not duplicate in the argument (like if sorted with
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/List.html#VALsort_uniq}[sort_uniq]}) *)
 let rec merge_uniq cmp l1 l2 =
   match (l1, l2) with
   | ([], _) -> l2
@@ -126,6 +165,12 @@ let rec merge_uniq cmp l1 l2 =
       | _ -> a2 :: merge_uniq cmp l1 t2
     )
 
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Sequences } *)
+
+(** Build a list from a sequence, but in reverse. Same as [of_seq] then [rev] *)
 let of_seq_rev s =
   let rec aux acc s = match s () with Seq.Nil -> acc | Seq.Cons (a, s) -> aux (a :: acc) s in
   aux [] s
@@ -161,25 +206,36 @@ let rec compare cmp l1 l2 =
 (*****************************************************************************)
 (** {1 List monad } *)
 
-(** Applicative let binding. [let+ x = xl in e = let* x = xl in e] *)
+(** Monadic bind. It's just {!concat_map} *)
+let bind l f = concat_map f l
+
+(** Monadic return *)
+let return a = [a]
+
+(** Same as [combine] but if a list is shorter then the elements of the longest
+    list are discarded *)
+let rec short_combine l1 l2 =
+  match (l1, l2) with (a1 :: t1, a2 :: t2) -> (a1, a2) :: short_combine t1 t2 | _ -> []
+
+(** Applicative let binding. [let+ x = xl in e = let* x = xl in return e] *)
 let ( let+ ) o f = map f o
 
-(** Not strict applicative merge ({!short_combine}) *)
+(** Not strict applicative merge ({!short_combine}).
+    If both list have different length, the longer one is cropped *)
 let ( and+ ) = short_combine
 
 (** Iterative let binding (The expression in the in must be unit). This replace
-    implicitly a unit member of the monad that is assumed to be uninteresting to a true unit.
-    In other words, It's an [iter]
-*)
+    implicitly a unit member of the monad (that is assumed to be uninteresting) to a true unit.
+    In other words, it's an [iter]: [let+! x = l in e = List.iter (fun x -> e) l] *)
 let ( let+! ) o f = iter f o
 
-(** Strict applicative merge ([combine]). Will throw if list have different length *)
+(** Strict applicative merge ([combine]). Will throw if lists have different length *)
 let ( and+! ) = combine
 
 (** Monadic let binding *)
 let ( let* ) o b = bind o b
 
-(** Do the Cartesian product of the two list *)
+(** Do the Cartesian product of two lists *)
 let prod l1 l2 =
   let* x1 = l1 in
   let+ x2 = l2 in

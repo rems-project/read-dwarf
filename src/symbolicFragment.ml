@@ -276,14 +276,14 @@ module Make (Var : Exp.Var) : S with type var = Var.t = struct
               | None ->
                   let selem = SElem.expand_bound selem Int.max_int in
                   let selem = SElem.write selem ~pos:block.offset ~len exp in
-                  (Int.min_int / 2, selem)
+                  (selem, Int.min_int / 2)
               | Some (bstart, _) ->
                   let npos = min bstart pos in
                   let nend = max pos (SElem.len selem) in
                   let nlen = nend - npos in
                   let selem = SElem.expand_bound selem nlen in
                   let selem = SElem.write selem ~pos:block.offset ~len exp in
-                  (npos, selem)
+                  (selem, npos)
             )
           | None ->
               let (start, endp) =
@@ -292,7 +292,7 @@ module Make (Var : Exp.Var) : S with type var = Var.t = struct
               let end_bound = endp - start in
               let selem = SElem.make ~end_bound bbase in
               let selem = SElem.write selem ~pos:block.offset ~len exp in
-              (start, selem)
+              (selem, start)
         in
         (* Clearing the symbolic cache on that area *)
         let scache = SCache.clear_bounds ?start ?endp frag.scache in

@@ -1,35 +1,34 @@
-(** This module represent a byte sub view on a bytes object.
-    Contrary to [Bytes] it is a non-owning immutable view.
-    It do not prevent the original bytes from being modified,
-    and the changes will be propagated in the view.
-    It is additional sugar on top of Linksem's [Byte_sequence_wrapper]
+(* The documentation is in the mli file *)
 
-    About all the suffixed function:
-    - All iteration function without suffix do the expected operation on char (as single bytes)
-    - All iteration function with suffix nle do the expected operation on a sequence of
-      integers of n bits as read in little endian.
-    - All iteration function with suffix nbe do the expected operation on a sequence of
-      integers of n bits as read in big endian.
-    - All iteration function with suffix nbs do the expected operation on a sequence of
-      BytesSeq.t of length corresponding to n bits.
-*)
-
-(* TODO make this include manually and make a mli file *)
+open Fun
 include Byte_sequence_wrapper
 
 type t = byte_sequence
 
-(** See [Bytes.blit] *)
-let blit (bs : t) (srcoff : int) (dst : bytes) (dstoff : int) (len : int) =
-  if srcoff < 0 || srcoff + len > bs.len then Raise.inv_arg "BytesSeq.blit : out of bounds "
-  else Bytes.blit bs.bytes (bs.start + srcoff) dst dstoff len
+let int_bytes = if Sys.int_size <= 32 then 4 else 8
 
 let unsafe_get bs i = Bytes.unsafe_get bs.bytes (i + bs.start)
 
-(** Convert a string to a BytesSeq.t as raw data *)
-let of_string s =
-  (* This is safe because a BytesSeq is immutable *)
-  of_bytes (Bytes.unsafe_of_string s)
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Hexadecimal conversions } *)
+
+let to_hex bs =
+  let len = length bs in
+  let buf = Buffer.create (2 * len) in
+  for i = bs.start to bs.start + bs.len - 1 do
+    Printf.bprintf buf "%02x" (Char.code (Bytes.unsafe_get bs.bytes i))
+  done;
+  Buffer.contents buf
+
+let to_hex_rev bs =
+  let len = length bs in
+  let buf = Buffer.create (2 * len) in
+  for i = bs.start + bs.len - 1 downto bs.start do
+    Printf.bprintf buf "%02x" (Char.code (Bytes.unsafe_get bs.bytes i))
+  done;
+  Buffer.contents buf
 
 (** Convert a hex string like A4B767DF into a {!BytesSeq.t} *)
 let of_hex hexstr : t =
@@ -43,7 +42,7 @@ let of_hex hexstr : t =
   done;
   of_bytes res
 
-(*$= of_hex & ~printer:to_string
+(*$= of_hex & ~printer:to_hex
      (of_hex "2a615B7c") (of_string "*a[|")
 *)
 (*$T of_hex
@@ -51,18 +50,55 @@ let of_hex hexstr : t =
      (try ignore (of_hex "7="); false with Stdlib.Scanf.Scan_failure _ -> true)
 *)
 
-(** Convert to a char array *)
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Array conversions } *)
+
 let to_array bs = Array.init (length bs) (fun i -> unsafe_get bs i)
 
-(** Convert from a char array *)
 let of_array arr = of_bytes (Bytes.init (Array.length arr) (fun i -> Array.unsafe_get arr i))
 
 (*****************************************************************************)
-(*         Getters                                                           *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Cutting the view } *)
 
-(** The size int bytes of Ocaml int *)
-let int_bytes = if Sys.int_size <= 32 then 4 else 8
+let sub bs start len : t =
+  if start >= 0 && len >= 0 && start + len <= bs.len then
+    { bytes = bs.bytes; start = bs.start + start; len }
+  else Raise.inv_arg "ByteSeq.sub at %d of length %d but total size is %d" start len bs.len
+
+let front i bs =
+  if i > bs.len || i < 0 then
+    Raise.inv_arg "Cannot take the first %d bytes of a bytesseq of size %d" i bs.len
+  else { bytes = bs.bytes; start = bs.start; len = i }
+
+let back i bs =
+  if i > bs.len || i < 0 then
+    Raise.inv_arg "Cannot take the last %d bytes of a bytesseq of size %d" i bs.len
+  else { bytes = bs.bytes; start = bs.start + bs.len - i; len = i }
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Interaction with [bytes] and raw string } *)
+
+let blit (bs : t) (srcoff : int) (dst : bytes) (dstoff : int) (len : int) =
+  if srcoff < 0 || srcoff + len > bs.len then Raise.inv_arg "BytesSeq.blit : out of bounds "
+  else Bytes.blit bs.bytes (bs.start + srcoff) dst dstoff len
+
+let of_string s =
+  (* This is safe because a BytesSeq is immutable *)
+  of_bytes (Bytes.unsafe_of_string s)
+
+(** Same as {!sub} but for bytes *)
+let bytes_sub bytes start len : t = sub (of_bytes bytes) start len
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Getters } *)
 
 (** Get an Ocaml int at index in a [bytes].
     The size of the read is 4 or 8 depending of the size of the int
@@ -93,6 +129,8 @@ let get64be bs i = gen_get 8 Bytes.get_int64_be bs i
 
 let getintle bs i = gen_get int_bytes bytes_get_intle bs i
 
+let getbs ~len bs i = sub bs i len
+
 let getbvle ~size bs i = gen_get (size / 8) (BitVec.bytes_load ~size) bs i
 
 let gen_get_ze size getter bs i =
@@ -107,32 +145,8 @@ let gen_get_ze size getter bs i =
 (* TODO: All the other _ze accessors *)
 let getintle_ze bs i = gen_get_ze int_bytes bytes_get_intle bs i
 
-(** Extract a sub range of a byte sequence. This is O(1) *)
-let sub bs start len : t =
-  if start >= 0 && len >= 0 && start + len <= bs.len then
-    { bytes = bs.bytes; start = bs.start + start; len }
-  else Raise.inv_arg "ByteSeq.sub at %d of length %d but total size is %d" start len bs.len
-
-(** Same as {!sub} but for bytes *)
-let bytes_sub bytes start len : t = sub (of_bytes bytes) start len
-
-(** This can instantiated to sub_getter 10 to have getter of BytesSeq.t of size 10 *)
-let sub_getter len bs start = sub bs start len
-
 (** Same as {!sub_getter} but for bytes *)
-let bytes_sub_getter len bs start = bytes_sub bs start len
-
-(** Take the first i bytes of the sequence *)
-let front i bs =
-  if i > bs.len || i < 0 then
-    Raise.inv_arg "Cannot take the first %d bytes of a bytesseq of size %d" i bs.len
-  else { bytes = bs.bytes; start = bs.start; len = i }
-
-(** Take the last i bytes of the sequence *)
-let back i bs =
-  if i > bs.len || i < 0 then
-    Raise.inv_arg "Cannot take the last %d bytes of a bytesseq of size %d" i bs.len
-  else { bytes = bs.bytes; start = bs.start + bs.len - i; len = i }
+let bytes_getbs len bs start = bytes_sub bs start len
 
 (** Tells if a byteseq fits this size (bs.len mod size = 0) *)
 let fit size bs = bs.len mod size = 0
@@ -141,8 +155,9 @@ let fit size bs = bs.len mod size = 0
 let trail size bs = back (bs.len mod size) bs
 
 (*****************************************************************************)
-(*         Iteration                                                         *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Iterators } *)
 
 (* Warning do not handle the end of the byteseq *)
 
@@ -160,25 +175,17 @@ let iter16le f bs = gen_iter 2 Bytes.get_int16_le f bs
 
 let iter16be f bs = gen_iter 2 Bytes.get_int16_be f bs
 
-let iter16bs f bs = gen_iter 2 (bytes_sub_getter 2) f bs
-
 let iter32le f bs = gen_iter 4 Bytes.get_int32_le f bs
 
 let iter32be f bs = gen_iter 4 Bytes.get_int32_be f bs
-
-let iter32bs f bs = gen_iter 4 (bytes_sub_getter 4) f bs
 
 let iter64le f bs = gen_iter 8 Bytes.get_int64_le f bs
 
 let iter64be f bs = gen_iter 8 Bytes.get_int64_be f bs
 
-let iter64bs f bs = gen_iter 8 (bytes_sub_getter 8) f bs
-
-(*****************************************************************************)
-(*         Folding                                                           *)
-(*****************************************************************************)
-
-(* Warning do not handle the end of the byteseq *)
+let iterbs ~len f bs =
+  gen_iter len (bytes_getbs len) f bs;
+  if not @@ fit len bs then f (trail len bs)
 
 let gen_fold_left iterf f a bs =
   let r = ref a in
@@ -191,23 +198,20 @@ let fold_left16le f a bs = gen_fold_left iter16le f a bs
 
 let fold_left16be f a bs = gen_fold_left iter16be f a bs
 
-let fold_left16bs f a bs = gen_fold_left iter16bs f a bs
-
 let fold_left32le f a bs = gen_fold_left iter32le f a bs
 
 let fold_left32be f a bs = gen_fold_left iter32be f a bs
-
-let fold_left32bs f a bs = gen_fold_left iter32bs f a bs
 
 let fold_left64le f a bs = gen_fold_left iter64le f a bs
 
 let fold_left64be f a bs = gen_fold_left iter64be f a bs
 
-let fold_left64bs f a bs = gen_fold_left iter64bs f a bs
+let fold_leftbs ~len f a bs = gen_fold_left (iterbs ~len) f a bs
 
 (*****************************************************************************)
-(*        To list                                                            *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 List conversions } *)
 
 let gen_to_list folder bs = List.rev (folder (fun list i -> i :: list) [] bs)
 
@@ -217,67 +221,37 @@ let to_list16le bs = gen_to_list fold_left16le bs
 
 let to_list16be bs = gen_to_list fold_left16be bs
 
-let to_list16bs bs = gen_to_list fold_left16bs bs
-
 let to_list32le bs = gen_to_list fold_left32le bs
 
 let to_list32be bs = gen_to_list fold_left32be bs
-
-let to_list32bs bs = gen_to_list fold_left32bs bs
 
 let to_list64le bs = gen_to_list fold_left64le bs
 
 let to_list64be bs = gen_to_list fold_left64be bs
 
-let to_list64bs bs = gen_to_list fold_left64bs bs
+let to_listbs ~len bs = gen_to_list (fold_leftbs ~len) bs
 
 (*****************************************************************************)
-(*        Binary IO                                                          *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Binary IO } *)
 
 let output ochannel bs =
   output_substring ochannel (Bytes.unsafe_to_string bs.bytes) bs.start bs.len
 
-let write = Files.write_bin output
-
 let input ichannel = Files.input_bytes ichannel |> of_bytes
 
-let read = Files.read_bin input
-
 (*****************************************************************************)
-(*        Pretty printing                                                    *)
 (*****************************************************************************)
+(*****************************************************************************)
+(** {1 Pretty Printing } *)
 
 let pp bs = bs |> to_char_list |> List.map PP.byte |> PP.separate PP.space
 
-let ppc bs = bs |> to_char_list |> List.map PP.byte |> PP.separate PP.empty
+let ppc bs = bs |> to_hex |> PP.string
 
-let pp16le bs : PP.document =
-  PP.(
-    let front = bs |> to_list16le |> List.map hex16 |> separate space in
-    if fit 2 bs then front else front ^^ space ^^ pp @@ trail 2 bs)
+let ppint bs = bs |> to_hex_rev |> PP.string
 
-let pp16be bs : PP.document =
-  PP.(
-    let front = bs |> to_list16be |> List.map hex16 |> separate space in
-    if fit 2 bs then front else front ^^ space ^^ pp @@ trail 2 bs)
+let ppby ~by bs = bs |> to_listbs ~len:by |> PP.separate_map PP.space ppc
 
-let pp32le bs : PP.document =
-  PP.(
-    let front = bs |> to_list32le |> List.map hex32 |> separate space in
-    if fit 4 bs then front else front ^^ space ^^ pp @@ trail 4 bs)
-
-let pp32be bs : PP.document =
-  PP.(
-    let front = bs |> to_list32be |> List.map hex32 |> separate space in
-    if fit 4 bs then front else front ^^ space ^^ pp @@ trail 4 bs)
-
-let pp64le bs : PP.document =
-  PP.(
-    let front = bs |> to_list64le |> List.map hex64 |> separate space in
-    if fit 8 bs then front else front ^^ space ^^ pp @@ trail 8 bs)
-
-let pp64be bs : PP.document =
-  PP.(
-    let front = bs |> to_list64be |> List.map hex64 |> separate space in
-    if fit 8 bs then front else front ^^ space ^^ pp @@ trail 8 bs)
+let ppbyint ~by bs = bs |> to_listbs ~len:by |> PP.separate_map PP.space (to_hex_rev %> PP.string)

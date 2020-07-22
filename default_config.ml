@@ -6,16 +6,16 @@
 (** Default config file *)
 let config_file = "config.toml"
 
-(** Default Z3 command. (Can be overidden with Z3_PATH and --z3) *)
+(** Default Z3 command. (Can be overidden with Z3_PATH and [--z3]) *)
 let z3 = "z3"
 
-(** Default Isla command. (Can be overidden with ISLA_CLIENT and --isla) *)
+(** Default Isla command. (Can be overidden with ISLA_CLIENT and [--isla]) *)
 let isla_client = "isla-client"
 
 (** The default architecture to pick when none is specified *)
 let default_arch = "aarch64"
 
-(** The Architecture module. They are in src/archs. *)
+(** The Architecture module. They are in [src/archs]. *)
 module Arch = AArch64
 
 (** Whether to enable backtraces or not *)

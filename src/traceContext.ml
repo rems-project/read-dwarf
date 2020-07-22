@@ -7,7 +7,7 @@
 (** The context to run a trace *)
 type t = {
   reg_writes : (Reg.t * State.tval) Vec.t;  (** Stores the delayed register writes *)
-  mem_reads : State.tval HashVector.t;  (** Stores the result of register reads *)
+  mem_reads : State.tval HashVector.t;  (** Stores the result of memory reads *)
   state : State.t;
   dwarf : Dw.t option;
 }

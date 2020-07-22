@@ -1,4 +1,6 @@
-(** Extension of the string module of the standard library *)
+(** Extension of the
+    {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/String.html}[String]}
+    module of the standard library. *)
 
 include Stdlib.String
 

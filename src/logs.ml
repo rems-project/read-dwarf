@@ -1,6 +1,4 @@
-open PP
-
-type ldoc = unit -> PP.document
+(* The documentation is in the mli file *)
 
 type 'a printf = ('a, out_channel, unit) format -> 'a
 
@@ -10,7 +8,9 @@ type level = Base | Err | Warn | Info | Debug
 
 let default_level = Warn
 
-let pp_level = function
+let pp_level =
+  let open PP in
+  function
   | Base -> empty
   | Err -> !^"[Error]"
   | Warn -> !^"[Warn]"
@@ -87,20 +87,6 @@ let baselog_fatal ~code name lvl fmt =
       exit code)
     out fmt
 
-let baselogd name lvl doc =
-  let out = channel lvl in
-  PP.fprintln out $ prefix 2 1 (brackets !^name ^^ pp_level lvl ^^ colon) doc;
-  flush out
-
-let baselogd_fatal ~code name lvl doc =
-  let stack = Printexc.get_callstack 50 in
-  let out = channel lvl in
-  PP.fprintln out $ prefix 2 1 (brackets !^name ^^ pp_level lvl ^^ !^" Fatal:") doc;
-  flush out;
-  if ConfigPre.enable_backtrace then Printexc.print_raw_backtrace out stack;
-  flush out;
-  exit code
-
 let loggers : (string, level) IdMap.t = IdMap.make ()
 
 let register (name : string) =
@@ -118,16 +104,6 @@ let mainlog i lvl fmt =
 let mainlog_fatal ~code i lvl fmt =
   let name = IdMap.of_ident loggers i in
   baselog_fatal ~code name lvl fmt
-
-let mainlogd i lvl ldoc =
-  if lvl <= IdMap.geti loggers i then
-    let name = IdMap.of_ident loggers i in
-    baselogd name lvl $ ldoc ()
-  else ()
-
-let mainlogd_fatal ~code i lvl ldoc =
-  let name = IdMap.of_ident loggers i in
-  baselogd_fatal ~code name lvl $ ldoc ()
 
 let set_default_level lvl = IdMap.fill_all loggers lvl
 
@@ -165,26 +141,4 @@ module Logger (S : String) = struct
   let debug fmt = log Debug fmt
 
   let has_debug () = get_level () >= Debug
-
-  (*****************************************************************************)
-  (*        PP.document version                                                *)
-  (*****************************************************************************)
-
-  let logd lvl ldoc = mainlogd id lvl ldoc
-
-  let logd_fatal ~code lvl ldoc = mainlogd_fatal ~code id lvl ldoc
-
-  let based ldoc = logd Base ldoc
-
-  let faild ldoc = mainlogd_fatal ~code:1 id Base ldoc
-
-  let errd ldoc = logd Err ldoc
-
-  let fatald ldoc = mainlogd_fatal ~code:2 id Err ldoc
-
-  let warnd ldoc = logd Warn ldoc
-
-  let infod ldoc = logd Info ldoc
-
-  let debugd ldoc = logd Debug ldoc
 end

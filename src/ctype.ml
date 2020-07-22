@@ -1,5 +1,7 @@
-(** This module represent ctypes as they are represented internally.
-
+(** This module provides the internal C-like type system. This type system is
+   slightly different than the normal C type system. This module only provide
+   the Ocaml datastructure to represent those types. The typing rules are
+   implemented in {!TraceCtype}, where they are applied directly on traces.
 *)
 
 open Logs.Logger (struct
@@ -27,9 +29,6 @@ let vDW_ATE_unsigned_char = "DW_ATE_unsigned_char" |> Dwarf.base_type_attribute_
 (*****************************************************************************)
 (*****************************************************************************)
 (** {1 Types } *)
-
-(** This is to represent a naming scope for structs *)
-type 'a named_env = (string, 'a) IdMap.t
 
 (** This is the provenance of the pointer. This tells to which symbolic memory block
     a pointer points to. *)
@@ -102,7 +101,7 @@ end)
 *)
 type struc = { layout : FieldMap.t; name : string; size : int; complete : bool }
 
-(** The type of a C enumeration *)
+(** The representation type of a C enumeration *)
 type enum = { name : string; labels : (int, string option) Hashtbl.t }
 
 (** The identifier for a linksem_cupdie. See {!ids_of_cupdie} *)
@@ -116,7 +115,7 @@ type cupdie_id = int * int
 *)
 type linksem_env = linksem_t list
 
-(** An versiont of the linksem environement indexed by {!cupdie_id} *)
+(** An version of the linksem environement indexed by {!cupdie_id} *)
 type linksem_indexed_env = (cupdie_id, linksem_t) Hashtbl.t
 
 (** The type environment that contain mapping from linking name and a generated id
@@ -134,7 +133,11 @@ type linksem_indexed_env = (cupdie_id, linksem_t) Hashtbl.t
     {!env_of_linksem}, the original linksem type must be kept alive in
     [lenv]
 *)
-type env = { structs : struc named_env; enums : enum named_env; lenv : linksem_indexed_env }
+type env = {
+  structs : (string, struc) IdMap.t;
+  enums : (string, enum) IdMap.t;
+  lenv : linksem_indexed_env;
+}
 
 (** The size of pointer. This will be configurable later *)
 let ptr_size = 8
@@ -273,10 +276,12 @@ let len = sizeof
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Linksem DWARF to internal Ctype conversion }
+(** {1:ctyplink C type linking: From Linksem}
 
     This section contain the whole hierarchy of function used to convert
     type from DWARF representation to the internal type system.
+
+    During this conversion, C type linking happens. TODO details
 
     The top-level interface for types is {!of_linksem} and
     the top-level interface for environement is {!env_of_linksem}
@@ -576,7 +581,7 @@ and pp_arr_dim dim = PP.(lbracket ^^ Option.fold ~none:empty ~some:int dim ^^ rb
 
 let pp_field { fname; offset = _; typ; size = _ } =
   let name = Option.value fname ~default:"_" in
-  infix 2 1 $ colon $ !^name $ pp typ
+  infix 2 1 colon !^name @@ pp typ
 
 let pp_struct { layout; name; size; complete } =
   let fields = FieldMap.bindings layout |> List.map (Pair.map PP.ptr @@ pp_field) in

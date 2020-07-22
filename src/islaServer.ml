@@ -10,7 +10,8 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-module Config = ConfigFile.Arch.Isla
+module Config = ConfigFile.ArchConf.Isla
+module Server = Cmd.SocketServer
 
 (** The configuration record type *)
 type config = Config.t
@@ -42,18 +43,20 @@ let cmd_of_config (config : config) socket =
       Vec.add_one cmd (Printf.sprintf "%s=%b" s b))
     config.config_registers;
   List.iter (fun s -> Vec.add_one cmd s) config.other_opts;
-  Vec.to_array cmd
+  let cmd = Vec.to_array cmd in
+  debug "Isla command line: \n%t" PP.(topi (array string) cmd);
+  cmd
 
 (** Start the server with the specified architecture, do not attempt any checks *)
 let raw_start config : unit =
   if !server != None then failwith "Isla server starting when there is already a server online";
-  server := Some (Cmd.Server.start "isla" (cmd_of_config config))
+  server := Some (Server.start ~name:"isla" (cmd_of_config config))
 
 (** Stop the server by cutting the connection. *)
 let raw_stop () =
   match !server with
   | Some serv ->
-      Cmd.Server.stop serv;
+      Server.stop serv;
       server := None
   | None -> ()
 
@@ -63,13 +66,13 @@ type basic_answer = Error | Version of string | StartTraces | Trace of bool * st
 (** Read an answer from isla-client. must match exactly write_answer in client.rs *)
 let read_basic_answer () =
   let serv = get_server () in
-  match Cmd.Server.read_byte serv with
+  match Server.read_byte serv with
   | 0 -> Error
-  | 1 -> Version (Cmd.Server.read_string serv)
+  | 1 -> Version (Server.read_string serv)
   | 2 -> StartTraces
   | 3 ->
-      let b = Cmd.Server.read_byte serv = 1 in
-      let s = Cmd.Server.read_string serv in
+      let b = Server.read_byte serv = 1 in
+      let s = Server.read_string serv in
       Trace (b, s)
   | 4 -> EndTraces
   | _ -> failwith "Unknown isla anwser"
@@ -130,16 +133,15 @@ type request = TEXT_ASM of string | ASM of BytesSeq.t | VERSION | STOP
     This should match the protocol *)
 let string_of_request = function
   | TEXT_ASM s -> Printf.sprintf "execute_asm %s" s
-  | ASM b ->
-      assert (BytesSeq.length b = 4);
-      PPI.(sprintc @@ !^"execute " ^^ byteseq32le b)
+  | ASM b -> PP.(sprintc @@ !^"execute " ^^ BytesSeq.ppint b)
   | VERSION -> "version"
   | STOP -> "stop"
 
 let send_string_request (req : string) : unit =
   let serv = get_server () in
   req_num := !req_num + 1;
-  Cmd.Server.write_string serv req
+  debug "Sending request %s" req;
+  Server.write_string serv req
 
 let string_request (req : string) : answer =
   send_string_request req;
@@ -199,7 +201,7 @@ module Cmd = struct
         let c = input_line stdin in
         try
           let answer = string_request c in
-          PP.(print $ pp_answer answer ^^ hardline)
+          PP.(println @@ pp_answer answer)
         with IslaError -> print_string "Isla sent back an error\nx "
       done
     with

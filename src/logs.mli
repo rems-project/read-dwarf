@@ -1,20 +1,48 @@
-(** This module provide a logging system. To create a logging module use functor {!Logger} *)
+(** This module provide a logging system for each module.
 
-type ldoc = unit -> PP.document
+    The logging system is intended to print on [stderr] or [stdout] (and maybe in file later)
+    messages of the form:
 
+    {v [Module][Level] Message here v}
+
+    For example:
+
+    {v [Z3][Info] Z3 server started with version 4.8.7 v}
+
+    If you just want to use it to log things in your own module, just insert
+    at the start of the module the following code:
+
+    {[
+    open Logs.Logger (struct
+      let str = __MODULE__
+    end)
+    ]}
+
+    You can then use all the function in {!Logger} to print logging messages in your module.
+
+    The rest of this module is about manipulation log {!level} in the different modules.
+    You can dynamically interact with the logs level from the command line
+    by using {!section:CommonOpt.logs} *)
+
+(** The type of normal logging function *)
 type 'a printf = ('a, out_channel, unit) format -> 'a
 
+(** The type of a failing logging function, that will exit after printing it's message *)
 type ('a, 'b) printf_fatal = ('a, out_channel, unit, 'b) format4 -> 'a
 
+(** The type of log level *)
 type level =
   | Base
       (** The actual output. The only thing printed in quiet mode.
-          Should only appear in CLI modules *)
+          Should only appear in {!CLI} modules *)
   | Err  (** An error message *)
   | Warn  (** An warning *)
-  | Info  (** Detailed on what happening *)
-  | Debug  (** Everything happening *)
+  | Info
+      (** Details on what happens that should be understandable if the person
+          do not know the corresponding module *)
+  | Debug  (** Everything happening in detail *)
 
+(** Pretty prints a level *)
 val pp_level : level -> PP.document
 
 (** Convert level to string *)
@@ -23,7 +51,7 @@ val level_to_string : level -> string
 (** Convert level to string header like ["\[Error\]"]. {!Base} is the empty string *)
 val level_to_header : level -> string
 
-(** Set a default level to all the module. Erase local customized levels *)
+(** Set a default level to all the modules. Erase local customized levels *)
 val set_default_level : level -> unit
 
 (** Set level of a module by name *)
@@ -40,13 +68,25 @@ module type String = sig
   val str : string
 end
 
-(** This declare a logger. The string parameter is the logger name.
-    It should be the OCaml module name.
+(** This declare a logger instance. The string parameter is the logger name.
+    It should be the OCaml module name. The normal way of instantiating this
+    module is:
 
-    This module provide a lot of logging function.
-    The function with d suffix take a {!ldoc} instead of a format string
-    to log complex data structures.
-*)
+    {[
+    open Logs.Logger (struct
+      let str = __MODULE__
+    end)
+    ]}
+
+    This module provide a lot of logging function, They only provide a
+    format string interface but with {!PP.top} on may print efficiently but
+    lazily arbitrary {!PP.document} to the logs.
+
+    Some examples:
+
+    {[ warn "This weird thing happened, I choose that default behavior for case %s" case ]}
+
+    {[ debug "Function ... received value %t" PP.(top printer object) ]} *)
 module Logger (S : String) : sig
   (** Override the level of this logger. It may still be overridden by the command line *)
   val set_level : level -> unit
@@ -57,61 +97,31 @@ module Logger (S : String) : sig
   (** Log a specific level using a format string *)
   val log : level -> 'a printf
 
-  (** Log a fatal problem with format string then shutdown with code 1 *)
+  (** Log a fatal problem with format string then shutdown with [code] *)
   val log_fatal : code:int -> level -> ('a, 'b) printf_fatal
 
-  (** Base command line output asked for by the CLI *)
+  (** Base command line output asked for by the CLI. Level is {!Base} *)
   val base : 'a printf
 
-  (** Failure due to external circumstances, exit with code 1 *)
+  (** Failure due to external circumstances, generally wrong user input, then exit with code 1.
+      Level is {!Base} *)
   val fail : ('a, 'b) printf_fatal
 
-  (** Declare a non-fatal internal error *)
+  (** Declare a non-fatal internal error. Level is {!Err} *)
   val err : 'a printf
 
-  (** Declare a fatal internal error then exit with code 2 *)
+  (** Declare a fatal internal error then exit with code 2. Level is {!Err} *)
   val fatal : ('a, 'b) printf_fatal
 
-  (** Raise a warning *)
+  (** Raise a warning. Level is {!Warn} *)
   val warn : 'a printf
 
-  (** Print an information about what's happening *)
+  (** Print general information about what's happening. Level is {!Info} *)
   val info : 'a printf
 
-  (** Print debugging information about what's happening *)
+  (** Print debugging information about what's happening. Level is {!Debug} *)
   val debug : 'a printf
 
   (** Tell if debug logging is enabled *)
   val has_debug : unit -> bool
-
-  (*****************************************************************************)
-  (*        PP.document version                                                *)
-  (*****************************************************************************)
-
-  (** Log a specific level using a lazy PP.document *)
-  val logd : level -> ldoc -> unit
-
-  (** Log a fatal problem with a l then shutdown with code 1 *)
-  val logd_fatal : code:int -> level -> ldoc -> 'a
-
-  (** Base command line output asked for by the CLI *)
-  val based : ldoc -> unit
-
-  (** Failure due to external circumstances, exit with code 1 *)
-  val faild : ldoc -> 'a
-
-  (** Declare a non-fatal internal error *)
-  val errd : ldoc -> unit
-
-  (** Declare a fatal internal error then exit with code 2 *)
-  val fatald : ldoc -> 'a
-
-  (** Raise a warning *)
-  val warnd : ldoc -> unit
-
-  (** Print an information about what's happening *)
-  val infod : ldoc -> unit
-
-  (** Print debugging information about what's happening *)
-  val debugd : ldoc -> unit
 end

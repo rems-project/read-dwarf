@@ -1,14 +1,22 @@
-(** A module giving a map indexing data with address ranges and
-    providing access to quick access to data corresponding to any value in-between
+(** A module giving a map indexing data with address ranges and providing access
+    to quick access to data corresponding to any value in-between.
 
-    The stored object must provide a [len] function but one can add a
-    length to any object with {!PairLenObject}
+    Each address is bound to at most one object so the ranges are not allowed to
+    overlap.
 
-    The ranges are not allowed to overlap.
+    In practice you dont specify the range. The size of the bound range is
+    provided by the stored object itself that is assumed to have a length. The
+    stored object must thus provide a [len] function as specfified by the
+    {!LenObject} signature. However a length can be added to any {!Object} using
+    {!PairLenObject}
 
-    For now, this has a pure immutable interface.
- **)
+    An important remark is that maps are perfectly allowed to have negative
+    addresses, and will considered negative integer as negative addresses. An
+    object of size 7 starting at -4 will end at 3
 
+    For now, this has a pure immutable interface.*)
+
+(** An integer map: [Map.Make(Int)] *)
 module IMap = Map.Make (Int)
 
 (** A module that represent a simple type with no operation *)
@@ -33,15 +41,18 @@ module PairLenObject (Obj : Object) : LenObject with type t = Obj.t * int = stru
   let len (_, l) = l
 end
 
-(** The signature of the PC indexed map*)
+(** The signature of the range map*)
 module type S = sig
+  (** The type of the contained object *)
   type obj
 
+  (** The type of an object with an offset *)
   type obj_off = obj * int
 
+  (** The type of the map from address ranges to {!obj} *)
   type t
 
-  (** An empty rngMap *)
+  (** An empty [RngMap] *)
   val empty : t
 
   (** Test if an address is inside the object at address [objaddr] *)
@@ -55,15 +66,31 @@ module type S = sig
 
   (** Get the object containing the address and the offset of the address inside the object
 
+      {[at_off map addr = (obj, off) ]}
+
+      means:
+
+      {v
+         |                      |           |         |
+       map 0                 obj start    point    obj end
+         |<--------------addr-------------->|
+                                |<---off--->|
+                                |<------len obj------>|
+      v}
+
+      In other words, [at_off] allow a change of coordinate from the map frame to the
+      object frame.
+
       Throw [Not_found] if no object contains the address *)
   val at_off : t -> int -> obj_off
 
-  (** Get the object containing the address and the offset of the address inside the object
+  (** Get the object containing the address and the offset of the address inside the object.
+      See {!at_off} for more explanation.
 
       [None] if no object contains the address *)
   val at_off_opt : t -> int -> obj_off option
 
-  (** Update the binding containing the provided addr.
+  (** Update the binding containing the provided address.
       If no binding contained the address, this is a no-op *)
   val update : (obj -> obj) -> t -> int -> t
 
@@ -97,11 +124,13 @@ module type S = sig
       using the provided crop function.
 
       [crop ~pos ~len obj] is supposed to crop the object [obj] and keep only the segment
-      [\[pos:pos +len)] of it.*)
+      [\[pos:pos +len)] of it (in the object coordinate frame).*)
   val clear_crop : t -> pos:int -> len:int -> crop:(pos:int -> len:int -> obj -> obj) -> t
 
   (** Same as {!clear} but if a bound is missing, then we erase until infinity in
-      that direction. The target interval is [\[start:endp)] *)
+      that direction. The target interval is [\[start:endp)].
+
+      In particular [clear_bounds map = ]{!empty}.*)
   val clear_bounds : ?start:int -> ?endp:int -> t -> t
 
   (** Add an object at a specific address. The whole range of addresses covered by the object
@@ -110,14 +139,17 @@ module type S = sig
 
   (** Add an object at a specific address. The whole range of addresses covered by the object
       must be free *)
-  val addp : t -> int * obj -> t
+  val addp : t -> obj_off -> t
 
   (** Give the list of bindings *)
   val bindings : t -> (int * obj) list
 
   (** Return a sequence of all the object overlapping the range [\[start:endp)].
       The first and last element may not be entierly contained in the ranged.
-      If any bound is unspecified, it goes to infinity in that direction. *)
+      If any bound is unspecified, it goes to infinity in that direction.
+
+
+      In particular [to_seq map] will iterate the entiere [RngMap]*)
   val to_seq : ?start:int -> ?endp:int -> t -> (int * obj) Seq.t
 end
 
@@ -125,7 +157,7 @@ end
 (*        Implementation                                                     *)
 (*****************************************************************************)
 
-(** Index object by range and give the object with starting *)
+(** How to make a [RngMap] from a {!LenObject} *)
 module Make (Obj : LenObject) : S with type obj = Obj.t = struct
   type obj = Obj.t
 
@@ -266,7 +298,7 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
         (addr + Obj.len obj)
         pend nbegin
 
-  let addp t (addr, obj) = add t addr obj
+  let addp t (obj, addr) = add t addr obj
 
   let bindings = IMap.bindings
 end

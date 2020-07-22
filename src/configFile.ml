@@ -1,13 +1,3 @@
-(** This module is to handle the configuration file of the program.
-
-    For now I expect a TOML format and use the [toml] library from opam. The data structure
-    themselves are format agnostic so if we change the TOML library of change of format, only this
-    file must be modified.
-
-    The top level usage is to first set the {!file} reference which will be done in {!CommonOpt}
-    Then then config can be loaded with {!load}.
-*)
-
 open Logs.Logger (struct
   let str = __MODULE__
 end)
@@ -38,10 +28,14 @@ let toml_expect_bool name : value -> bool = function
 let toml_expect_string name : value -> string = function
   | TString s -> s
   | _ -> raise (InvalidKey ("bad type, expected string", [name]))
+  (* This function is unused, but it may be needed by future configuration options *)
+  [@@ocaml.warning "-32"]
 
 let toml_expect_int name : value -> int = function
   | TInt i -> i
   | _ -> raise (InvalidKey ("bad type, expected string", [name]))
+  (* This function is unused, but it may be needed by future configuration options *)
+  [@@ocaml.warning "-32"]
 
 (* Getters *)
 
@@ -100,12 +94,9 @@ let toml_get_table (func : table -> 'a) (table : table) (key : key) : 'a =
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Internal representation of the config } *)
+(** {1 Configuration structure } *)
 
-(** This module provides the current isla configuration.
-    In particular everything in here is salient for cache coherency. *)
-
-module Arch = struct
+module ArchConf = struct
   module Isla = struct
     (* TODO At some point it would be good to integrate this with native isla config files *)
 
@@ -181,22 +172,22 @@ module Arch = struct
         ]
   end
 
-  type t = { name : string; toolchain : string; isla : Isla.t }
+  type t = { arch : ArchType.t; toolchain : string; isla : Isla.t }
 
   let isla_key = Toml.key "isla"
 
   let toolchain_key = Toml.key "toolchain"
 
-  let of_toml ~name ~path table =
+  let of_toml ~arch ~path table =
     let toolchain = toml_get_string table toolchain_key in
     let isla = toml_get_table (Isla.of_toml ~path) table isla_key in
-    { name; toolchain; isla }
+    { arch; toolchain; isla }
 
   let pp_raw aconf =
     let open PP in
     record "arch-config"
       [
-        ("name", string aconf.name);
+        ("arch", ArchType.pp aconf.arch);
         ("toolchain", string aconf.toolchain);
         ("isla", Isla.pp_raw aconf.isla);
       ]
@@ -244,7 +235,7 @@ let archs_key = Toml.key "archs"
 
 let z3_key = Toml.key "z3"
 
-type archs_type = (ArchType.t, Arch.t) Hashtbl.t
+type archs_type = (ArchType.t, ArchConf.t) Hashtbl.t
 
 let archs_of_toml ~path (table : table) : archs_type =
   try
@@ -253,12 +244,14 @@ let archs_of_toml ~path (table : table) : archs_type =
            let name = Key.to_string k in
            match v with
            | TTable t -> (
-               try (ArchType.of_string name, Arch.of_toml ~name ~path t)
+               try
+                 let arch = ArchType.of_string name in
+                 (arch, ArchConf.of_toml ~arch ~path t)
                with InvalidKey (s, kl) -> raise (InvalidKey (s, Key.to_string k :: kl))
              )
            | _ -> raise (InvalidKey ("bad type, expected table", [Key.to_string k])))
     |> Hashtbl.of_seq
-  with Failure s -> raise (InvalidKey (s, []))
+  with Failure s | Invalid_argument s -> raise (InvalidKey (s, []))
 
 type t = { arch : ArchType.t option; archs : archs_type; z3 : Z3.t }
 
@@ -273,17 +266,14 @@ let pp_raw conf =
   record "config"
     [
       ("default-arch", opt ArchType.pp conf.arch);
-      ("archs", hashtbl ArchType.pp Arch.pp_raw conf.archs);
+      ("archs", hashtbl ArchType.pp ArchConf.pp_raw conf.archs);
       ("z3", Z3.pp_raw conf.z3);
     ]
 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Top level interaction }
-
-    This section is about loading the configuration from a TOML file
-*)
+(** {1 Top level interaction } *)
 
 let of_file file : t =
   let path = Filename.dirname file in
@@ -312,25 +302,22 @@ let ensure_loaded file = match !data with Some _ -> () | None -> load file
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Accessors }
-
-    The config must be loaded otherwise {!UnloadedConfig} will be thrown
-*)
+(** {1 Accessors } *)
 
 exception UnloadedConfig
 
 let raise_unloaded _ = raise UnloadedConfig
 
-let get_data () = Opt.value_fun !data ~default:raise_unloaded
+let get_config () = Opt.value_fun !data ~default:raise_unloaded
 
 let default_arch =
   try ArchType.of_string ConfigPre.default_arch
   with Invalid_argument s -> fatal "in default_arch in config.ml: %s" s
 
-let get_arch_name () = match (get_data ()).arch with Some a -> a | None -> default_arch
+let get_arch_name () = match (get_config ()).arch with Some a -> a | None -> default_arch
 
-let get_arch_config arch = Hashtbl.find (get_data ()).archs arch
+let get_arch_config arch = Hashtbl.find (get_config ()).archs arch
 
 let get_isla_config arch = (get_arch_config arch).isla
 
-let get_z3_config () = (get_data ()).z3
+let get_z3_config () = (get_config ()).z3
