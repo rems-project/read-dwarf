@@ -334,7 +334,7 @@ let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : stri
            (List.map
               (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
                 let comp_dir' =
-                  match !Globals.comp_dir with
+                  match !AnalyseGlobals.comp_dir with
                   | None -> comp_dir
                   | Some comp_dir'' -> (
                       match comp_dir with
@@ -368,7 +368,7 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
     (ufe, Dwarf.subprogram_at_line ds.ds_subprogram_line_extents ufe lnr.lnr_line)
   in
   let comp_dir' =
-    match !Globals.comp_dir with
+    match !AnalyseGlobals.comp_dir with
     | None -> comp_dir
     | Some comp_dir'' -> (
         match comp_dir with

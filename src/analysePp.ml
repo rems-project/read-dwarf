@@ -1,4 +1,4 @@
-open Types
+open AnalyseTypes
 open AnalyseUtils
 open AnalyseElfTypes
 open AnalyseControlFlowTypes
@@ -173,7 +173,7 @@ let pp_instruction m test an k i =
   (* the source file lines (if any) associated to this address *)
   (* OLD VERSION *)
   (*  ^ begin
-      if !Globals.show_source then
+      if !AnalyseGlobals.show_source then
         let source_info =
           match pp_dwarf_source_file_lines () test.dwarf_static true addr with
           | Some s ->
@@ -198,7 +198,8 @@ let pp_instruction m test an k i =
         ^ css m Render_ctrlflow an.rendered_control_flow_inbetweens.(k)
         ^ ""
         ^ css m Render_source
-            (pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source multiple elifi)
+            (pp_dwarf_source_file_lines' test.dwarf_static !AnalyseGlobals.show_source multiple
+               elifi)
         ^ "\n"
       in
       (* if there's just a single entry, suppress iff it's a non-start entry, but if there are (confusingly) multiple, show all *)
@@ -213,7 +214,7 @@ let pp_instruction m test an k i =
   (* the frame info for this address *)
   (*TODO: precompute the diffs to make this pure *)
   ^ begin
-      if !Globals.show_cfa then
+      if !AnalyseGlobals.show_cfa then
         let frame_info = pp_frame_info m an.frame_info k in
         if frame_info = !last_frame_info then "" (*"CFA: unchanged\n"*)
         else (
@@ -227,7 +228,7 @@ let pp_instruction m test an k i =
     end
   (* the variables whose location ranges include this address - old version*)
   (*  ^ begin
-      if (*true*) !Globals.show_vars then (
+      if (*true*) !AnalyseGlobals.show_vars then (
         let als_old = !last_var_info in
         let als_new (*fald*) = Dwarf.filtered_analysed_location_data test.dwarf_static addr in
         last_var_info := als_new;
@@ -239,7 +240,7 @@ let pp_instruction m test an k i =
  *)
   (* the variables whose location ranges include this address - new version*)
   ^ begin
-      if !Globals.show_vars then
+      if !AnalyseGlobals.show_vars then
         css m Render_vars_new (pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k))
         (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
         (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
@@ -281,7 +282,7 @@ let pp_instruction m test an k i =
       ^ "\n"
       )
   ^
-  if (*true*) !Globals.show_vars then
+  if (*true*) !AnalyseGlobals.show_vars then
     if k < Array.length an.instructions - 1 then
       css m Render_vars_old (pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1))
     else ""

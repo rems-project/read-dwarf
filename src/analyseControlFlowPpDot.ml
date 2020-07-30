@@ -381,7 +381,7 @@ let mk_ppd_instruction test an label k _nesting =
     let lines =
       [label]
       @ List.map
-          (pp_dwarf_source_file_lines' test.dwarf_static !Globals.show_source false)
+          (pp_dwarf_source_file_lines' test.dwarf_static !AnalyseGlobals.show_source false)
           an.line_info.(k)
       (* the address and (hex) instruction *)
       @ [

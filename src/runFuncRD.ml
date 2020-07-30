@@ -36,7 +36,7 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
     let pc = Z.of_int pc in
     let index = analyse_analysis.index_of_address pc in
     let instr = analyse_analysis.instructions.(index) in
-    AnalysePp.pp_instruction Types.Ascii analyse_test analyse_analysis index instr
+    AnalysePp.pp_instruction AnalyseTypes.Ascii analyse_test analyse_analysis index instr
   in
   base "Entry state:\n%t" PP.(topi State.pp start);
   match func.sym with

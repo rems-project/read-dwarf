@@ -32,4 +32,4 @@ let show_source = ref true
 
 (*let ppmode = ref Types.Ascii*)
 
-let ppmode = ref Types.Html
+let ppmode = ref AnalyseTypes.Html

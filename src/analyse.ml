@@ -3,7 +3,7 @@ open Logs.Logger (struct
 end)
 
 (*open Printf*)
-open Types
+open AnalyseTypes
 open AnalyseUtils
 open AnalyseSdtUtils
 
@@ -37,28 +37,30 @@ open AnalysePp
 
 let process_file () : unit =
   (*filename_objdump_d filename_branch_tables (filename_elf : string) : unit =*)
-  let m = !Globals.ppmode in
+  let m = !AnalyseGlobals.ppmode in
 
   (* TODO: make idiomatic Cmdliner :-(  *)
   let filename_elf =
-    match !Globals.elf with Some s -> s | None -> Warn.fatal "no --elf option\n"
+    match !AnalyseGlobals.elf with Some s -> s | None -> Warn.fatal "no --elf option\n"
   in
 
   let filename_objdump_d =
-    match !Globals.objdump_d with Some s -> s | None -> Warn.fatal "no --objdump-d option\n"
+    match !AnalyseGlobals.objdump_d with
+    | Some s -> s
+    | None -> Warn.fatal "no --objdump-d option\n"
   in
 
   let filename_branch_tables =
-    match !Globals.branch_table_data_file with
+    match !AnalyseGlobals.branch_table_data_file with
     | Some s -> s
     | None -> Warn.fatal "no --branch-tables option\n"
   in
 
   let filename_out_file_option =
-    !Globals.out_file
+    !AnalyseGlobals.out_file
     (*    match m with
-    | Ascii -> !Globals.out_file
-    | Html -> Option.map (function s -> s ^ ".html") !Globals.out_file*)
+    | Ascii -> !AnalyseGlobals.out_file
+    | Html -> Option.map (function s -> s ^ ".html") !AnalyseGlobals.out_file*)
   in
 
   (* try caching linksem output - though linksem only takes 5s, so scarcely worth the possible confusion. It's recomputing the variable info that takes the time *)
@@ -78,17 +80,19 @@ let process_file () : unit =
 
   let an = time "mk_analysis" (mk_analysis test filename_objdump_d) filename_branch_tables in
 
-  match (!Globals.elf2, !Globals.objdump_d2, !Globals.branch_table_data_file2) with
+  match
+    (!AnalyseGlobals.elf2, !AnalyseGlobals.objdump_d2, !AnalyseGlobals.branch_table_data_file2)
+  with
   | (None, _, _) -> (
       (* read qemu log if present *)
       let visitedo : bool array option =
-        match !Globals.qemu_log with
+        match !AnalyseGlobals.qemu_log with
         | None -> None
         | Some qemu_filename -> Some (read_qemu_log an qemu_filename)
       in
 
       (* output CFG dot file *)
-      ( match !Globals.cfg_dot_file with
+      ( match !AnalyseGlobals.cfg_dot_file with
       | Some cfg_dot_file ->
           let start_indices =
             List.map
@@ -143,7 +147,7 @@ let process_file () : unit =
       match filename_out_file_option with Some _ -> close_out c | None -> ()
     )
   | (Some filename_elf2, Some filename_objdump_d2, Some filename_branch_tables2) -> (
-      match !Globals.cfg_dot_file with
+      match !AnalyseGlobals.cfg_dot_file with
       | Some cfg_dot_file ->
           let test2 = parse_elf_file filename_elf2 in
 
@@ -183,13 +187,13 @@ let process_file () : unit =
 
           (* if/when we want to run comparison without specifying the start symbols, we'll need to add the sdt_subroutine data to the above for the to-be-inlined O0 case *)
           let start_indices =
-            match parse_source_node_list test an (Some an2) !Globals.cfg_source_nodes with
+            match parse_source_node_list test an (Some an2) !AnalyseGlobals.cfg_source_nodes with
             | [] -> all_elf_symbol_indices an
             | cfg_source_node_list0 -> cfg_source_node_list0
           in
 
           let start_indices2 =
-            match parse_source_node_list test2 an2 None !Globals.cfg_source_nodes2 with
+            match parse_source_node_list test2 an2 None !AnalyseGlobals.cfg_source_nodes2 with
             | [] -> all_elf_symbol_indices an2
             | cfg_source_node_list2 -> cfg_source_node_list2
           in
@@ -204,7 +208,7 @@ let process_file () : unit =
 
           let graph' = correlate_source_line graph0 graph2 in
 
-          (*          
+          (*
           let graph'' = graph_cfg_union graph graph' in
           let cfg_dot_file_union = cfg_dot_file_root ^ "_union.dot" in
           pp_cfg graph cfg_dot_file_union false;
