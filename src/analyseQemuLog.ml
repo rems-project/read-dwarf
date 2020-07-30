@@ -2,6 +2,10 @@
 
 (*****************************************************************************)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (**    read qemu log file to display coverage in control-flow graphs         *)
 open AnalyseUtils
 
@@ -10,7 +14,7 @@ open AnalyseCollectedType
 let read_qemu_log an filename_qemu_log : bool array =
   let log_addresses : addr list =
     match read_file_lines filename_qemu_log with
-    | Error s -> Warn.fatal "%s\ncouldn't read qemu log file: \"%s\"\n" s filename_qemu_log
+    | Error s -> fatal "%s\ncouldn't read qemu log file: \"%s\"\n" s filename_qemu_log
     | Ok lines ->
         let parse_line (s : string) : natural option =
           (*         Printf.printf "%s  " s;*)

@@ -1,6 +1,10 @@
 open AnalyseUtils
 open AnalyseElfTypes
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (*****************************************************************************)
 (**       pp symbol map                                                      *)
 
@@ -27,7 +31,7 @@ let parse_elf_file (filename : string) : test =
         (elf_epi : Sail_interface.executable_process_image),
         (symbol_map : Elf_file.global_symbol_init_info) ) =
     match info with
-    | Error.Fail s -> Warn.fatal "populate_and_obtain_global_symbol_init_info: %s" s
+    | Error.Fail s -> fatal "populate_and_obtain_global_symbol_init_info: %s" s
     | Error.Success x -> x
   in
 
@@ -78,14 +82,14 @@ let parse_elf_file (filename : string) : test =
 
   (*  Debug.print_string "elf segments etc\n";*)
   match (elf_epi, elf_file) with
-  | (Sail_interface.ELF_Class_32 _, _) -> Warn.fatal "%s" "cannot handle ELF_Class_32"
-  | (_, Elf_file.ELF_File_32 _) -> Warn.fatal "%s" "cannot handle ELF_File_32"
+  | (Sail_interface.ELF_Class_32 _, _) -> fatal "%s" "cannot handle ELF_Class_32"
+  | (_, Elf_file.ELF_File_32 _) -> fatal "%s" "cannot handle ELF_File_32"
   | (Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1) ->
       (* architectures from linksem elf_header.lem *)
       let arch =
         if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_aarch64 then AArch64
         else if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_x86_64 then X86
-        else Warn.fatal "unrecognised ELF file architecture"
+        else fatal "unrecognised ELF file architecture"
       in
 
       (* remove all the auto generated segments (they contain only 0s) *)
@@ -96,7 +100,7 @@ let parse_elf_file (filename : string) : test =
       in
       let ds =
         match Dwarf.extract_dwarf_static (Elf_file.ELF_File_64 f1) with
-        | None -> Warn.fatal "%s" "extract_dwarf_static failed"
+        | None -> fatal "%s" "extract_dwarf_static failed"
         | Some ds ->
             (* Debug.print_string2 (Dwarf.pp_analysed_location_data ds.Dwarf.ds_dwarf
                                     ds.Dwarf.ds_analysed_location_data);

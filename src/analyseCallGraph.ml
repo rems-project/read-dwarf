@@ -3,6 +3,10 @@
 
 (*****************************************************************************)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 open AnalyseUtils
 open AnalyseElfTypes
 open AnalyseControlFlowTypes
@@ -98,7 +102,7 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
     match List.find_opt (function (_, k', _) -> k' = k) nodes with
     | Some n -> n
     | None ->
-        Warn.nonfatal "node_of_index %d\n" k;
+        err "node_of_index %d\n" k;
         List.hd nodes
   in
 

@@ -41,19 +41,17 @@ let process_file () : unit =
 
   (* TODO: make idiomatic Cmdliner :-(  *)
   let filename_elf =
-    match !AnalyseGlobals.elf with Some s -> s | None -> Warn.fatal "no --elf option\n"
+    match !AnalyseGlobals.elf with Some s -> s | None -> fatal "no --elf option\n"
   in
 
   let filename_objdump_d =
-    match !AnalyseGlobals.objdump_d with
-    | Some s -> s
-    | None -> Warn.fatal "no --objdump-d option\n"
+    match !AnalyseGlobals.objdump_d with Some s -> s | None -> fatal "no --objdump-d option\n"
   in
 
   let filename_branch_tables =
     match !AnalyseGlobals.branch_table_data_file with
     | Some s -> s
-    | None -> Warn.fatal "no --branch-tables option\n"
+    | None -> fatal "no --branch-tables option\n"
   in
 
   let filename_out_file_option =
@@ -170,11 +168,10 @@ let process_file () : unit =
                                 match find_sdt_subroutine_by_name an2.sdt s' with
                                 | Some ss -> (k, nesting_init (Some ss))
                                 | None ->
-                                    Warn.fatal
-                                      "no corresponding ano2 sdt subroutine found for %s\n" s'
+                                    fatal "no corresponding ano2 sdt subroutine found for %s\n" s'
                               )
                           )
-                        | None -> Warn.fatal "address_of_elf_symbol failed on \"%s\"\n" s'
+                        | None -> fatal "address_of_elf_symbol failed on \"%s\"\n" s'
                       ))
                   (String.split_on_char ' ' s)
           in
@@ -222,7 +219,7 @@ let process_file () : unit =
           let layout_lines =
             match read_file_lines cfg_dot_file_layout with
             | Ok lines -> lines
-            | Error s -> Warn.fatal "couldn't read cfg_dot_file_layout %s" s
+            | Error s -> fatal "couldn't read cfg_dot_file_layout %s" s
           in
           let ppd_correlate_edges = List.map (pp_edge "black") graph'.gc_edges in
           let c = open_out cfg_dot_file in
@@ -240,8 +237,8 @@ let process_file () : unit =
           close_out c;
           ignore @@ Unix.system ("dot -Tpdf " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".pdf");
           ignore @@ Unix.system ("dot -Tsvg " ^ cfg_dot_file ^ " > " ^ cfg_dot_file_root ^ ".svg")
-      | None -> Warn.fatal "no dot file\n"
+      | None -> fatal "no dot file\n"
     )
-  | _ -> Warn.fatal "missing files for elf2\n"
+  | _ -> fatal "missing files for elf2\n"
 
 (* dot emacs regexp that appears to match edges: [a-zA-Z0-9_]+ *->[^;]*;    *)

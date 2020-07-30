@@ -3,6 +3,10 @@
 
 (*****************************************************************************)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 open AnalyseUtils
 open AnalyseControlFlowTypes
 open AnalyseRangedVarType
@@ -97,10 +101,10 @@ let rec locals_subroutine context (ss : Dwarf.sdt_subroutine) =
   @ List.flatten (List.map (locals_subroutine context1) ss.ss_subroutines)
   @ List.flatten (List.map (locals_lexical_block context1) ss.ss_lexical_blocks)
 
-(*   
+(*
     ^ (indent (*^ "name:"                   ^*) ^ (pp_sdt_maybe ss.ss_name (fun name1 -> name1 ^ "\n")
   (*  ^ indent ^ "cupdie:"                 ^ pp_cupdie3 ss.ss_cupdie ^ "\n"*)
-  ^ (indent ^ ("kind:"                   ^ (((match ss.ss_kind with SSK_subprogram -> "subprogram" | SSK_inlined_subroutine -> "inlined subroutine" )) ^ ("\n" 
+  ^ (indent ^ ("kind:"                   ^ (((match ss.ss_kind with SSK_subprogram -> "subprogram" | SSK_inlined_subroutine -> "inlined subroutine" )) ^ ("\n"
   ^ (indent ^ ("call site:"              ^ (pp_sdt_maybe ss.ss_call_site (fun ud -> "\n" ^ (indent_level true (Nat_big_num.add level(Nat_big_num.of_int 1)) ^ (pp_ud ud ^ "\n")))
   ^ (indent ^ ("abstract origin:"        ^ (pp_sdt_maybe ss.ss_abstract_origin (fun s -> "\n" ^ locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1)) s)
   (*  ^ indent ^ "type:"                   ^ pp_sdt_maybe ss.ss_type (fun typ -> pp_type_info_deep typ ^"\n" end)*)
@@ -112,7 +116,7 @@ let rec locals_subroutine context (ss : Dwarf.sdt_subroutine) =
   (*  ^ indent ^ "decl:"                   ^ pp_sdt_maybe ss.ss_decl (fun ((ufe,line) as ud) -> "\n" ^ indent_level true (level+1) ^ pp_ufe ufe ^ " " ^ show line ^ "\n" end)*)
   (*  ^ indent ^ "noreturn:"               ^ show ss.ss_noreturn ^ "\n"*)
   (*  ^ indent ^ "external:"               ^ show ss.ss_external ^"\n"*)
-  ^ "\n")))))))))))))))))))))))))   
+  ^ "\n")))))))))))))))))))))))))
  *)
 and locals_lexical_block context (lb : Dwarf.sdt_lexical_block) =
   let context1 = "lexblock" :: context in
@@ -127,7 +131,7 @@ and locals_lexical_block context (lb : Dwarf.sdt_lexical_block) =
   (*  ^ indent ^ "pc ranges:"      ^ pp_pc_ranges (level+1) lb.slb_pc_ranges*)
   ^ (indent ^ ("subroutines :"   ^ (pp_sdt_list lb.slb_subroutines (locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1)))
   ^ (indent ^ ("lexical_blocks:" ^ (pp_sdt_list lb.slb_lexical_blocks (locals__lexical_block (Nat_big_num.add level(Nat_big_num.of_int 1)))
-  ^ "\n"))))))))))   
+  ^ "\n"))))))))))
  *)
 
 let locals_compilation_unit context (cu : Dwarf.sdt_compilation_unit) =
@@ -251,7 +255,7 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
     else
       let addr = instructions.(k).i_addr in
       if not (Nat_big_num.less addr_prev addr) then
-        Warn.fatal "mk_ranged_vars_at_instructions found non-increasing address %s" (pp_addr addr);
+        fatal "mk_ranged_vars_at_instructions found non-increasing address %s" (pp_addr addr);
       let (still_current, old) =
         List.partition (function ((_, n2, _), _) -> Nat_big_num.less addr n2) prev
       in
@@ -279,6 +283,6 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
     rvai_remaining;
   }
 
-(*   
+(*
 let local_locals (vars: ranged_var list) instructions  : ranged_vars_at_locations
    *)

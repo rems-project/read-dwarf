@@ -3,6 +3,10 @@
 
 (*****************************************************************************)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (** basic pp for control-flow abstraction                                    *)
 open AnalyseUtils
 
@@ -57,7 +61,7 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
       list =
     match read_file_lines filename_branch_table with
     | Error s ->
-        Warn.fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
+        fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
     | Ok lines ->
         let parse_line (s : string) : (natural * (natural * natural * string * natural)) option =
           match
@@ -71,7 +75,7 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
                     Nat_big_num.of_int n,
                     shift,
                     Nat_big_num.of_int a_offset ) )
-          | exception _ -> Warn.fatal "couldn't parse branch table data file line: \"%s\"\n" s
+          | exception _ -> fatal "couldn't parse branch table data file line: \"%s\"\n" s
         in
         List.filter_map parse_line (List.tl (Array.to_list lines))
   in
@@ -139,7 +143,7 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
     if pc = String.length shift then
       match stack with
       | [a] -> a
-      | _ -> Warn.fatal "eval_shift_expression terminated with non-singleton stack"
+      | _ -> fatal "eval_shift_expression terminated with non-singleton stack"
     else
       let command = shift.[pc] in
       if command = 'n' then
@@ -155,7 +159,7 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
                 (Nat_big_num.pow_int_positive 2 (Char.code command - Char.code '0'))
             in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal "eval_shift_expression shift empty stack"
+        | _ -> fatal "eval_shift_expression shift empty stack"
       else if command = 'r' then
         (* push rodata branch table base address *)
         let stack' = a_table :: stack in
@@ -170,29 +174,29 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
         | a1 :: a2 :: stack' ->
             let a' = Nat_big_num.add a1 a2 in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal "eval_shift_expression plus emptyish stack"
+        | _ -> fatal "eval_shift_expression plus emptyish stack"
       else if command = 'b' then
         (* read byte from branch table *)
         match stack with
         | a :: stack' ->
             let a' = read_rodata_b a in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal "eval_shift_expression b empty stack"
+        | _ -> fatal "eval_shift_expression b empty stack"
       else if command = 'h' then
         (* read halfword from branch table *)
         match stack with
         | a :: stack' ->
             let a' = read_rodata_h a in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal "eval_shift_expression h empty stack"
+        | _ -> fatal "eval_shift_expression h empty stack"
       else if command = 'W' then
         (* read word from branch table and sign-extend *)
         match stack with
         | a :: stack' ->
             let a' = read_rodata_W a in
             eval_shift_expression shift a_table a_offset i (a' :: stack') (pc + 1)
-        | _ -> Warn.fatal "eval_shift_expression W empty stack"
-      else Warn.fatal "eval_shift_expression unknown command"
+        | _ -> fatal "eval_shift_expression W empty stack"
+      else fatal "eval_shift_expression unknown command"
   in
 
   let branch_table_target_addresses =
@@ -207,8 +211,7 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
                     let table_entry_addr = Nat_big_num.add a_table (Nat_big_num.of_int (4 * i)) in
                     match natural_assoc_opt table_entry_addr rodata_words with
                     | None ->
-                        Warn.fatal "no branch table entry for address %s\n"
-                          (pp_addr table_entry_addr)
+                        fatal "no branch table entry for address %s\n" (pp_addr table_entry_addr)
                     | Some table_entry ->
                         let a_target =
                           Nat_big_num.modulus
@@ -323,8 +326,7 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
         let addresses =
           try List.assoc addr branch_table_targets
           with Not_found ->
-            Warn.fatal
-              "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
+            fatal "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
               (pp_addr addr)
         in
         List.mapi
@@ -359,12 +361,12 @@ let pp_opcode_bytes arch (opcode_bytes : int list) : string =
 
 (*****************************************************************************)
 
-(* objdump -d output format, from GNU objdump (GNU Binutils for Ubuntu) 2.30: 
+(* objdump -d output format, from GNU objdump (GNU Binutils for Ubuntu) 2.30:
 x86:
   400150:\t48 83 ec 10          \tsub    $0x10,%rsp
   400160:	48 8d 05 99 0e 20 00 	lea    0x200e99(%rip),%rax        # 601000 <x>
- 
-AArch64: 
+
+AArch64:
    10000:\t90000088 \tadrp\tx8, 20000 <x>
    10004:	52800129 	mov	w9, #0x9                   	// #9
  *)
@@ -379,11 +381,11 @@ type objdump_instruction = natural * int list (*opcode bytes*) * string (*mnemon
 let parse_objdump_line arch (s : string) : objdump_instruction option =
   let parse_hex_int64 s' =
     try Scanf.sscanf s' "%Lx" (fun i64 -> i64)
-    with _ -> Warn.fatal "cannot parse address in objdump line %s\n" s
+    with _ -> fatal "cannot parse address in objdump line %s\n" s
   in
   let parse_hex_int s' =
     try Scanf.sscanf s' "%x" (fun i -> i)
-    with _ -> Warn.fatal "cannot parse opcode byte in objdump line %s\n" s
+    with _ -> fatal "cannot parse opcode byte in objdump line %s\n" s
   in
   if Str.string_match objdump_line_regexp s 0 then
     let addr_int64 = parse_hex_int64 (Str.matched_group 1 s) in
@@ -405,7 +407,7 @@ let parse_objdump_lines arch lines : objdump_instruction list =
 
 let parse_objdump_file arch filename_objdump_d : objdump_instruction array =
   match read_file_lines filename_objdump_d with
-  | Error s -> Warn.fatal "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
+  | Error s -> fatal "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
   | Ok lines -> Array.of_list (parse_objdump_lines arch lines)
 
 (*****************************************************************************)
@@ -435,7 +437,7 @@ let mk_instructions test filename_objdump_d filename_branch_table :
     ( (function
       | addr -> (
           try Hashtbl.find tbl addr
-          with _ -> Warn.fatal "index_of_address didn't find %s\n" (pp_addr addr)
+          with _ -> fatal "index_of_address didn't find %s\n" (pp_addr addr)
         )),
       function
       | addr -> (
@@ -505,7 +507,7 @@ let pp_target_addr_wrt (addr : natural) (c : control_flow_insn) (a : natural) =
 let pp_come_from_addr_wrt (addr : natural) (c : control_flow_insn) (a : natural) =
   (if highlight c && Nat_big_num.greater a addr then "v" else "") ^ pp_addr a
 
-(*  
+(*
 let pp_branch_targets (xs : (addr * control_flow_insn * (target_kind * addr * int * string) list) list)
     =
   String.concat ""

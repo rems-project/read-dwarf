@@ -3,6 +3,10 @@
 
 (*****************************************************************************)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 open AnalyseUtils
 open AnalyseControlFlowTypes
 open AnalyseElfTypes
@@ -49,9 +53,9 @@ let pp_line_number_header_concise (lnh : Dwarf.line_number_header) : string =
 ^ ("line_base =                          " ^ (Nat_big_num.to_string lnh.lnh_line_base ^ ("\n"
 ^ ("line_range =                         " ^ (Nat_big_num.to_string lnh.lnh_line_range ^ ("\n"
 ^ ("opcode_base =                        " ^ (Nat_big_num.to_string lnh.lnh_opcode_base ^ ("\n"
-^ ("standard_opcode_lengths =            " ^ (string_of_list 
+^ ("standard_opcode_lengths =            " ^ (string_of_list
   instance_Show_Show_Num_natural_dict lnh.lnh_standard_opcode_lengths ^ ("\n"
-^ ("comp_dir =                           " ^ (string_of_maybe 
+^ ("comp_dir =                           " ^ (string_of_maybe
   instance_Show_Show_string_dict lnh.lnh_comp_dir ^ ("\n"
 ^ ("include_directories =                " ^ (Lem_string.concat ", " (Lem_list.map string_of_bytes  lnh.lnh_include_directories) ^ ("\n"
 ^ ("file_entries =                   \n\n" ^ (Lem_string.concat "\n" (Lem_list.map pp_line_number_file_entry  lnh.lnh_file_entries) ^ "\n"))))))))))))))))))))))))))))))))))))))))))))
@@ -77,17 +81,17 @@ let split_into_sequences
     | [] -> (
         match acc1 with
         | [] -> List.rev acc2
-        | _ -> Warn.fatal "split_into_sequences found premature end of sequence"
+        | _ -> fatal "split_into_sequences found premature end of sequence"
       )
     | lnr :: lnrs' ->
         if lnr.lnr_end_sequence then (
           let first =
             match List.last_opt acc1 with
             | Some lnr_first -> lnr_first.lnr_address
-            | None -> Warn.fatal "split_into_sequences found sequence of length 0"
+            | None -> fatal "split_into_sequences found sequence of length 0"
           in
           let last = lnr.lnr_address in
-          if Nat_big_num.equal first last then Warn.fatal "split_into_sequences found first=last"
+          if Nat_big_num.equal first last then fatal "split_into_sequences found first=last"
           else ();
           let elis =
             {
@@ -123,8 +127,8 @@ let split_into_entries (s : evaluated_line_info_sequence) : evaluated_line_info_
   in
   f [] s.elis_lines
 
-(*           
-        
+(*
+
 let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_info_for_instruction option array =
   let sequences = List.flatten (List.map split_into_sequences eli) in
   let compare_sequence s1 s2 = Nat_big_num.compare s1.elis_first s2.elis_first in
@@ -132,24 +136,24 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
   (*let overlap_sequence s1 s2 = not( Nat_big_num.greater_equal s2.first s1.last || Nat_big_num.greater_equal s1.first s2.last) in*)
 
   Printf.printf "mk_line_info\n%s" (String.concat "\n" (List.map pp_sequence_concise sequences_sorted));
-  
+
   let size = Array.length instructions in
   let elifis = Array.make size None in
 
   let next_sequence addr remaining_sequences : ((evaluated_line_info_sequence list) * (evaluated_line_info_sequence list)) =
-    let (discardable,remaining') = 
+    let (discardable,remaining') =
       List.partition
-        (function sequence -> 
+        (function sequence ->
            Nat_big_num.less_equal sequence.elis_last addr)
         remaining_sequences in
-    let (sequences,remaining'') = 
+    let (sequences,remaining'') =
       List.partition
-        (function sequence -> 
+        (function sequence ->
            Nat_big_num.less_equal sequence.elis_first addr)
         remaining' in
     (sequences,remaining'') in
-  
-  let rec g remaining_sequences k = 
+
+  let rec g remaining_sequences k =
     if k>= size then ()
     else
       let addr = instructions.(k).i_addr in
@@ -157,18 +161,18 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
       | ([sequence'],remaining_sequences'') ->
          (* found one - start trying that sequence *)
          f sequence' sequence'.elis_lines remaining_sequences'' k
-      | ([],[]) -> 
+      | ([],[]) ->
          (* no sequences for this address and no remaining sequences - stop *)
          ()
-      | ([],remaining_sequences'') -> 
+      | ([],remaining_sequences'') ->
          (* no sequences for this address - continue with the next address, discarding now-irrelevant sequences *)
          g remaining_sequences'' (k+1)
       | ((sequence1::sequence2::_ as sequences),remaining_sequences'') ->
          (* multiple sequences covering this address - hope that shouldn't happen in well-formed DWARF *)
          Warn.nonfatal "multiple sequences found for %d:\n%s" k (String.concat "\n" (List.map pp_sequence_concise sequences));
          (* just discard all except the first *)
-         f sequence1 sequence1.elis_lines remaining_sequences'' k 
-       
+         f sequence1 sequence1.elis_lines remaining_sequences'' k
+
   and f active_sequence remaining_lines remaining_sequences k =
     if k>= size then ()
     else
@@ -183,7 +187,7 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
                elifi_line = l1 } in
            elifis.(k) <- Some elifi;
            f active_sequence remaining_lines remaining_sequences (k+1)
-         else if Nat_big_num.less l1.lnr_address addr && Nat_big_num.less addr l2.lnr_address then 
+         else if Nat_big_num.less l1.lnr_address addr && Nat_big_num.less addr l2.lnr_address then
            (* this instruction address is within the range of the first line, but not equal to it*)
            let elifi = {
                elifi_start = false;
@@ -203,13 +207,13 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
          else
            (* this instruction address is before the range of the first line *)
            (* so skip this instruction and try the next *)
-           f active_sequence remaining_lines remaining_sequences (k+1) 
+           f active_sequence remaining_lines remaining_sequences (k+1)
   in
   g sequences_sorted 0  ;
   elifis
 
 
-NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW 
+NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW NEW
  *)
 
 let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
@@ -307,7 +311,7 @@ let source_line (comp_dir, dir, file) n1 =
           (*        source_file_cache := (file, None) :: !source_file_cache;
                   None *)
           source_file_cache := ((comp_dir, dir, file), None) :: !source_file_cache;
-          Warn.nonfatal "filename %s %s" filename s;
+          err "filename %s %s" filename s;
           None
     )
 
@@ -323,7 +327,7 @@ let pp_source_line so column =
       else s
   | None -> "file not found"
 
-(* OLD source file lines 
+(* OLD source file lines
 let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : string option =
   let sls = Dwarf.source_lines_of_address ds a in
   match sls with

@@ -3,6 +3,10 @@
 
 (*****************************************************************************)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 open AnalyseUtils
 open AnalyseSdtUtils
 open AnalyseElfTypes
@@ -140,7 +144,7 @@ let inlining_stack_at_index (an : analysis) k =
                   match ss.ss_call_site with
                   | Some (_ufe, line, _subprogram_name) -> line
                   | None -> -3
-                  (*Warn.fatal "no call site"*) )
+                  (*fatal "no call site"*) )
               ))
           (List.rev sss)
       in
@@ -150,7 +154,7 @@ let inlining_stack_at_index (an : analysis) k =
       match nls with [] -> [] | (_name, line) :: nls' -> shift line nls'
     )
   | _ ->
-      Warn.nonfatal "inlining_stack_at_index found non-prefix-related inlinings:\n%s"
+      err "inlining_stack_at_index found non-prefix-related inlinings:\n%s"
         (String.concat "\n===---\n"
            (List.map
               (function
@@ -505,7 +509,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
     | C_plain -> (
         match i.i_targets with
         | [(_, _, k', _)] -> next_non_start_node_name nesting visited k'
-        | _ -> Warn.fatal "non-unique plain targets at %s" (pp_addr i.i_addr)
+        | _ -> fatal "non-unique plain targets at %s" (pp_addr i.i_addr)
       )
     | C_branch _ -> (
         match i.i_targets with
@@ -513,7 +517,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
             if List.mem k' visited then (node_name nesting addr', k')
               (* TODO: something more useful *)
             else next_non_start_node_name nesting (k' :: visited) k'
-        | _ -> Warn.fatal "non-unique branch targets at %s" (pp_addr i.i_addr)
+        | _ -> fatal "non-unique branch targets at %s" (pp_addr i.i_addr)
       )
     | _ -> (node_name nesting i.i_addr, k)
   in
@@ -586,13 +590,13 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
     let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_no_instruction ->
-        Warn.fatal "graphette_normal on C_no_instruction"
+        fatal "graphette_normal on C_no_instruction"
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_plain ->
-        Warn.fatal "graphette_normal on C_plain"
+        fatal "graphette_normal on C_plain"
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_branch _ ->
-        Warn.fatal "graphette_normal on C_branch"
+        fatal "graphette_normal on C_branch"
         (*graphette_body acc_nodes acc_edges visited nn_last (k + 1)*)
     | C_ret ->
         let node = mk_node nesting k CFG_node_ret "ret" in
@@ -694,7 +698,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               i.i_targets
           with
           | [k_call] -> k_call
-          | _ -> Warn.fatal "non-unique k_call"
+          | _ -> fatal "non-unique k_call"
         in
         let nn_k_successor =
           match
@@ -724,7 +728,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
                 in
                 match names with
                 | [name] -> name
-                | _ -> Warn.fatal "multiple ss_target names: %s\n" (String.concat ", " names)
+                | _ -> fatal "multiple ss_target names: %s\n" (String.concat ", " names)
               in
 
               (* find all the source lines associated with this instruction in the O0 *)
@@ -756,7 +760,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               with
               | [ss] -> Some ss
               | [] -> None
-              | _ -> Warn.fatal "multiple ss_O2_ambient'"
+              | _ -> fatal "multiple ss_O2_ambient'"
             )
         in
 
@@ -797,20 +801,17 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               n_current = new_ss_O2_ambient_option;
               n_stack =
                 ( match nesting.n_current with
-                | None -> Warn.fatal "no ss_call"
+                | None -> fatal "no ss_call"
                 | Some ss_current ->
-                    ( ( match ss_current.ss_name with
-                      | None -> Warn.fatal "no name"
-                      | Some name -> name
-                      ),
+                    ( (match ss_current.ss_name with None -> fatal "no name" | Some name -> name),
                       match new_ss_O2_ambient_option with
                       | None ->
-                          Warn.fatal "no call site for\n%s"
+                          fatal "no call site for\n%s"
                             (Dwarf.pp_sdt_subroutine (Nat_big_num.of_int 0) ss_current)
                       | Some new_ss_O2_ambient -> (
                           match new_ss_O2_ambient.ss_call_site with
                           | None ->
-                              Warn.fatal "no call site2 for\n%s"
+                              fatal "no call site2 for\n%s"
                                 (Dwarf.pp_sdt_subroutine (Nat_big_num.of_int 0) ss_current)
                           | Some (_ufe, line, _subprogram_name) -> line
                         )
@@ -880,7 +881,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               mk_graph' return_target g_acc' visited' work_list'
           | (false, false) ->
               (* non-graphette-start, and not a non-start node*)
-              Warn.nonfatal
+              warn
                 "mk_graph' called on index %d at %s which is neither is_graphette_start nor \
                  is_graph_non_start_node - could be a self-loop"
                 k

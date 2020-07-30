@@ -1,5 +1,9 @@
 (** Finding sdt (DWARF simple-die-tree) subroutines by various predicates *)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 let rec find_sdt_subroutine_subroutine (p : Dwarf.sdt_subroutine -> bool)
     (ss : Dwarf.sdt_subroutine) : Dwarf.sdt_subroutine list =
   let sss1 =
@@ -30,7 +34,7 @@ let find_sdt_subroutine_by_name (sdt_d : Dwarf.sdt_dwarf) (s : string) :
   match find_sdt_subroutine_dwarf p sdt_d with
   | [] -> None
   | [ss] -> Some ss
-  | _ -> Warn.fatal "find_sdt_subroutine_by_name found multiple matching subroutines"
+  | _ -> fatal "find_sdt_subroutine_by_name found multiple matching subroutines"
 
 let find_sdt_subroutine_by_entry_address (sdt_d : Dwarf.sdt_dwarf) addr :
     Dwarf.sdt_subroutine list =
@@ -38,5 +42,5 @@ let find_sdt_subroutine_by_entry_address (sdt_d : Dwarf.sdt_dwarf) addr :
     match ss.ss_entry_address with None -> false | Some addr' -> addr' = addr
   in
   match find_sdt_subroutine_dwarf p sdt_d with
-  | [] -> Warn.fatal "find_sdt_subroutine_by_entry_address found no matching subroutines"
+  | [] -> fatal "find_sdt_subroutine_by_entry_address found no matching subroutines"
   | sss -> sss
