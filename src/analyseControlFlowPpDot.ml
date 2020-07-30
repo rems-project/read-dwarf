@@ -451,7 +451,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
 
   (* the graphette start nodes are the instructions which are either
        - elf symbols, or
-       - the branch target (but not the successor) of a C_branch_and_link  
+       - the branch target (but not the successor) of a C_branch_and_link
           (probably these will all also have elf symbols) *)
   let is_graphette_start_target (cf : come_from) =
     match cf.cf_target_kind with
@@ -1036,7 +1036,7 @@ http://ocamlgraph.lri.fr/doc/Fixpoint.html
 (* same-source-line edges *)
 
 let rec graph_nodes g =
-  g.gc_nodes @ concat_map graph_nodes (List.map (function (_, _, g') -> g') g.gc_subgraphs)
+  g.gc_nodes @ List.concat_map graph_nodes (List.map (function (_, _, g') -> g') g.gc_subgraphs)
 
 let correlate_source_line g1 g2 : graph_cfg =
   let is_branch_cond = function

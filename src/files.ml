@@ -66,6 +66,11 @@ let input_list (elem_reader : 'a reader) (i : in_channel) : 'a list =
   let rec aux acc = try aux (elem_reader i :: acc) with End_of_file -> List.rev acc in
   aux []
 
+(** Try the reader until it fails with [End_of_file] and then build the array of all the
+    successfully read objects in order.*)
+let input_array (elem_reader : 'a reader) (i : in_channel) : 'a array =
+  input_list elem_reader i |> Array.of_list
+
 (** Output all the element of the list in order with the provided writer *)
 let output_list (elem_writer : 'a writer) (o : out_channel) (l : 'a list) =
   List.iter (elem_writer o) l

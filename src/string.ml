@@ -19,3 +19,12 @@ let exists f s =
     if i >= len then false else if f s.[i] then true else exists_from (i + 1)
   in
   exists_from 0
+
+(** Convert the list into a list of char. Probably a bad idea on large strings. *)
+let to_list s =
+  let len = length s in
+  let res = ref [] in
+  for i = len - 1 downto 0 do
+    res := s.[i] :: !res
+  done;
+  !res

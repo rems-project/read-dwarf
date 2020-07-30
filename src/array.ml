@@ -28,3 +28,44 @@ let of_list_mapi f = function
 
 (** [of_list_map f l = of_list (List.map f l) = map f (of_list l)] *)
 let of_list_map f = of_list_mapi (Fun.const f)
+
+(*****************************************************************************)
+(*****************************************************************************)
+(*****************************************************************************)
+(** {1 Array scanning } *)
+
+(** Find the first value satisfying the predicate and return it with its index.
+    Throw [Not_found] if no value satisfies the predicate *)
+let find_pair (pred : 'a -> bool) (arr : 'a array) : int * 'a =
+  let len = length arr in
+  let rec from n =
+    if n >= len then raise Not_found
+    else
+      let v = arr.(n) in
+      if pred v then (n, v) else from (n + 1)
+  in
+  from 0
+
+(** Find the first value satisfying the predicate.
+    Throw [Not_found] if no value satisfies the predicate *)
+let find pred arr = find_pair pred arr |> snd
+
+(** Find the first index whose value satisfies the predicate.
+    Throw [Not_found] if no value satisfies the predicate *)
+let find_index pred arr = find_pair pred arr |> fst
+
+(** Find all the values satisfying the predicate and return them with their index.*)
+let find_all_pairs (pred : 'a -> bool) (arr : 'a t) : (int * 'a) list =
+  let len = length arr in
+  let res = ref [] in
+  for i = len - 1 downto 0 do
+    let v = arr.(i) in
+    if pred v then res := (i, v) :: !res
+  done;
+  !res
+
+(** Find all the values satisfying the predicate*)
+let find_all pred (arr : 'a t) : 'a list = find_all_pairs pred arr |> List.map snd
+
+(** Find all the indices whose value satisfies the predicate*)
+let find_all_indices pred (arr : 'a t) : int list = find_all_pairs pred arr |> List.map fst

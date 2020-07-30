@@ -82,7 +82,7 @@ let split_into_sequences
     | lnr :: lnrs' ->
         if lnr.lnr_end_sequence then (
           let first =
-            match list_last_opt acc1 with
+            match List.last_opt acc1 with
             | Some lnr_first -> lnr_first.lnr_address
             | None -> Warn.fatal "split_into_sequences found sequence of length 0"
           in
@@ -303,7 +303,7 @@ let source_line (comp_dir, dir, file) n1 =
       | Ok lines ->
           source_file_cache := ((comp_dir, dir, file), Some lines) :: !source_file_cache;
           access_lines lines n
-      | MyFail s ->
+      | Error s ->
           (*        source_file_cache := (file, None) :: !source_file_cache;
                   None *)
           source_file_cache := ((comp_dir, dir, file), None) :: !source_file_cache;

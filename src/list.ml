@@ -19,6 +19,15 @@ let rec set_nth l n v =
   | _ :: l when n = 0 -> v :: l
   | a :: l -> a :: set_nth l (n - 1) v
 
+(** Give the last element of the list. Raise [Invalid_argument] if the list is empty. *)
+let rec last = function
+  | [a] -> a
+  | _ :: l -> last l
+  | [] -> Raise.inv_arg "List.last on empty_list"
+
+(** Give the last element of the list. Return [None] if the list is empty. *)
+let rec last_opt = function [a] -> Some a | _ :: l -> last_opt l | [] -> None
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)

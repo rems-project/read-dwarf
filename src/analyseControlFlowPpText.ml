@@ -76,7 +76,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
         let targets4 = List.map (function (_, _, k', _) -> k') targets3 in
 
         let first = min k (List.hd targets4) in
-        let last = max k (list_last targets4) in
+        let last = max k (List.last targets4) in
 
         Some
           { source = k; targets = targets4; first; last; weight = (if first < k then B else L) }

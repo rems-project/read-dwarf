@@ -39,7 +39,7 @@ let process_file () : unit =
   (*filename_objdump_d filename_branch_tables (filename_elf : string) : unit =*)
   let m = !Globals.ppmode in
 
-  (* todo: make idiomatic Cmdliner :-(  *)
+  (* TODO: make idiomatic Cmdliner :-(  *)
   let filename_elf =
     match !Globals.elf with Some s -> s | None -> Warn.fatal "no --elf option\n"
   in
@@ -93,7 +93,7 @@ let process_file () : unit =
           let start_indices =
             List.map
               (function k -> (k, nesting_init None))
-              (array_indices_such_that (function ss -> ss <> []) an.elf_symbols)
+              (Array.find_all_indices (function ss -> ss <> []) an.elf_symbols)
           in
           let graph = mk_cfg test an visitedo "" false false start_indices in
           Printf.printf "cfg branch nodes: %d\n" (count_branch_nodes graph);
@@ -110,7 +110,7 @@ let process_file () : unit =
         match m with
         | Ascii -> (
             match read_file_lines "emacs-highlighting" with
-            | MyFail _ -> ()
+            | Error _ -> ()
             | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
           )
         | Html -> ()
@@ -122,7 +122,7 @@ let process_file () : unit =
         | Ascii -> ()
         | Html -> (
             match read_file_lines "html-preamble.html" with
-            | MyFail _ -> ()
+            | Error _ -> ()
             | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
           )
       end;
@@ -135,7 +135,7 @@ let process_file () : unit =
         | Ascii -> ()
         | Html -> (
             match read_file_lines "html-postamble.html" with
-            | MyFail _ -> ()
+            | Error _ -> ()
             | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
           )
       end;
@@ -178,7 +178,7 @@ let process_file () : unit =
           let all_elf_symbol_indices an =
             List.map
               (function k -> (k, nesting_init None))
-              (array_indices_such_that (function ss -> ss <> []) an.elf_symbols)
+              (Array.find_all_indices (function ss -> ss <> []) an.elf_symbols)
           in
 
           (* if/when we want to run comparison without specifying the start symbols, we'll need to add the sdt_subroutine data to the above for the to-be-inlined O0 case *)
@@ -218,7 +218,7 @@ let process_file () : unit =
           let layout_lines =
             match read_file_lines cfg_dot_file_layout with
             | Ok lines -> lines
-            | MyFail s -> Warn.fatal "couldn't read cfg_dot_file_layout %s" s
+            | Error s -> Warn.fatal "couldn't read cfg_dot_file_layout %s" s
           in
           let ppd_correlate_edges = List.map (pp_edge "black") graph'.gc_edges in
           let c = open_out cfg_dot_file in

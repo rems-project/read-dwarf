@@ -17,6 +17,6 @@ let mk_elf_symbols test instructions : string list array =
   Array.map (function i -> elf_symbols_of_address test i.i_addr) instructions
 
 let address_of_elf_symbol test (s : string) : addr option =
-  find_map
+  List.find_map
     (fun (name, (_typ, _size, address, _mb, _binding)) -> if s = name then Some address else None)
     test.symbol_map

@@ -56,7 +56,7 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
       (*offset*)
       list =
     match read_file_lines filename_branch_table with
-    | MyFail s ->
+    | Error s ->
         Warn.fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
     | Ok lines ->
         let parse_line (s : string) : (natural * (natural * natural * string * natural)) option =
@@ -405,7 +405,7 @@ let parse_objdump_lines arch lines : objdump_instruction list =
 
 let parse_objdump_file arch filename_objdump_d : objdump_instruction array =
   match read_file_lines filename_objdump_d with
-  | MyFail s -> Warn.fatal "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
+  | Error s -> Warn.fatal "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
   | Ok lines -> Array.of_list (parse_objdump_lines arch lines)
 
 (*****************************************************************************)
