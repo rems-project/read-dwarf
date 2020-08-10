@@ -21,7 +21,11 @@ let clamp_z z = try Z.to_int z with Z.Overflow when Z.compare z Z.zero > 0 -> In
 let of_linksem (elf : Elf.File.t) (env : Ctype.env) (lvar : linksem_t) : t =
   let name = lvar.svfp_name in
   let param = match lvar.svfp_kind with SVPK_var -> false | SVPK_param -> true in
-  let ctype = match lvar.svfp_type with Some t -> Ctype.of_linksem ~env t | None -> Ctype.of_linksem_none () in
+  let ctype =
+    match lvar.svfp_type with
+    | Some t -> Ctype.of_linksem ~env t
+    | None -> Ctype.of_linksem_none ()
+  in
   let locs =
     lvar.svfp_locations |> Option.value ~default:[]
     |> List.map (fun (a, b, l) -> ((Z.to_int a, clamp_z b), Loc.of_linksem elf l))
