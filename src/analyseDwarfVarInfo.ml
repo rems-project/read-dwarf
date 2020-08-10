@@ -28,7 +28,7 @@ let pp_sdt_concise_variable_or_formal_parameter_main (level : int)
   ^ "  "
   (*^ indent ^ "kind:" *) ^ (match svfp.svfp_kind with SVPK_var -> "var" | SVPK_param -> "param")
   ^ "  "
-  (*^ indent ^ "type:" *) ^ Dwarf.pp_type_info_deep svfp.svfp_type
+  (*^ indent ^ "type:" *) ^ (match svfp.svfp_type with None -> "none" | Some t -> Dwarf.pp_type_info_deep t)
   ^ "  "
   (*^ indent ^ "const_value:"*)
   ^ (match svfp.svfp_const_value with None -> "" | Some v -> "const:" ^ Nat_big_num.to_string v)

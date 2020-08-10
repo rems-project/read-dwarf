@@ -455,6 +455,14 @@ and unqualified_of_linksem ?(force_complete = false) ~cc : linksem_t -> unqualif
       enum_type_of_linksem ~cc ~cupdie ~mname ~decl
   | _ -> Raise.inv_arg "Converting qualified type in unqualified"
 
+(** Placeholder for whatever the right thing to do is when linksem found no type - TODO: fix *)
+and of_linksem_none () =        
+      let unqualified =   voidstar in 
+      { unqualified; const=false; volatile=false; restrict=false; constexpr = false }
+
+
+
+       
 (** The main [of_linksem] that take a full conversion_context and qualifiers.
 
     The user friendly version is {!of_linksem}
