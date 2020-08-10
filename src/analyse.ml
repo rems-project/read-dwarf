@@ -50,7 +50,7 @@ let process_file () : unit =
 
   let filename_branch_tables_option =
     !AnalyseGlobals.branch_table_data_file
-      (*
+    (*
     match !AnalyseGlobals.branch_table_data_file with
     | Some s -> s
     | None -> fatal "no --branch-tables option\n"*)
@@ -78,7 +78,9 @@ let process_file () : unit =
    *)
   let test = time "parse_elf_file" parse_elf_file filename_elf in
 
-  let an = time "mk_analysis" (mk_analysis test filename_objdump_d) filename_branch_tables_option in
+  let an =
+    time "mk_analysis" (mk_analysis test filename_objdump_d) filename_branch_tables_option
+  in
 
   match
     (!AnalyseGlobals.elf2, !AnalyseGlobals.objdump_d2, !AnalyseGlobals.branch_table_data_file2)

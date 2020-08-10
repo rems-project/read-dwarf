@@ -58,29 +58,31 @@ let branch_table_target_addresses test filename_branch_table_option : (addr * ad
   let branch_data :
       (natural (*a_br*) * (natural (*a_table*) * natural (*size*) * string (*shift*) * natural))
       (*offset*)
-        list =
+      list =
     match filename_branch_table_option with
     | None -> []
-    | Some filename_branch_table -> 
-    match read_file_lines filename_branch_table with
-    | Error s ->
-        fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
-    | Ok lines ->
-        let parse_line (s : string) : (natural * (natural * natural * string * natural)) option =
-          match
-            Scanf.sscanf s " %x: %x %x %s %x #" (fun a_br a_table n shift a_offset ->
-                (a_br, a_table, n, shift, a_offset))
-          with
-          | (a_br, a_table, n, shift, a_offset) ->
-              Some
-                ( Nat_big_num.of_int a_br,
-                  ( Nat_big_num.of_int a_table,
-                    Nat_big_num.of_int n,
-                    shift,
-                    Nat_big_num.of_int a_offset ) )
-          | exception _ -> fatal "couldn't parse branch table data file line: \"%s\"\n" s
-          in
-          List.filter_map parse_line (List.tl (Array.to_list lines))
+    | Some filename_branch_table -> (
+        match read_file_lines filename_branch_table with
+        | Error s ->
+            fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
+        | Ok lines ->
+            let parse_line (s : string) :
+                (natural * (natural * natural * string * natural)) option =
+              match
+                Scanf.sscanf s " %x: %x %x %s %x #" (fun a_br a_table n shift a_offset ->
+                    (a_br, a_table, n, shift, a_offset))
+              with
+              | (a_br, a_table, n, shift, a_offset) ->
+                  Some
+                    ( Nat_big_num.of_int a_br,
+                      ( Nat_big_num.of_int a_table,
+                        Nat_big_num.of_int n,
+                        shift,
+                        Nat_big_num.of_int a_offset ) )
+              | exception _ -> fatal "couldn't parse branch table data file line: \"%s\"\n" s
+            in
+            List.filter_map parse_line (List.tl (Array.to_list lines))
+      )
   in
 
   (* pull out .rodata section from ELF *)
@@ -328,15 +330,17 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
     | C_branch_register _ ->
         let addresses =
           try List.assoc addr branch_table_targets
-          with Not_found ->
+          with Not_found -> (
             match branch_table_targets with
             | [] ->
-               (warn "branch-register instruction used, but no branch_table_targets - defaulting to just this address, which will give the wrong control-flow data";
+                warn
+                  "branch-register instruction used, but no branch_table_targets - defaulting to \
+                   just this address, which will give the wrong control-flow data";
                 [addr]
-               )
-            | _ -> 
-               fatal "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
-                 (pp_addr addr)
+            | _ ->
+                fatal "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
+                  (pp_addr addr)
+          )
         in
         List.mapi
           (function
