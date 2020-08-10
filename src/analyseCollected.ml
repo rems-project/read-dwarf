@@ -30,10 +30,10 @@ open AnalyseControlFlowPpText
 open AnalyseDwarfVarInfo
 open AnalyseDwarfInliningInfo
 
-let mk_analysis test filename_objdump_d filename_branch_table =
+let mk_analysis test filename_objdump_d filename_branch_table_option =
   (* compute the basic control-flow data *)
   let (instructions, index_of_address, index_option_of_address, address_of_index) =
-    time "mk_instructions" (mk_instructions test filename_objdump_d) filename_branch_table
+    time "mk_instructions" (mk_instructions test filename_objdump_d) filename_branch_table_option
   in
 
   let line_info =

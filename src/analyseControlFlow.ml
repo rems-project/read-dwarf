@@ -53,12 +53,15 @@ let pp_target_kind_short = function
 
 (*****************************************************************************)
 
-let branch_table_target_addresses test filename_branch_table : (addr * addr list) list =
+let branch_table_target_addresses test filename_branch_table_option : (addr * addr list) list =
   (* read in and parse branch-table description file *)
   let branch_data :
       (natural (*a_br*) * (natural (*a_table*) * natural (*size*) * string (*shift*) * natural))
       (*offset*)
-      list =
+        list =
+    match filename_branch_table_option with
+    | None -> []
+    | Some filename_branch_table -> 
     match read_file_lines filename_branch_table with
     | Error s ->
         fatal "%s\ncouldn't read branch table data file: \"%s\"\n" s filename_branch_table
@@ -76,8 +79,8 @@ let branch_table_target_addresses test filename_branch_table : (addr * addr list
                     shift,
                     Nat_big_num.of_int a_offset ) )
           | exception _ -> fatal "couldn't parse branch table data file line: \"%s\"\n" s
-        in
-        List.filter_map parse_line (List.tl (Array.to_list lines))
+          in
+          List.filter_map parse_line (List.tl (Array.to_list lines))
   in
 
   (* pull out .rodata section from ELF *)
@@ -326,8 +329,14 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
         let addresses =
           try List.assoc addr branch_table_targets
           with Not_found ->
-            fatal "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
-              (pp_addr addr)
+            match branch_table_targets with
+            | [] ->
+               (warn "branch-register instruction used, but no branch_table_targets - defaulting to just this address, which will give the wrong control-flow data";
+                [addr]
+               )
+            | _ -> 
+               fatal "targets_of_control_flow_insn_without_index C_branch_register fail for %s\n"
+                 (pp_addr addr)
         in
         List.mapi
           (function
@@ -415,7 +424,7 @@ let parse_objdump_file arch filename_objdump_d : objdump_instruction array =
 
 (*****************************************************************************)
 
-let mk_instructions test filename_objdump_d filename_branch_table :
+let mk_instructions test filename_objdump_d filename_branch_table_option :
     instruction array * (addr -> index) * (addr -> index option) * (index -> addr) =
   let objdump_instructions : objdump_instruction array =
     parse_objdump_file test.arch filename_objdump_d
@@ -423,7 +432,7 @@ let mk_instructions test filename_objdump_d filename_branch_table :
 
   (* TODO: check the objdump opcode_bytes against the ELF *)
   let branch_table_targets : (addr * addr list) list =
-    branch_table_target_addresses test filename_branch_table
+    branch_table_target_addresses test filename_branch_table_option
   in
 
   let (index_of_address, index_option_of_address) =

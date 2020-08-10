@@ -48,10 +48,12 @@ let process_file () : unit =
     match !AnalyseGlobals.objdump_d with Some s -> s | None -> fatal "no --objdump-d option\n"
   in
 
-  let filename_branch_tables =
+  let filename_branch_tables_option =
+    !AnalyseGlobals.branch_table_data_file
+      (*
     match !AnalyseGlobals.branch_table_data_file with
     | Some s -> s
-    | None -> fatal "no --branch-tables option\n"
+    | None -> fatal "no --branch-tables option\n"*)
   in
 
   let filename_out_file_option =
@@ -76,7 +78,7 @@ let process_file () : unit =
    *)
   let test = time "parse_elf_file" parse_elf_file filename_elf in
 
-  let an = time "mk_analysis" (mk_analysis test filename_objdump_d) filename_branch_tables in
+  let an = time "mk_analysis" (mk_analysis test filename_objdump_d) filename_branch_tables_option in
 
   match
     (!AnalyseGlobals.elf2, !AnalyseGlobals.objdump_d2, !AnalyseGlobals.branch_table_data_file2)
@@ -144,12 +146,12 @@ let process_file () : unit =
 
       match filename_out_file_option with Some _ -> close_out c | None -> ()
     )
-  | (Some filename_elf2, Some filename_objdump_d2, Some filename_branch_tables2) -> (
+  | (Some filename_elf2, Some filename_objdump_d2, filename_branch_tables_option_2) -> (
       match !AnalyseGlobals.cfg_dot_file with
       | Some cfg_dot_file ->
           let test2 = parse_elf_file filename_elf2 in
 
-          let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables2 in
+          let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables_option_2 in
 
           let parse_source_node_list test an (ano2 : analysis option) (so : string option) :
               (index * nesting) list =
