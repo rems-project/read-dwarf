@@ -468,6 +468,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
     | T_branch_cond_successor -> false
     | T_branch_register -> false
     | T_smc_hvc_successor -> false
+    | T_out_of_range _ -> false
   in
 
   let is_graphette_start k =
@@ -582,6 +583,10 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
       [(k', nesting)] )
   in
 
+  let discard_out_of_range_targets targets =
+    List.filter (function (T_out_of_range _, _, _, _) -> false | _ -> true) targets
+  in
+
   (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes. Recurse (via mk_graph) at bl instructions that are inlined  *)
   let rec graphette_normal return_target (k, nesting) :
       graph_cfg * (index * nesting) list * (* work_list_new *)
@@ -655,7 +660,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
                  | (_, _, k', _) ->
                      let (nn', k'') = next_non_start_node_name nesting [] k' in
                      ((node.nc_name, nn', CFG_edge_flow), (k'', nesting)))
-               i.i_targets)
+               (discard_out_of_range_targets i.i_targets))
         in
         ( {
             gc_start_nodes = [];
@@ -676,7 +681,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
                     | (_, _, k', _) ->
                         let (nn', k'') = next_non_start_node_name nesting [] k' in
                         ((node.nc_name, nn', CFG_edge_flow), (k'', nesting)))
-                  i.i_targets))
+                  (discard_out_of_range_targets i.i_targets)))
         in
         ( {
             gc_start_nodes = [];
@@ -695,7 +700,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
                 | (T_branch_and_link_call, _, k', _) -> Some k'
                 | (T_branch_and_link_call_noreturn, _, k', _) -> Some k'
                 | _ -> None)
-              i.i_targets
+              (discard_out_of_range_targets i.i_targets)
           with
           | [k_call] -> k_call
           | _ -> fatal "non-unique k_call"
@@ -704,7 +709,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
           match
             List.filter_map
               (function (T_branch_and_link_successor, _, k', _) -> Some k' | _ -> None)
-              i.i_targets
+              (discard_out_of_range_targets i.i_targets)
           with
           | [k'] ->
               let (nn', k'') = next_non_start_node_name nesting [] k' in

@@ -47,6 +47,7 @@ let pp_target_kind_short = function
   | T_branch_cond_successor -> "b.cc-succ"
   | T_branch_register -> "br"
   | T_smc_hvc_successor -> "smc-hvc-succ"
+  | T_out_of_range a -> "out-of-range"
 
 (*****************************************************************************)
 (**   find targets of each entry of a branch-table description file          *)
@@ -354,14 +355,17 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
 
   targets
 
-let targets_of_control_flow_insn index_of_address branch_table_targets (addr : natural)
+let targets_of_control_flow_insn index_option_of_address branch_table_targets (addr : natural)
     (opcode_bytes : int list) (c : control_flow_insn) : target list =
   (*Printf.printf "targets_of_control_flow_insn addr=%s\n" (pp_addr addr); flush stdout;*)
   List.map
     (function
-      | (tk, a'', s'') ->
+      | (tk, a'', s'') -> (
           (*       Printf.printf "%s" ("foo " ^ pp_addr addr ^ " " ^ pp_control_flow_instruction c ^ " " ^ pp_target_kind_short tk ^ " " ^ pp_addr a'' ^ " " ^ s'' ^ "\n");*)
-          (tk, a'', index_of_address a'', s''))
+          match index_option_of_address a'' with
+          | Some i -> (tk, a'', i, s'')
+          | None -> (T_out_of_range a'', a'', 0 (*dummy*), s'')
+        ))
     (targets_of_control_flow_insn_without_index branch_table_targets addr opcode_bytes c)
 
 let pp_opcode_bytes arch (opcode_bytes : int list) : string =
@@ -387,7 +391,8 @@ AArch64:
 let objdump_line_regexp =
   Str.regexp " *\\([0-9a-fA-F]+\\):\t\\([0-9a-fA-F ]+\\)\t\\([^ \t]+\\) *\\(.*\\)$"
 
-type objdump_instruction = natural * int list (*opcode bytes*) * string (*mnemonic*) * string
+type objdump_instruction =
+  natural (*address*) * int list (*opcode bytes*) * string (*mnemonic*) * string
 
 (*args etc*)
 
@@ -415,13 +420,36 @@ let parse_objdump_line arch (s : string) : objdump_instruction option =
     Some (addr, opcode_bytes, mnemonic, operands)
   else None
 
+(*
 let parse_objdump_lines arch lines : objdump_instruction list =
   List.filter_map (parse_objdump_line arch) (Array.to_list lines)
+ *)
+
+let rec parse_objdump_lines arch lines (next_index : int) (last_address : natural option) :
+    objdump_instruction list =
+  if next_index >= Array.length lines then []
+  else
+    match parse_objdump_line arch lines.(next_index) with
+    (* skip over unparseable lines *)
+    | None -> parse_objdump_lines arch lines (next_index + 1) last_address
+    | Some ((addr, opcode_bytes, mnemonic, operands) as i) -> (
+        match last_address with
+        | None -> i :: parse_objdump_lines arch lines (next_index + 1) (Some addr)
+        | Some last_address' ->
+            let last_address'' = Nat_big_num.add last_address' (Nat_big_num.of_int 4) in
+            if addr > last_address'' then (
+              (* fake up "missing" instructions for any gaps in the address space*)
+              warn "gap in objdump instruction address sequence at %s" (pp_addr last_address'');
+              (last_address'', [], "missing", "")
+              :: parse_objdump_lines arch lines next_index (Some last_address'')
+            )
+            else i :: parse_objdump_lines arch lines (next_index + 1) (Some addr)
+      )
 
 let parse_objdump_file arch filename_objdump_d : objdump_instruction array =
   match read_file_lines filename_objdump_d with
   | Error s -> fatal "%s\ncouldn't read objdump-d file: \"%s\"\n" s filename_objdump_d
-  | Ok lines -> Array.of_list (parse_objdump_lines arch lines)
+  | Ok lines -> Array.of_list (parse_objdump_lines arch lines 0 None)
 
 (*****************************************************************************)
 (**  parse control-flow instruction asm from objdump and branch table data   *)
@@ -467,8 +495,8 @@ let mk_instructions test filename_objdump_d filename_branch_table_option :
             in
 
             let targets =
-              targets_of_control_flow_insn index_of_address branch_table_targets addr opcode_bytes
-                c
+              targets_of_control_flow_insn index_option_of_address branch_table_targets addr
+                opcode_bytes c
             in
             {
               i_addr = addr;

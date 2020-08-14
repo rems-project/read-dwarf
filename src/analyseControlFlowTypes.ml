@@ -28,6 +28,7 @@ type target_kind =
   | T_branch_cond_successor
   | T_branch_register
   | T_smc_hvc_successor
+  | T_out_of_range of addr
 
 type target = target_kind * addr * index * string
 

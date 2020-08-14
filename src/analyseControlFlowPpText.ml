@@ -55,6 +55,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
       | T_branch_cond_successor -> false
       | T_branch_register -> true
       | T_smc_hvc_successor -> false
+      | T_out_of_range _ -> false
     in
 
     (* filter out targets that we're not going to render *)
