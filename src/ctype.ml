@@ -348,7 +348,12 @@ let rec field_of_linksem ~cc ((_, fname, ltyp, offseto) : linksem_field) : field
   debug "Processing sizeof field %t" PP.(top (opt string) fname);
   let size = sizeof typ in
   debug "Processed field %t" PP.(top (opt string) fname);
-  let offset = match offseto with Some offset -> Z.to_int offset | (* assume missing offsets are zero - perhaps should only occur for union members*) None -> 0 in
+  let offset =
+    match offseto with
+    | Some offset -> Z.to_int offset
+    (* assume missing offsets are zero - perhaps should only occur for union members*)
+    | None -> 0
+  in
   { fname; offset; typ; size }
 
 and field_map_of_linksem ~cc l : FieldMap.t =
