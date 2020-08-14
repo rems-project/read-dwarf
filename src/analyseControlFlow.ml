@@ -437,12 +437,11 @@ let rec parse_objdump_lines arch lines (next_index : int) (last_address : natura
         | None -> i :: parse_objdump_lines arch lines (next_index + 1) (Some addr)
         | Some last_address' ->
             let last_address'' = Nat_big_num.add last_address' (Nat_big_num.of_int 4) in
-            if addr > last_address'' then (
+            if addr > last_address'' then
               (* fake up "missing" instructions for any gaps in the address space*)
-              warn "gap in objdump instruction address sequence at %s" (pp_addr last_address'');
+              (*warn "gap in objdump instruction address sequence at %s" (pp_addr last_address'');*)
               (last_address'', [], "missing", "")
               :: parse_objdump_lines arch lines next_index (Some last_address'')
-            )
             else i :: parse_objdump_lines arch lines (next_index + 1) (Some addr)
       )
 
