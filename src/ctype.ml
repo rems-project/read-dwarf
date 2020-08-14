@@ -336,7 +336,7 @@ let base_type_of_linksem ?size ~encoding name =
     Cint { name; signed = encoding = vDW_ATE_signed_char; size = 1; ischar = true }
   else Raise.fail "In Ctype.base_of_linksem: encoding %x unknown" encoding
 
-let rec field_of_linksem ~cc ((_, fname, ltyp, offset) : linksem_field) : field =
+let rec field_of_linksem ~cc ((_, fname, ltyp, offseto) : linksem_field) : field =
   let newpln =
     Opt.(
       let+ pln = cc.potential_link_name and+ fname = fname in
@@ -348,7 +348,7 @@ let rec field_of_linksem ~cc ((_, fname, ltyp, offset) : linksem_field) : field 
   debug "Processing sizeof field %t" PP.(top (opt string) fname);
   let size = sizeof typ in
   debug "Processed field %t" PP.(top (opt string) fname);
-  let offset = Z.to_int offset in
+  let offset = match offseto with Some offset -> Z.to_int offset | (* assume missing offsets are zero - perhaps should only occur for union members*) None -> 0 in
   { fname; offset; typ; size }
 
 and field_map_of_linksem ~cc l : FieldMap.t =
