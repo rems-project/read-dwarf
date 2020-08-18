@@ -2,8 +2,7 @@
     needed for read-dwarf operations
 
     I would have called this module dwarf but linksem decided that is was a good idea
-    to dump all its modules in the global namespace.
-*)
+    to dump all its modules in the global namespace.*)
 
 module Var = DwVar
 module Func = DwFunc
@@ -35,8 +34,7 @@ let dwarferror fmt = Printf.ksprintf (fun s -> raise (DwarfError s)) fmt
 
 (** Get Dwarf information from an Elf file.
 
-    May raise an {!DwarfError} if a problem occurs.
-*)
+    May raise an {!DwarfError} if a problem occurs.*)
 let of_elf (elf : Elf.File.t) =
   info "Loading architecture %s for %s" (ElfFile.machine_to_string elf.machine) elf.filename;
   Arch.load_elf_arch elf;

@@ -62,28 +62,28 @@ val mem_id : ('a, 'b) t -> int -> bool
 (*****************************************************************************)
 (** {1 Accessors } *)
 
-(** Get a value by key. Throws if the key is not bound *)
+(** Get a value by key. Raise [Not_found] if the key is not bound. *)
 val getk : ('a, 'b) t -> 'a -> 'b
 
-(** Get a value by key. None if the key is not bound *)
+(** Get a value by key. None if the key is not bound. *)
 val getk_opt : ('a, 'b) t -> 'a -> 'b option
 
-(** Get a value by id *)
+(** Get a value by id. Raise [Invalid_argument] if the index is not bound. *)
 val geti : ('a, 'b) t -> int -> 'b
 
-(** Get a value by id, unsafe *)
+(** Get a value by id, unsafe. *)
 val unsafe_geti : ('a, 'b) t -> int -> 'b
 
-(** Set a value by key *)
+(** Set a value by key. Raise [Not_found] if the key is not bound.  *)
 val setk : ('a, 'b) t -> 'a -> 'b -> unit
 
-(** Set a value by id *)
+(** Set a value by id. Raise [Invalid_argument] if the index is not bound. *)
 val seti : ('a, 'b) t -> int -> 'b -> unit
 
-(** Set a value by id, unsafe *)
+(** Set a value by id, unsafe. *)
 val unsafe_seti : ('a, 'b) t -> int -> 'b -> unit
 
-(** Bind the value to all the keys *)
+(** Bind the value to all the keys with the specified value. *)
 val fill_all : ('a, 'b) t -> 'b -> unit
 
 (*****************************************************************************)

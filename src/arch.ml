@@ -33,6 +33,7 @@ let get_config () = ConfigFile.get_arch_config (get ())
 (** Get the Isla configuration for the initialized architecture *)
 let get_isla_config () = ConfigFile.get_isla_config (get ())
 
+(** Load the architecture of this {!Elf.File} *)
 let load_elf_arch (elf : Elf.File.t) =
   match elf.machine with
   | Supp at -> ensure_loaded at

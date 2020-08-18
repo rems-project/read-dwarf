@@ -2,24 +2,7 @@
 
     This subcommand is about running a complex block of execution
     It start at a specific offset in a block and can terminate on various condition.
-    If not enough condition are met, it may crash by reaching an invalid instruction
-
-
-*)
-
-(* Possible options
-   - Use {!Trace or not}
-   - -no-run (just dump trace)
-   - final State simplification
-   - [Trace] simplification
-   - Possible dumps :
-     - Preprocessed Trace
-     - Register types
-     - Trace.t
-     - Initial State after Init
-     - Final State before Simp
-     - Final State after Simp
-*)
+    If not enough condition are met, it may crash by reaching an invalid instruction *)
 
 open Cmdliner
 open CommonOpt
@@ -88,7 +71,6 @@ let elfblock_term = Term.(const gen_block $ elf_term $ len $ breakpoints)
 let run_block (elf, block) no_run reg_types =
   if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
   if not no_run then begin
-    Init.init ();
     let init_state = Init.state () |> State.copy ~elf in
     State.lock init_state;
     let tree = Block.run block init_state in

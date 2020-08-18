@@ -1,5 +1,33 @@
 {0 Binary Analysis}
 
+This page is about how we analyse the ELF and DWARF information in binary files
+All the module in this page provide a wrapping interface around [linksem]. An
+important convention is that if there is an internal type with a name, the
+corresponding type in linksem representing the same concept is named
+[linksem_name].
+
+{1 Analyse }
+
+There is a lot a binary analyse code in [Analyse*] modules that should be documented: TODOa
+
+There other related module that should deleted or renamed:
+ - {!Globals}
+ - {!Warn}
+ - {!Debug}
+ - {!Type}
+
 {1 ELF }
 
+The [Elf*] group of modules provide the main interface to ELF information. The
+main interface is the {!Elf} module. It will parse the ELF {{!ElfFile}file} and
+extract the {{!ElfSymTable}symbol table}. In particular they provide direct
+access to ELF {{!ElfSymbol}symbols} like function and global variables.
+
 {1 DWARF}
+
+DWARF information is processed after linksem by the [Dw*] modules The main
+module is {!Dw}, but there are other module for {{!DwFunc}functions} and
+{{!DwVar}variables}.
+
+This step also does C type linking in {!Ctype} and inverting DWARF location in
+{!Loc}.

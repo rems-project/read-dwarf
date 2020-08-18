@@ -1,4 +1,5 @@
-(** The main module to use the AST of expression and SMT operation *)
+(** The main module to use the AST of expression and SMT operation
+    for a more generic overview of the AST, see {!SymbolicExpressions}.*)
 
 include AstDef
 
@@ -98,7 +99,7 @@ let is_atomic = function
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Destructors }
+(** {1:destr Destructors }
 
     Aparently I overestimated ocaml type-system in it's handling of empty types.
 

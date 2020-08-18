@@ -1,1 +1,57 @@
 {0 Architecture}
+
+Here I will present how to describe a symbolic state of a specific architecture in
+read-dwarf.
+
+The architecture are listed by the {!ArchType} enumeration. Not all
+architectures in the enumeration have the full support, but an architecture must
+be in the enumeration to be supported. Feel free to add members. This
+enumeration is used everywhere to refer to various architecture.
+
+{1 Selection and discovery of the architecture}
+
+{2 Architecture module selection}
+
+The module {!ArchSig} defines the signature {!ArchSig.S} that an architecture
+module must provide. The {!Config} module then must provide at compile time the
+architecture module to be linked in {!Config.Arch}. This module may provide one
+or more architecture. It is not yet decided if in the end we will want to
+support multiple architecture in a single binary, or just require a different
+compilation of read-dwarf which may lead to have things like
+[aarch64-linux-gnu-read-dwarf] or [aarch64-none-eabi-read-dwarf]. The current
+system support both, but the case of multiple architecture in a single module
+hasn't been tested because only {!AArch64} has been implemented.
+
+The architecture modules are stored in the [archs] subfolder of [src]. For now
+there is only {!AArch64}
+
+{1 Architectural features}
+
+The main interface to all architecture specific component is {!Arch}. This
+module is a wrapper around the compile-time selected Architecture module
+{!Config.Arch} with some extra features. All code that depend on architectural
+details should just use {!Arch} directly.
+
+A lot of architecture specific things, like the function call ABI,
+the physical memory size and some other things are in the {!Arch} module.
+However some things are not. For example the list of registers and their
+SMT types ({!Ast.ty}) are managed by the {!Reg} module. This is because the
+register list is not statically hard-coded. It is deduced at run-time from isla, which
+means that we do not need to maintain a list of system register anywhere. Obviously
+the {!Arch} module need to know about some register to manage the ABI, so those
+registers will be introduced by {!Arch}, but all the other register are only introduced
+if an instruction touching them is used. This means that if a system register
+is never used, it's exactly the same as if didn't exists for read-dwarf.
+
+{1 Representation of the architectural state}
+
+Full architectural state are represented by value of type {!State.t}, those
+value are symbolic and actually represent set of concrete state. This is
+explained in {!State} it self.
+
+All state are derived from other state using {!State.copy}, apart from the first
+one which should be {!Init.state}. When calling that function, Isla will be
+called on a dummy instruction to get the isla initialization sequence. Currently
+the {!Init} module just consider the Isla start state as the initial state. To
+get the initial state at function entry, only must get the ABI of the function
+(of type {!Arch.func_abi}) and then call {!Arch.func_abi.init}

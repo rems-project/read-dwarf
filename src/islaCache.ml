@@ -6,7 +6,8 @@
     if you use the cache.
 
     You can use {!ensure_started} to force the {!IslaServer} to start but you probably
-    shouldn't do that
+    shouldn't do that. By the default the {!IslaServer} is only started if the traces
+    of an instruction are required and not in the cache.
 *)
 
 open Logs.Logger (struct
@@ -16,8 +17,12 @@ end)
 (** The type of Isla configuration *)
 type config = IslaServer.config
 
-(** Special encoding of BytesSeq. If it is short enough to fit in the hash, then we do it.
+(** Implementation of {!Cache.Key} for opcodes.
+
+   It is a special encoding of BytesSeq. If it is short enough to fit in the hash, then we do it.
     Otherwise we store in a file.
+
+    The exact encoding is here (back mean the last/top bit of the integer, i.e. {!IntBits.back}):
 
     Short encoding:
       bit 0 to back -3 : The data
@@ -26,8 +31,7 @@ type config = IslaServer.config
 
     Long encoding:
       bit 0 to back -1 : The start of the data
-      bit back -1: set
-*)
+      bit back -1: set *)
 module Opcode (*: Cache.Key *) = struct
   type t = BytesSeq.t option
 
@@ -70,7 +74,9 @@ module Opcode (*: Cache.Key *) = struct
       Some (BytesSeq.of_bytes b)
 end
 
-(** Representation of trace lists on disk Just a list of traces separated by new lines *)
+(** Representation of trace lists on disk.
+
+    It is just a list of traces separated by new lines *)
 module TraceList (*: Cache.Value *) = struct
   type t = Isla.rtrc list
 
@@ -102,7 +108,7 @@ end
 let epoch = 4
 
 module Epoch (*: Cache.Epoch*) = struct
-  type t = string * int * string (* config digest *)
+  type t = string (* isla version *) * int (* epoch global var *) * string (* config digest *)
 
   let to_file file trcs =
     let output ochannel (s, i, d) = Printf.fprintf ochannel "%s\n%d\n%s\n" s i d in

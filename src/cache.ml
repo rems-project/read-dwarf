@@ -5,8 +5,7 @@
      - A single value, see {!Single}
 
     A cache must be uniquely named and will be stored in {!find_dir}[()/name]. This will
-    be a directory in case of map and a file in case of value
-*)
+    be a directory in case of map and a file in case of a single value *)
 
 open Fun
 
@@ -117,8 +116,21 @@ exception Exists
 (*****************************************************************************)
 (** {1 Input signatures } *)
 
-(** The interface of keys. The key is allowed to not use the files to store information
-    and to use the hash to reconstruct the value *)
+(** The interface of keys.
+
+    Key are use to index values in the cache, however instead of using the key
+    directly as a file name, the hexadecimal {!hash} of the key is used trough
+    {!int_to_file}. See {!Make} for more details.
+
+    There are two main way of managing keys:
+    - The hash is injective, in which case there is no need for extra information.
+    - The hash is not injective, in which case extra information
+      required to disambiguate between different value with the
+      same hash can be used. This information is stored in the file obtained with
+      {!to_keyfile} file. See {!to_file}.
+
+    An implementation can do a mix of both i.e. Putting extra information only for
+    value for which there is hash collision. *)
 module type Key = sig
   include Hashtbl.HashedType
 
@@ -127,14 +139,13 @@ module type Key = sig
       The implementer must call {!to_keyfile} on it *)
   val to_file : string -> t -> unit
 
-  (** Build back the key from the hack and a storage file.
+  (** Build back the key from the hash and a storage file.
       The filename supplied is without the key extension.
       The implementer must call {!to_keyfile} on it.
 
       If you start with a [key] and a [file], then doing
-      [{!to_file} file key]
-      and then [{!of_file ({!hash} key) file] must return something {!equal} to key.
-  *)
+      [to_file file key]
+      and then [of_file (hash key) file] must return something {!equal} to key.*)
   val of_file : int -> string -> t
 end
 
@@ -150,8 +161,7 @@ module IntKey : Key with type t = int = struct
 end
 
 (** The interface of values: They just need to be able to be serialized to files.
-    This is isn't plain Marshal because some values may want a human readable formatting.
-*)
+    This is isn't plain Marshal because some values may want a human readable format.*)
 module type Value = sig
   type t
 
@@ -164,8 +174,7 @@ end
 
 (** A cache can be indexed by an Epoch. When reading a cache with an incompatible epoch,
     then the cache is deleted on load. Use {!UnitEpoch} to not have this functionality.
-    {!Single} caches currently do not support epochs.
-*)
+    {!Single} caches currently do not support epochs.*)
 module type Epoch = sig
   include Value
 
@@ -230,18 +239,17 @@ module type S = sig
   val remove : t -> key -> unit
 end
 
-(**
-    The Key must provide the {!Key} interface,
+(** The Key must provide the {!Key} interface,
     where the values must satisfy the {!Value} interface.
 
     The map is stored on the disk in a simple way. First the key is hashed and this
     hashed gives a filename with {!int_to_file}. If there is no collision, then the
-    value is stored in that file and the key is stored (optionally) in the hashname.key
+    value is stored in that file and the key is stored (optionally) in [hash.key]
     file (See {!Key} for details).
 
-    If there is collision then the filename is a directory containing numeroted files
-    of all the key-value pairs. Again the value is in file named n when the key is
-    (optionally) in file named n.key.
+    If there is collision then the filename is a directory containing numbered files
+    of all the key-value pairs. Again the value is in file named [n] when the key is
+    (optionally) in file named [n.key].
 *)
 module Make (Key : Key) (Value : Value) (Epoch : Epoch) :
   S with type key = Key.t and type value = Value.t and type epoch = Epoch.t = struct
@@ -429,7 +437,10 @@ module type SingleS = sig
   val clear : t -> unit
 end
 
-(** The functor is to make a single cached value. This do not support epochs (Yet) *)
+(** The functor is to make a single cached value. This do not support epochs (Yet)
+
+    TODO: Maybe the code would be simpler if this was a map from unit to the value.
+*)
 module Single (Value : Value) : SingleS with type value = Value.t = struct
   type value = Value.t
 

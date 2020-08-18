@@ -1,4 +1,7 @@
-(** This module provide code to manipulate basic block and run them *)
+(** This module provide code to manipulate basic block and run them.
+
+    This is only for use by {!RunBB} and debugging. I don't think this should be used
+    for anything else. {!Block} should generally be used instead.*)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -10,12 +13,8 @@ type state = State.t
 
 (** Type of a basic block.
 
-    The main part is the traces of all the non-branching instruction
-
-    TODO: The branch part are all the possible trace of the last, branching instruction.
-    If the list is empty, there is no such last instruction
-*)
-type t = { main : trc array (* TODO: branch : trc list *) }
+    The main part is the traces of all the non-branching instruction *)
+type t = { main : trc array }
 
 (** Take a binary block and call isla on all the instruction to get traces
     Also does the typing of traces for register discovery.
@@ -54,14 +53,12 @@ let simplify_mut (bb : t) = Array.map_mut Trace.simplify bb.main
 
 (** Run a linear basic block on a state by mutation.
 
-    If [env] is provided, the run is typed.
-*)
+    If [dwarf] is provided, the run is typed.*)
 let run_mut ?dwarf state (bb : t) : unit = Array.iter (TraceRun.trace_mut ?dwarf state) bb.main
 
 (** Run a linear basic block on a trace and return a new state
 
-    If [env] is provided, the run is typed.
-*)
+    If [dwarf] is provided, the run is typed.*)
 let run ?dwarf start (bb : t) : state =
   let state = State.copy start in
   run_mut ?dwarf state bb;

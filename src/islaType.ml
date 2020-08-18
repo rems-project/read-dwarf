@@ -1,15 +1,20 @@
+(** This module is about type isla trace and register discovery.
+
+    The actual goal is dicovering the existence and type of registers from Isla
+    traces, but this require type the trace with {!Isla.ty} and thus full type
+    checking of traces. We expect isla to be correct, so a type error would be
+    very surprising. *)
+
 open Isla
 
 open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-type 'a vector = 'a Vec.t
+(** A context that associate Isla {{!ty} types} to Isla variables *)
+type type_context = ty HashVector.t
 
-type 'a hvector = 'a HashVector.t
-
-type type_context = ty hvector
-
+(** A group of the source range and type for an expression *)
 type lty = lrng * ty
 
 (** Exception that represent an Isla typing error *)
@@ -22,7 +27,8 @@ let _ =
         Some PP.(sprint @@ hardline ^^ prefix 2 1 (lrng l ^^ !^": ") (!^"TypeError: " ^^ !^s))
     | _ -> None)
 
-(** Assert some properties for type correctness. Requires a lrng and a string error message *)
+(** Assert some properties for type correctness.
+    Requires a lrng and a string error message *)
 let tassert l s b = if not b then raise (TypeError (l, s))
 
 let expect_bool s (l, t) =
@@ -34,7 +40,7 @@ let expect_bv s (l, t) =
 let expect_enum s (l, t) =
   match t with Ty_Enum n -> n | _ -> raise (TypeError (l, "A enumeration was expected :" ^ s))
 
-let type_unop l (u : unop) (ltt : lrng * ty) : ty =
+let type_unop l (u : unop) (ltt : lty) : ty =
   match u with
   | Not ->
       expect_bool "Not" ltt;
@@ -70,7 +76,7 @@ let type_binop l (b : binop) ((_, t) as ltt) ((_, t') as ltt') : ty =
       ignore @@ bv_same ();
       Ty_Bool
 
-let type_manyop l (m : manyop) ltl : ty =
+let type_manyop l (m : manyop) (ltl : lty list) : ty =
   tassert l "Manyops must have at least 1 element" (ltl != []);
   match m with
   | And | Or ->
@@ -90,6 +96,9 @@ let type_manyop l (m : manyop) ltl : ty =
       let sizes = List.map (expect_bv PP.(sprintc @@ !^"inside " ^^ pp_manyop m)) ltl in
       Ty_BitVec (List.fold_left ( + ) 0 sizes)
 
+(** Take an Isla value and a context and give the list of field that correspond to
+    that value. Those fields would need to be prefixed with the top register name
+    before being added in {!Reg} *)
 let rec type_valu loc (cont : type_context) : valu -> (Reg.Path.t * Reg.ty) list =
   let plain ty = [([], IslaConv.ty ty)] in
   function
@@ -149,4 +158,5 @@ let type_trc ?(tc = HashVector.empty ()) (isla_trace : rtrc) =
   List.iter process events;
   tc
 
+(** Print a type context for debugging *)
 let pp_tcontext = HashVector.pp Isla.pp_ty

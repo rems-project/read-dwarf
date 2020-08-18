@@ -1,3 +1,8 @@
+(** This module implement the [rd] subcommand. This the was to original meaning of "read-dwarf".
+    and the first command.
+
+    With {{!RunFuncRD}[run-func-rd]} This is the main used of the {!Analyse} code *)
+
 open Cmdliner
 open CommonOpt
 
@@ -64,15 +69,10 @@ let qemu_log =
   setter AnalyseGlobals.qemu_log
     Arg.(value & opt (some non_dir_file) None & info ["qemu_log"] ~docv:"QEMU_LOG_FILE" ~doc)
 
-(* TODO: cmdliner seems to check that the file exists(?), which we don't want here. Or are we just not opening it properly?*)
 let out_file =
   let doc = "file for output (optional)" in
   setter AnalyseGlobals.out_file
-    Arg.(value & opt (some non_dir_file) None & info ["o"; "out"] ~docv:"OUT_FILE" ~doc)
-
-let info =
-  let doc = "Read and dump dwarf information" in
-  Term.(info "rd" ~doc ~exits)
+    Arg.(value & opt (some string) None & info ["o"; "out"] ~docv:"OUT_FILE" ~doc)
 
 let cfg_dot_file =
   let doc = "File to output CFG dot to" in
@@ -120,5 +120,14 @@ let options =
   ]
 
 let full_term = Term.(func_options options Analyse.process_file $ const ())
+
+let info =
+  let doc =
+    "Dumps an ELF file in the read-dwarf format. DWARF information is interleaved with the \
+     result of the objdump, so one can see how the dwarf information is positioned compared to \
+     the assembly. It will also try to read the source file to interleave the original source \
+     code."
+  in
+  Term.(info "rd" ~doc ~exits)
 
 let command = (full_term, info)

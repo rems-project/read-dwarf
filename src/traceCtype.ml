@@ -1,4 +1,22 @@
-(** This module provide most of the C type inference utility *)
+(** This module provide most of the C type inference logic
+
+    An important remark about this logic is that all types are optional. The
+    absence of types is like a poison that propagate to the end, meaning that if
+    any value in expression do not have a C type, then the whole expression won't
+    have one. This behavior may need to be though of again.
+
+    The second important remark is that we don't really care about
+    the typing of non-pointer values. Whether an plain integer
+    is an [int] or a [long] is completely irrelevant to us.
+    On the other hand, whether a pointer is a [int*] or a [long*] is
+    very important. That's why more non-pointer type will
+    decay to {!Ctype.Machine} in all rules.
+
+    The type inference is decomposed in two parts:
+    - First, we have to type {{!exp} expressions} themselves as if they
+      were expression on C values and not machine values.
+    - Second, we have to type effect like {{!read}reading} and {{!write}writing}
+      to memory *)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -10,11 +28,11 @@ open Fun
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Expressions}
+(** {1:exp Expressions}
 
     This section implements all the C type expression inference rules.
 
-    C Types are always option and if any part of an expression is not typed,
+    C Types are always optional and if any part of an expression is not typed,
     then the result is not typed.
 *)
 
@@ -50,8 +68,8 @@ let unop (u : Ast.unop) tval : Ctype.t option =
 
 let constexpr_to_int ~ctxt e =
   try
-    let vctxt v = expand_var ~ctxt v (Trace.Var.ty v) |> ConcreteEval.eval_direct in
-    e |> ConcreteEval.eval_direct ~ctxt:vctxt |> Value.expect_bv |> BitVec.to_int
+    let vctxt v = expand_var ~ctxt v (Trace.Var.ty v) |> ConcreteEval.eval in
+    e |> ConcreteEval.eval ~ctxt:vctxt |> Value.expect_bv |> BitVec.to_int
   with ConcreteEval.Symbolic ->
     err "Expression %t was typed as constexpr but is not constant" (PP.top Trace.pp_exp e);
     Raise.again ConcreteEval.Symbolic
@@ -156,6 +174,7 @@ let rec expr ~ctxt (exp : Trace.exp) : Ctype.t option =
   debug "Typing %t with %t" PP.(top Trace.pp_exp exp) PP.(top (opt Ctype.pp) ctyp);
   ctyp
 
+(** Same as {!expr} but return the expression in a {!Tval} *)
 and expr_tval ~ctxt exp =
   let ctyp = expr ~ctxt exp in
   { exp; ctyp }
@@ -163,7 +182,13 @@ and expr_tval ~ctxt exp =
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Memory Read} *)
+(** {1:read Memory Read}
+
+    When reading memory there are two main cases:
+    - The address has a pointer type, in which case we figure out the type of
+      the read according to that pointer type.
+    - The address do not have a pointer type, so we try to do an untyped read
+      with {!State.read_noprov} which may fail.*)
 
 let fragment_at ~(dwarf : Dw.t) ~fenv ~size (frag : Ctype.fragment) at : Ctype.t option =
   let open Opt in
@@ -212,7 +237,7 @@ let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size :
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Memory Write} *)
+(** {1:write Memory Write} *)
 
 let fragment_write_at ~dwarf:(_ : Dw.t) ~fenv ~(ctyp : Ctype.t) (frag : Ctype.fragment) at : unit
     =

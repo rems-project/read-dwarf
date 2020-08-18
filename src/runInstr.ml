@@ -106,7 +106,8 @@ let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
 let get_traces instr isla_run dump_types : traces =
   IslaCache.start @@ Arch.get_isla_config ();
-  Init.init ();
+  (* I call Init.init manually to print the register types *)
+  Init.init () |> ignore;
   let rtraces = IslaCache.get_traces instr in
   List.iter (fun t -> IslaType.type_trc t |> ignore) rtraces;
   if dump_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
@@ -144,7 +145,8 @@ let run_instr dump_init norun simp_state traces =
     if dump_init then base "Initial state:\n%t\n" (PP.topi State.pp init_state);
     let states =
       match traces with
-      | IslaTraces trcs -> List.map (IslaRun.trc init_state) trcs
+      | IslaTraces trcs ->
+          List.map ((IslaRun.trc [@ocaml.warning "-3"] (* deprecated *)) init_state) trcs
       | Traces trcs -> List.map (TraceRun.trace init_state) trcs
     in
     let states =

@@ -1,10 +1,9 @@
 (** This module provide a type to represent concrete values.
 
     There is not concrete value for memory yet, but maybe there should be at some point to
-    be able to fully support concrete evaluation without external tool
-*)
+    be able to fully support concrete evaluation without external tool*)
 
-(** The type of concrete value *)
+(** The type of concrete values *)
 type t = Bool of bool | Enum of Ast.enum | Bv of BitVec.t
 
 (** String representation of concrete values *)

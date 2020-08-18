@@ -35,7 +35,7 @@
 - {!RngMap}: Map structure that allow to index value by range of addresses.
     You can bind a whole interval of addresses to a value.
 
-{1 Resizable array and related data structures}
+{1 Resizable array and other integer-indexed data structures}
 
 - {!Vec}: Main resizable array module. Layer on top of the [res] library.
 - {!FullVec}: Conceptually a array/vector that binds all the integers to values.
@@ -45,6 +45,8 @@
 - {!IdMap}: A hashmap that numbers the bindings such that each binding can be
     identified by either the key of the integer identifier. Useful for doing
     symbol numbering for example.
+- {!Counter}: Just an integer counter to index something. It has a {!Counter.get}
+  function that give the next integer each time it's called.
 
 {1 Weak data structures}
 

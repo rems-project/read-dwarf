@@ -1,27 +1,67 @@
 {0 Command line interface}
 
+[read-dwarf] as a various set of subcommand for testing various aspect of the
+code. They are call like [read-dwarf subcommand --options ..]. The convention is
+that for each subcommand there is a corresponding module. For example the
+[run-func] subcommand is implemented in {!RunFunc}. All the command line
+interface of read-dwarf use the [cmdliner] library.
+Those module export a [command] value like {!RunFunc.command}.
+This value is then used by [Main] to build and call the main command line.
+
+To add a new subcommand, you have to make a new module, with the logic of that subcommand,
+export a [command] value, and add that value in [Main].
+
 {1 Common options}
 
-{1 Low-level or testing interfaces}
+There are a certain number of common options for setting binary paths or config
+file locations from the command line. They are all defined in {!CommonOpt}.
+This module also contain common [cmdliner] infrastructure.
 
-{2 Test the raw isla server}
+{1 Low-level isla testing}
 
-{2 Test the isla pipeline}
+This section is about command to test the isla interaction on single
+instructions. All those subcommand start with [isla-*].
+
+ - [isla-server] (in {!IslaServer.Cmd}) allow to do manual call to the isla server.
+   The input is un-parsed and transmitted as raw text to isla, however the result
+   is parsed and printed again as the protocol is partially a binary protocol.
+
+ - [isla-test] (in {!IslaTest}) allow to test all the elements of the pipeline
+     individually. In particular it allows to parse an isla trace text from disk
+     and other similar low-level testing operation. It completely ignores the
+     {!IslaCache}
 
 {1 Information dumping}
 
-{2 RD: Interleaving of objdump and DWARF information}
+This section is about sub-commands that dump ELF and DWARF information without
+doing any symbolic execution.
 
-{2 Dump the ELF information}
-
-{2 Dump the processed DWARF information}
+ - [rd] (in {!ReadDwarf}) : Dumps an ELF file in the read-dwarf format. DWARF
+     information is interleaved with the result of the objdump, so one can see
+     how the dwarf information is positioned compared to the assembly. It will
+     also try to read the source file to interleave the original source code. 
+ - [dump-sym] (in {!DumpSym}) : Dumps the ELF symbols as parsed by the {!Elf}
+   modules.
+ - [dump-dwarf] (in {!DumpDwarf}) : Dumps the ELF information as parsed by the
+   {!Dw} modules.
 
 {1 Symbolic Execution}
 
-{2 Run an single instruction}
+This section is about sub-commands that test the symbolic execution engine. They
+all start with [run-*].
 
-{2 Run a basic block}
+ - [run-instr] (in {!RunInstr}): Run a single instruction. Can also dump it's
+   {!Trace}.
+ - [run-bb] (in {!RunBB}): Run a basic block. This will run instructions in
+   order, without updating the PC: Any jump will be ignored.
+ - [run-block] (in {!RunBlock}): Run a complex block of instruction. One need to
+   specify a start point and an end condition.
+ - [run-func] (in {!RunFunc}): Same as [run-block] but start at function start
+   and does proper function entry initialization according to the ABI.
+ - [run-func-rd] (in {!RunFuncRD}: Same as [run-func] but also interleave the
+   [rd] output.
 
-{2 Run a block}
+{1 Cache maintenance}
 
-{2 Run a function}
+The [read-dwarf cache] sub-command (in {!Cache.cmd}) provides some cache
+maintenance operations.

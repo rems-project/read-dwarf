@@ -1,8 +1,11 @@
 (** This module provides a representation of a complex block of code.
 
-    The end of the block is decided by an arbitrary predicate on the pc
+    The end of the block is decided by [endpred], an arbitrary predicate on the
+    pc. In particular if the PC is symbolic the execution is stopped anyway. This
+    means that we either reached the top level function return or an unresolved
+    branch table.
 
-*)
+    To generate easily end predicates, there is {!gen_endpred}.*)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -11,13 +14,17 @@ end)
 (** [endpred pc_exp] gives when to stop *)
 type t = { runner : Runner.t; start : int; endpred : State.exp -> string option }
 
-(* TODO support variable length instruction *)
-
 (** Build a complex block starting from [start] in [sym] and ending when [endpred] says so.
     [endpred] is a predicate on the symbolic PC expression *)
 let make ~runner ~start ~endpred = { runner; start; endpred }
 
-type label = Start | End of string | BranchAt of int | NormalAt of int
+(** The labels on tree node at the output of {!run} *)
+type label =
+  | Start  (** Root node of the tree *)
+  | End of string
+      (** Lead node of the tree, the string describe which end condition has be triggered *)
+  | BranchAt of int  (** A Branching node at a given PC *)
+  | NormalAt of int  (** A normal instruction at PC. Exists only if [every_instruction] is true *)
 
 let label_to_string = function
   | Start -> "Start"
@@ -27,10 +34,16 @@ let label_to_string = function
 
 let pp_label label = label |> label_to_string |> PP.string
 
-(** Run the block an return a state tree indexed by the addresses of the branches
+(** Run the block an return a state tree indexed by the addresses of the
+    branches.
 
-    When [every_instruction] is true, It will make a snapshot of
-*)
+    When [every_instruction] is true, It will make a snapshot of the state i.e a
+    tree node at each instruction. By default it will only make a Tree node on
+    branching points.
+
+    The output is a tree because state merging is not implemented so if we are
+    going twice on the same PC, the whole thing will be run twice separately in
+    two separate tree branches. *)
 let run ?(every_instruction = false) (b : t) (start : State.t) : label StateTree.t =
   let pcreg = Arch.pc () in
   assert (State.is_locked start);

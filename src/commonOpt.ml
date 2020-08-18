@@ -1,12 +1,14 @@
 (** This module provide support for common command line option to be used across
-    multiple subcomands *)
+    multiple subcomands.
+
+    It also provide some {{!utils}utilities} on the command line.*)
 
 open Cmdliner
 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Command line option helper functions }
+(** {1:utils Command line option helper functions }
 
     Some [Cmdliner] helper functions.
 *)
@@ -45,6 +47,7 @@ let func_options olist func = add_options olist Term.(const func)
 (*****************************************************************************)
 (** {1 Exit codes } *)
 
+(** Description of read-dwarf exit codes. May need to be updated *)
 let exits =
   let doc = "on external errors, (Parsing error, Typing error, ...)." in
   let doc2 = "on non-exception internal errors like assertion failed." in

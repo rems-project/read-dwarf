@@ -1,15 +1,19 @@
-(** This module handle the register abstraction:
+(** This module handle the register abstraction.
 
-    A register is defined by a path (in {!Path}) i.e a string list.
+    A register is defined by a {!Path} and a type {!ty}. The path is a
+    representation of dot separated list of identifiers.
 
-    TODO Support sail vectors (A path will be of type (string + int) list)
+    Register are not part of the {!Arch} module because they are discovered
+    dynamically. This module keeps a global index of all register of the current
+    architecture (in a {!IdMap}). This map also fix the types of registers.
 
-    Those paths are indexed by integer through a global {!IdMap} named {!index}.
-    This map also fix the types of registers.
+    This allow to represent registers as integer everywhere.
 
-    The module also provides {!Map} and {!PMap} a respectively full and partial maps
-    over registers.
-*)
+    The module also provides {!Map} and {!PMap} a respectively full and partial
+    maps over registers. They need special support (especially the full map)
+    because new registers may be added at any time after the creation of the map.
+
+    TODO: Support sail vectors (A path will be of type (string + int) list) *)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -23,10 +27,13 @@
 module Path : sig
   type t = string list
 
+  (** Print the path as dotted list of identifier: [\["A";"B";"C"\] -> "A.B.C"] *)
   val to_string : t -> string
 
+  (** Parse the path as dotted list of identifier:  ["A.B.C" -> \["A";"B";"C"\]] *)
   val of_string : string -> t
 
+  (** Pretty print the path *)
   val pp : t -> PP.document
 end
 
@@ -38,32 +45,42 @@ end
     Global register properties and accessors
 *)
 
-(** The type representing a register. The module invariant is that this type always contains
-    a value bound in the global index *)
+(** The type representing a register. The module invariant is that this type
+    always contains a value bound in the global index and so this is always a
+    valid register id. *)
 type t = private int
 
-(** The type of a register. This is isomorphic to {!Isla.ty}. Use {!IslaConv.ty} to convert *)
+(** The type of a register. This is isomorphic to {!Isla.ty}.
+    Use {!IslaConv.ty} to convert *)
 type ty = Ast.no Ast.ty
 
-val mem : t -> bool
-
+(** Check if register is declared with that path *)
 val mem_path : Path.t -> bool
 
+(** Check if a register is declared with that name.
+    Same as [Path.of_string |> mem_path] *)
 val mem_string : string -> bool
 
+(** Give the register corresponding to that path *)
 val of_path : Path.t -> t
 
+(** Give the path of a register *)
 val to_path : t -> Path.t
 
+(** Give the register corresponding to a register name *)
 val of_string : string -> t
 
+(** Give the name of a register *)
 val to_string : t -> string
 
 (** Give the current number of registers *)
 val num : unit -> int
 
+(** Give the type of a register *)
 val reg_type : t -> ty
 
+(** Give the type of register path.
+    Throw [Not_found], it that path is not a declared register *)
 val path_type : Path.t -> ty
 
 (** Add a new register to the global {!index}. Return it's representation *)
@@ -90,63 +107,43 @@ val seq_all : unit -> t Seq.t
 (** Equality predicate *)
 val equal : t -> t -> bool
 
-(** Pretty prints the register (Just use {!to_string}) *)
+(** Pretty prints a register (Just use {!to_string}) *)
 val pp : t -> PP.document
 
+(** Pretty prints a register type *)
 val pp_ty : ty -> PP.document
 
-(** Prints the register index *)
+(** Prints the register index (mainly for debugging I suppose) *)
 val pp_index : unit -> PP.document
 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Register maps } *)
+(** {1 Register map }
 
-(** This is a port of {!HashVector} to use registers. Go to the documentation of {!HashVector}.*)
-module PMap : sig
-  type reg = t
+    To achieve a partial map on register, one may just used a plain [Hashtbl].
+    However as register is a finite type one may want to have a map where all the
+    register are bound and thus access to a bound value cannot fail. This is
+    complicated by the fact that new registers can be added after the creation of
+    the map. To handle all those subtleties, there is the {!Map} module.*)
 
-  type 'a t
+(** This module provide a full map over register in the same way than {!FullVec}
+    provide a map of integers. It still need a generator to generate the value
+    bound to not-yet-added registers.
 
-  val empty : unit -> 'a t
+    Because the domain of registers is finite, some extra function are available
+    like {!iter} and {!iteri} that are not possible in {!FullVec}.
 
-  exception Exists
-
-  val add : 'a t -> reg -> 'a -> unit
-
-  val mem : 'a t -> reg -> bool
-
-  val set : 'a t -> reg -> 'a -> unit
-
-  val get_opt : 'a t -> reg -> 'a option
-
-  (** Throw [Invalid_argument] if the register is not bound *)
-  val get : 'a t -> reg -> 'a
-
-  (** Builds the {!PMap} from a sequence *)
-  val of_seq : (reg * 'a) Seq.t -> 'a t
-
-  val pp : ('a -> PP.document) -> 'a t -> PP.document
-end
-
-(** This is a port of {!FullVec} to use registers. Go to the documentation of {!FullVec}
-
-    However, because the domain of register is finite, some extra function are available
-    like {!iter} and {!iteri}.
-
-    If register are added with {!add}, they are automatically implicitely added to the {!Map}
-    and the generator must accept those new values. The generator will never be called
-    on invalid register values (i.e. when the generator is called on a register,
-    the former can get the latter's type and name)
-*)
+    If a register is added with {!add}, it is automatically and implicitly added
+    to the {!Map} and the generator must accept this new value. The generator
+    will never be called on invalid register values (i.e. when the generator is
+    called on a register, the former can get the latter's type and name with
+    {!reg_type} and {!to_string}) *)
 module Map : sig
   type reg = t
 
+  (** The type of the complete map *)
   type 'a t
-
-  (** Dummy value that will fail as soon as it is used *)
-  val dummy : unit -> 'a t
 
   (** Initialize the map with a generator *)
   val init : (reg -> 'a) -> 'a t
@@ -172,8 +169,10 @@ module Map : sig
   (** Map the function on all current register. Future registers are unchanged *)
   val map_mut_current : ('a -> 'a) -> 'a t -> unit
 
+  (** Iterate over all the value of all currently present registers *)
   val iter : ('a -> unit) -> 'a t -> unit
 
+  (** Same as {!iter} but also with the register index *)
   val iteri : (reg -> 'a -> unit) -> 'a t -> unit
 
   (** Give all the registers bindings *)

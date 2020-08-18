@@ -2,8 +2,10 @@
     It only contain generic information about the opcode and not specific
     information about a place in the code.*)
 
+(** A simple trace with it's metadata *)
 type trace_meta = { trace : Trace.t; jump : bool; footprint : Reg.t list }
 
+(** A full instruction representation *)
 type t = { traces : trace_meta list; length : int;  (** Bytes length *) footprint : Reg.t list }
 
 (** Helper to access the [footprint] field *)
@@ -31,7 +33,7 @@ let trace_meta_of_trace trace =
   List.iter process_event trace;
   { trace; jump = !jump; footprint = List.sort_uniq compare !footprint }
 
-(** Generate an instruction full data from a list of traces *)
+(** Generate an instruction data from a list of traces *)
 let of_traces traces =
   let traces = List.map trace_meta_of_trace traces in
   let length = 4 (* TODO *) in
@@ -40,7 +42,7 @@ let of_traces traces =
   in
   { traces; length; footprint }
 
-(** Pretty print multiple traces *)
+(** Pretty print the representation of an instruction *)
 let pp instr =
   let open PP in
   separate_mapi hardline

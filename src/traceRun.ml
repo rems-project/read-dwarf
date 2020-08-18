@@ -1,10 +1,10 @@
 (** This module is for running trace from {!Trace} like {!IslaRun} runs Isla traces.
 
     Due to the semantic of a register access being the register at the beginning of the trace,
-    All register writes are not done immediately but delayed and stored in the {!context}.
+    all register writes are not done immediately but delayed and stored in the {!context}.
 
     Typing is enabled if {!TraceContext.typing_enabled} returns true for
-    functions that take a context. For other functions, typing is enable if the
+    functions that take a context. For other functions, typing is enabled if the
     [dwarf] optional argument is passed
 *)
 
@@ -24,8 +24,7 @@ let expand ~(ctxt : ctxt) (exp : Trace.exp) : State.exp =
 (** Expand a Trace expression to a typed State expression, using the context.
 
     If the context enables typing, the expression will actually be typed,
-    otherwise the type will be [None]
-*)
+    otherwise the type will be [None] *)
 let expand_tval ~(ctxt : ctxt) (exp : Trace.exp) : State.tval =
   let sexp = expand ~ctxt exp in
   if Ctxt.typing_enabled ~ctxt then
@@ -81,6 +80,8 @@ let trace ?dwarf (start : State.t) (events : Trace.t) : State.t =
 
 (** Run a trace by mutating the provided state including it's PC.
     If the trace modified the PC then nothing is done otherwise [next] is added to it.
+
+    Thus this function automatically handle moving the PC for fall-through instruction
 *)
 let trace_pc_mut ?dwarf ~(next : int) (state : State.t) (events : Trace.t) : unit =
   let pc = Arch.pc () in

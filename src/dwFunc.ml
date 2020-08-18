@@ -84,6 +84,7 @@ let of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lfun : linksem_t) =
   let sym = Elf.SymTbl.of_name_opt elf.symbols func.name in
   { sym; func }
 
+(** Get the API of a top level function *)
 let get_api tf = func_get_api tf.func
 
 (** Pretty print a raw top level function *)

@@ -1,3 +1,5 @@
+(* The documentation is in the mli file *)
+
 let rec split =
   let open Ast in
   function

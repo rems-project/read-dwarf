@@ -1,12 +1,11 @@
-(** Represent a symbol table.
+(** The module provide a type to represent a symbol table.
 
-     The interesting operation provided are fetching symbol by name
-     and knowing which symbol own a specific address
+     The interesting operations provided are fetching symbol by name
+     and knowing which symbol owns a specific address
 
     {!of_position_string} provides a convenient way of describing a position
-    in the ELF file from a human text input like the CLI.
+    in the ELF file from a human text input like the CLI.*)
 
- *)
 type sym = ElfSymbol.t
 
 type linksem_sym = ElfSymbol.linksem_t
@@ -16,6 +15,7 @@ type sym_offset = sym * int
 
 type linksem_t = Elf_file.global_symbol_init_info
 
+(** The type of a symbol table. *)
 type t
 
 (** The empty symbol table *)
@@ -56,7 +56,7 @@ val sym_offset_of_string : t -> string -> sym_offset
 
 (** Convert a position string to a symbol + offset
 
-   A position string is string describing a position in an ELF file.
+   A position string is a string describing a position in an ELF file.
    Two format are accepted for now:
    - A raw address of the form "0x40cafe"
    - A symbol name with optional offset like "sym" or "sym+4" or "sym+0x4"

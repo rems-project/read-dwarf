@@ -35,11 +35,12 @@ let commands = if Tests.enable_tests then Tests.command :: pcommands else pcomma
 
 let _ = Printexc.record_backtrace Config.enable_backtrace
 
+(* Other architecture are unsupported for now. Remove this only when you are explicitely
+   working on make other architecture work with read-dwarf *)
 let _ = assert ("aarch64" = Arch.module_name)
 
-(* TODO allow to set the seed in compile time config for debugging *)
+(* TODO allow to set the seed in compile time or run time config for debugging *)
 let _ = Random.self_init ()
 
-(** main *)
-
+(** Main entry point *)
 let _ = Term.exit @@ Term.eval_choice Default.command commands

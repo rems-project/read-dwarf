@@ -42,6 +42,20 @@ provide a CLI to run a single function symbolically.
    See {!SymbolicExecution}
  - The we pretty print the results using {!PP} and {!Logs}. See {!Printing}
 
+{1 Detailled pages}
+
+Here is a list of top level pages that explain a subgroup of functionality:
+
+ - {!Utility}: List of modules that provide generic functionality
+ - {!Printing}: Generic information about printing and logging
+ - {!Configuration}: Configuration organisation
+ - {!SymbolicExpressions}: All module related to symbolic expression manipulation
+ - {!Architecture}: All modules related to achitecture representation
+ - {!InstructionPipeline}: All module related to instruction semantics processing.
+ - {!BinaryAnalysis}: All module about reading ELF and DWARF information
+ - {!TypeInference}: All modules about the C type system and type inference.
+ - {!SymbolicExecution}: All module related to top-level symbolic execution.
+ - {!CLI}: All the modules defining the command line interfaces.
 
 {1 Dependencies}
 
@@ -67,22 +81,6 @@ and links to their documentations (for those what have one)
   Only used to do UTF-8 character folding in {!Analyse}. Those utility function
   should probably move to {!String} to be accessible elsewhere.
 
-
-{1 Detailled pages}
-
-Here is a list of top level pages that explain a subgroup of functionality:
-
- - {!Utility}: List of modules that provide generic functionality
- - {!Printing}: Generic information about printing and logging
- - {!Configuration}: Configuration organisation
- - {!SymbolicExpressions}: All module related to symbolic expression manipulation
- - {!Architecture}: All modules related to achitecture representation
- - {!InstructionPipeline}: All module related to instruction semantics processing.
- - {!BinaryAnalysis}: All module about reading ELF and DWARF information
- - {!TypeInference}: All modules about the C type system and type inference.
- - {!SymbolicExecution}: All module related to top-level symbolic execution.
- - {!CLI}: All the modules defining the command line interfaces.
-
 {1 Alphabetical index}
 
 Here is an alphabetical list of all modules. Use [make list] to regenerate.
@@ -90,20 +88,37 @@ Here is an alphabetical list of all modules. Use [make list] to regenerate.
 {!modules:
 AArch64
 Analyse
+AnalyseCallGraph
+AnalyseCollected
+AnalyseCollectedType
+AnalyseComeFrom
+AnalyseControlFlow
+AnalyseControlFlowPpDot
+AnalyseControlFlowPpText
+AnalyseControlFlowTypes
+AnalyseDwarfFrameInfo
+AnalyseDwarfInliningInfo
+AnalyseDwarfLineInfo
+AnalyseDwarfVarInfo
+AnalyseElf
+AnalyseElfSymbols
+AnalyseElfTypes
+AnalysePp
+AnalyseQemuLog
+AnalyseRangedVarType
+AnalyseSdtUtils
+AnalyseUtils
 Arch
 ArchSig
 ArchType
 Array
 Ast
 AstDef
-AstLexer
 AstManip
 AstOtt
-AstParser
-AstParser_pp
 BB
-BitVec
 Bits
+BitVec
 Block
 BytesSeq
 Cache
@@ -123,8 +138,8 @@ DwFunc
 DwVar
 Elf
 ElfFile
-ElfSymTable
 ElfSymbol
+ElfSymTable
 Exp
 ExpTyped
 Files
@@ -149,11 +164,11 @@ IslaType
 List
 Loc
 Logs
+Main
 Opt
+Pair
 PP
 PPExp
-PPI
-Pair
 Protect
 Raise
 ReadDwarf
@@ -167,8 +182,6 @@ RunInstr
 Runner
 Segment
 Seq
-Smt
-SmtIntro
 State
 StateSimplify
 StateTree
@@ -188,5 +201,5 @@ Vec
 Warn
 WeakMap
 WeakPtr
-Z3}
-
+Z3
+}

@@ -1,3 +1,5 @@
+(* The documentation is in the mli file *)
+
 type t = int ref
 
 let make start = ref (start - 1)

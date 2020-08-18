@@ -2,8 +2,120 @@
 
 {1 Expression representation and parametric types}
 
-Describe the complete build system with [ott] and [isla-lang]
+The internal expression syntax is derived from
+{{:http://smtlib.cs.uiowa.edu/}SMT-LIB} with the bitvector, boolean, and
+enumeration theory. The enumeration theory is about types that contain a
+specific number of numbered item. All the symbolic execution system is based of
+those expressions.
+
+Optionally, an expression can support the whole memory through the SMT array
+theory from addresses to bytes or words. This support is optional, see {!typopt}
+
+If you only wish to use those expression, I recommend you directly use the
+{!Ast} module. This module export {!Ast.exp} as well as parsing and pretty
+printing capabilities.
+
+The {!Ast} module also define the syntax for SMT-LIB commands ({!Ast.smt}), and
+answers ({!Ast.smt_ans}).
+
+{2 Build process and modules}
+
+The expressions types are build by [ott]. Currently, to avoid repetition, part
+of the [ott] AST comes from [isla_lang.ott] and only the difference with
+[isla-lang] are coming from the main [ast.ott] file. Only specific parts of
+[isla_lang.ott] are extracted with [extract_section.awk] before merging with
+[ast.ott]. The result of the call to [ott] are:
+
+  - {!AstOtt} that defined the ast types
+  - {!AstParser} The menhir parser module 
+  - {!AstParser_pp} The pprint pretty-printing module 
+  - {!AstLexer} The ocamllex lexer module
+
+One thing to be aware of is the dependency chain: first {!AstOtt} is defined,
+then {!AstDef} (which is not generated) defines dome extra type definition to be
+used, then all the parsing and pretty printing module depend on {!AstDef} and
+then {!Ast} encapsulate all of that for the rest of the codebase.
+
+Unless you are tweaking things inside the AST, you should only use the {!Ast}
+module and none of the other [Ast*] module (Except {!AstManip}).
+
+{2:typopt Expression type parameter and options}
+
+The type of expression ({!Ast.exp}) is parametric and has currently 4 parameters
+that are propagated to other {!Ast} types. Some {!Ast} types only have a subset
+of those parameters when it make sense. It would be good to respect the variable
+letter names throughout the codebase to keep it consistent and understandable.
+
+ - ['a]: Annotation type: The annotation is present on every expression
+      constructor, and can be extracted with {!AstManip.annot}
+ - ['v]: Variable type: The type of symbolic variables.
+ - ['b]: Bound variable type: The expression can optionally contain let bindings
+     and bound variables with the usual semantics. This feature of expression
+     can be disabled by putting {!Ast.no} in that parameter slot, in which case
+     all let-bindings constructors and bound variable ([Let] and [Bound]) are
+     disabled.
+ - ['m]: Memory operation: This is intended to be a boolean option: only
+     {!Ast.Size.t} or {!Ast.no}. In the first case, expression are allowed to
+     contain memory array type and contain constructors like memory select or
+     store. In the second case, all those operations are disabled and it is
+     known that an expression can only be a bitvector, a boolean or an
+     enumeration. In particular the content of register should generally not
+     contain memory-enabled expressions.
+     
+Expression coming out of the parser have their type parameter fixed to
+['a=]{!Ast.lrng}, ['v=string], ['b=string], ['m=]{!Ast.Size.t}. Corresponding
+aliases of the various instanciation with those type are types prefixed by [r]
+like {!Ast.rexp}, {!Ast.rsmt}, {!Ast.rty}, and {!Ast.rsmt_ans}.
+
+The pretty-printer functions are a bit more tolerant in which type are allowed,
+but there still are some restrictions. Thus one may need to use some of the
+conversion function in next section before pretty-printing or after parsing.
 
 {1 Operations on expressions}
 
+Basic operation on expression like mapping/iterating over sub-expresions or
+variables is provided in {!AstManip}. This module also provide conversion of
+type parameters (like changing the type of variables).
+
+Internally, typed expression are used, which mean that the ['a] parameter of the
+expressions is actually their type of ocaml type {!Ast.ty}. The {!ExpTyped}
+module provide smart constructors that allow to construct directly typed
+expressions. It also provide function to convert untyped expression to typed
+expressions. On top of that the {!Exp} module provides a functor to apply over a
+variable functor that allow to lift variable behavior like equality and pretty
+printing at the expression level.
+
+{!AstManip} only provide syntactic operation on expression, other modules
+provide semantic operations on expressions:
+
+ - {!Sums} provide sum manipulation: allow to split and rebuild sum expression
+   to/from list of terms.
+ - {!ConcreteEval} provides concrete evaluation of expressions.
+   It returns values of type {!Value.t} which represent the possible concrete
+   values that can result of an expression evaluation.
+ - {!PPExp} provide a more human readable expression printing 
+   than SMT-LIB syntax. Most operator are infix and have "usual" precedence.
+   This module try to stay injective which means that a given pretty printed text 
+   represent a single possible syntactic expression.
+ - And last but not least: {!Z3} module allow interacting with Z3 
+   for simplifying expression and checking SMT properties. If you use 
+   the high-level API of this module, you will not have to care about 
+   types like {!Ast.smt} or {!Ast.smt_ans}.
+
 {1 Symbolic regions of memory}
+
+In symbolic execution, one may need to represent large regions of memory in a
+symbolic manner. It would be possible to do that with a single expression of
+bitvector type with a very large size but this quickly become unwieldy.
+Furthermore in some case the machine code will perform writes at symbolic
+address which the position at which something is written in something else is
+symbolic. To represent this we use a two stage abstraction.
+
+First, there is {!SymbolicBytes} which represent a block of memory which can
+contain arbitrary symbolic expressions at arbitrary but concrete addresses. Then
+{!SymbolicFragment} takes it one step further and provide a way to store
+arbitrary symbolic expressions at arbitrary symbolic addresses. When reading
+from a {!SymbolicFragment}, the read may not be resolved because of unknown
+aliasing of symbolic addresses. Those abstractions are only suitable to
+represent a sequential view of the memory without any concept of concurrent
+memory accesses.

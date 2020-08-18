@@ -6,12 +6,18 @@ let mem hv k =
   if k < 0 then Raise.inv_arg "HashVector.mem: negative index %d" k;
   k < Vec.length hv && Vec.unsafe_get hv k != None
 
+let copy = Vec.copy
+
 exception Exists
 
 let set hv k v : unit =
   if k < 0 then Raise.inv_arg "HashVector.set: negative index %d" k;
   if k >= Vec.length hv then Vec.ensure hv (k + 1) None;
   Vec.unsafe_set hv k (Some v)
+
+let clear hv k =
+  if k < 0 then Raise.inv_arg "HashVector.clear: negative index %d" k;
+  if k < Vec.length hv then Vec.unsafe_set hv k None
 
 let add (hv : 'a t) (k : int) (v : 'a) : unit = if mem hv k then raise Exists else set hv k v
 

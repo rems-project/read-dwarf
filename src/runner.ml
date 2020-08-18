@@ -4,6 +4,8 @@
     Later this module will handle inlining in a transparent way, and
     may also compress basic block traces (We'll need to check this is okay with type inference)
 
+    For now this module load instructions on a per-symbol basis, and do not
+    try to load instructions outside of function symbol. TODO: remove this restriction.
 
     The final goal of this module is to encode all necessary information to perform a
     state transition. In particular, the {!run} function should never require more
@@ -40,7 +42,9 @@ let of_elf ?dwarf elf =
 
 let of_dwarf dwarf = of_elf ~dwarf dwarf.elf
 
-(** Load a symbol into the runner. All instruction traces are fetched and cached.*)
+(** Load a symbol into the runner. All instruction traces are fetched and cached.
+
+    TODO support variable length instructions.*)
 let load_sym runner (sym : Elf.Sym.t) =
   info "Loading symbol %s in %s" sym.name runner.elf.filename;
   Vec.add_one runner.funcs sym.addr;
@@ -129,14 +133,17 @@ let execute_normal ?(prelock = ignore) ~pc runner (instr : Instr.t) state =
   end
   else run_pure ()
 
-(** Do the whole fetch and execute.
-    Take the PC from the state, and fetch it's {!Trace} and then run it.
+(** Do the whole fetch and execute cycle.
+    Take the PC from the state, and fetch it's {{!Instr}instruction} and then run it.
+    It return the list of possible behavior of that instruction.
+    Normally the union of the set of concrete states represented by this
+    list of symbolic state cover all the defined behaviors of the fetched instruction
+    from the initial state.
 
     If the state is unlocked and the instruction is single trace, then
     the function mutates the state and returns the same state.
 
-    Otherwise the state is locked (if not) and new states are
-    returned
+    Otherwise the state is locked (if not) and new unlocked states are returned.
 
     In any case the returned states are unlocked.
 *)

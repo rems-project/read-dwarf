@@ -1,19 +1,21 @@
 (** The goal of this module is to represent a segment as loaded in memory.
     In particular, all information about file layout is intentionally lost
-    I use basic ints for speed. It it fails for some reason, I'll move to int64s
+    I use basic ints for speed. It it fails for some reason, I'll move to int64s.
+
+    This is basically a {!BytesSeq} with metadata.
 *)
 
 (** The type of a segment *)
 type t = {
   data : BytesSeq.t;
-  addr : int;
+  addr : int;  (** The actual start address of the BytesSeq *)
   size : int;  (** redundant with {!BytesSeq.length} data *)
   read : bool;
   write : bool;
   execute : bool;
 }
 
-(** Loads a {!Segment.t} using a linksem interpreted segment. *)
+(** Loads a {!t} using a linksem interpreted segment. *)
 let of_linksem (lseg : Elf_interpreted_segment.elf64_interpreted_segment) : t =
   let size = Z.to_int lseg.elf64_segment_memsz in
   let bytes = Bytes.create size in
@@ -43,5 +45,5 @@ let get_addr_list_opt getter segs addr =
     (fun res seg -> if is_in seg addr then Some (get_addr getter seg addr) else res)
     None segs
 
-(** Get the segment containing an address or [None] *)
+(** Get the segment containing an address, among a list of them or [None] *)
 let get_containing segs addr = List.find_opt (Fun.flip is_in addr) segs

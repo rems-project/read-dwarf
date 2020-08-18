@@ -1,5 +1,4 @@
-(** This module is designed to run symbolically (and later, maybe not) an ELF function
-*)
+(** This module is designed to run symbolically (and later, maybe not) an ELF function *)
 
 open Cmdliner
 open CommonOpt
@@ -23,7 +22,6 @@ let run_func elfname name dump no_run entry len breakpoints loop =
   base "Loading ABI";
   let abi = Arch.get_abi api in
   TraceCache.start @@ Arch.get_isla_config ();
-  Init.init ();
   base "Computing entry state";
   let start = Init.state () |> State.copy ~elf |> abi.init in
   if entry then base "Entry state:\n%t" (PP.topi State.pp start);

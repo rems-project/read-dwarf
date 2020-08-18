@@ -1,23 +1,27 @@
 (** This module handles a Z3 server
 
-    For high level usage, call {!start} or {!ensure_started} then use any of
-    - {!simplify}
-    - {!check_sat}
-    - {!check}
+    For high level usage, call {!start} or {!ensure_started} then
+    instantiate the {!Make} functor and use operation in the section
+    about {!S.nocontext}:
 
-    For a more medium level usage, you may want to manage you context before making requests.
-    Look at section {!section:context} for context management and TODO.
+    For a more medium level usage, you may want to manage your context manually
+    before making requests. The best way of doing that is by using a
+    {!ContextCounter}.
 
-    In the idea, one would open a context, use {!send_smt} or {!command} to
-    send declaration or commands to Z3 and then finish by the {!request}.
-    Then one can close the context.
+    Once you are in the correct context, you can use your instantiated version of {!Make}
+    to do operations such as: {!S.declare_var} or {!S.send_assert} to build your context,
+    and then {!S.simplify}, {!S.check} of {!S.check_sat}.
 
-    For low-level details:
+    For low-level details (All function in the first two section of this module should
+    probably be reserved to those who understand the implementation)
 
-    The module keeps Z3 as a child process and communicates through pipes.
+    The module keeps Z3 as a child process and communicates through pipes using
+    {!Cmd.IOServer}.
 
     {!start} sends the introduction in [intro.smt2] to Z3 so that it is available
     in any context.
+    SMT answer are parsed from the pipe with {!Files.input_sexp}. If the wrong
+    number of answer is expected, the system will just deadlock.
 *)
 
 open Logs.Logger (struct
@@ -29,8 +33,27 @@ end)
 (*****************************************************************************)
 (** {1 Raw server management } *)
 
-type server = { ioserver : Cmd.IOServer.t; config : ConfigFile.Z3.t }
+(** A boolean enabling context tracing (For better error messages) *)
+let z3_trace = true
 
+(** An element of the context stack. It has a name and a declaration number.
+
+    The declaration number is incremented at each declaration in the context.*)
+type context_elem = { name : string; mutable num : int }
+
+(** The type of a SMT context stack *)
+type context = context_elem list
+
+(** The starting context *)
+let start_context : context = [{ name = "top"; num = 0 }]
+
+(** Give a string representation of a {!context_elem} *)
+let context_elem_to_string ce = Printf.sprintf "(%s num %d)" ce.name ce.num
+
+(** The type of a Z3 server *)
+type server = { ioserver : Cmd.IOServer.t; config : ConfigFile.Z3.t; mutable context : context }
+
+(** The global Z3 server *)
 let server : server option ref = ref None
 
 (** Assume the server is started and returns it. *)
@@ -45,7 +68,7 @@ let raw_start () =
   let timeout_cmd = config.timeout |> Opt.map (Printf.sprintf "-t:%d") |> Opt.to_list in
   let memory_cmd = config.memory |> Opt.map (Printf.sprintf "-memory:%d") |> Opt.to_list in
   let cmd = Array.of_list (base_cmd @ timeout_cmd @ memory_cmd) in
-  server := Some { ioserver = Cmd.IOServer.start cmd; config };
+  server := Some { ioserver = Cmd.IOServer.start cmd; config; context = start_context };
   ()
 
 (** Stop Z3 without asking politely *)
@@ -56,36 +79,14 @@ let raw_stop () =
       server := None
   | None -> ()
 
-(*****************************************************************************)
-(*****************************************************************************)
-(*****************************************************************************)
-(** {1 Raw Context management }
-    The {!context} represent a stack of {!context_elem} that represent the
-    current opened contexts.
-*)
-
-(** A boolean enabling context tracing (For better error messages) *)
-let z3_trace = true
-
-(** An element of the context stack. It has a name and a declaration number.
-
-    The declaration number is incremented at each declaration in the context.*)
-type context_elem = { name : string; mutable num : int }
-
-(** The current context stack *)
-let context : context_elem list ref = ref [{ name = "top"; num = 0 }]
-
-(** Give a string representation of a {!context_elem} *)
-let context_elem_to_string ce = Printf.sprintf "(%s num %d)" ce.name ce.num
-
 (** Give a string representation of the current context for error reporting *)
-let get_context_string () =
-  if z3_trace then String.concat "." (List.map context_elem_to_string !context)
+let get_context_string server =
+  if z3_trace then String.concat "." (List.map context_elem_to_string server.context)
   else "Z3 tracing disabled"
 
 (** Increment the declaration number of the top {!context_elem}. *)
-let incr_context () =
-  let ce = List.hd !context in
+let incr_context server =
+  let ce = List.hd server.context in
   ce.num <- ce.num + 1
 
 (*****************************************************************************)
@@ -108,25 +109,25 @@ let send_string (serv : server) s =
   output_string serv.ioserver.output s;
   output_char serv.ioserver.output '\n';
   flush serv.ioserver.output;
-  if z3_trace then incr_context ()
+  if z3_trace then incr_context serv
 
 (** Send a smt statement to the server and increment the declaration number in the context *)
 let send_smt (serv : server) ?(ppv = PP.erase) smt =
   debug "In context %t, sent smt %t"
-    (fun o -> output_string o (get_context_string ()))
+    (fun o -> output_string o (get_context_string serv))
     (PP.top (Ast.pp_smt ppv) smt);
   PP.fprintln serv.ioserver.output @@ Ast.pp_smt ppv smt;
-  if z3_trace then incr_context ()
+  if z3_trace then incr_context serv
 
 (** Read a string from the server (A Z3 answer is always a valid sexp) *)
 let read_string (serv : server) =
   let sexp = Files.input_sexp serv.ioserver.input in
-  debug "In context %t, read \n%s" (fun o -> output_string o (get_context_string ())) sexp;
+  debug "In context %t, read \n%s" (fun o -> output_string o (get_context_string serv)) sexp;
   sexp
 
 (** Read a {!smt_ans} from the server *)
 let read_smt_ans (serv : server) : Ast.rsmt_ans =
-  let filename = get_context_string () in
+  let filename = get_context_string serv in
   Ast.parse_smt_ans_string ~filename (read_string serv)
 
 (** Make a request to the server and expect an answer. Will hang if there is no answer *)
@@ -141,14 +142,14 @@ let command ?(ppv = PP.erase) smt =
   send_smt serv ~ppv smt
 
 (** Expect a version answer and fails if it is not the case *)
-let expect_version : Ast.rsmt_ans -> string = function
+let expect_version (serv : server) : Ast.rsmt_ans -> string = function
   | Version s -> s
-  | _ -> Raise.fail "expected version from Z3 in %s" (get_context_string ())
+  | _ -> Raise.fail "expected version from Z3 in %s" (get_context_string serv)
 
 (** Expect an expression answer and fails if it is not the case *)
-let expect_exp : Ast.rsmt_ans -> Ast.rexp = function
+let expect_exp (serv : server) : Ast.rsmt_ans -> Ast.rexp = function
   | Exp e -> e
-  | _ -> Raise.fail "expected expression from Z3 in %s" (get_context_string ())
+  | _ -> Raise.fail "expected expression from Z3 in %s" (get_context_string serv)
 
 (** Get the Z3 version string *)
 let get_version () =
@@ -158,11 +159,11 @@ let get_version () =
 let is_context_sat serv =
   send_smt serv Ast.CheckSat;
   match read_smt_ans serv with
-  | Error s -> Raise.fail "Z3: error %s on check_sat in %s" s (get_context_string ())
+  | Error s -> Raise.fail "Z3: error %s on check_sat in %s" s (get_context_string serv)
   | Sat -> Some true
   | Unsat -> Some false
   | Unknown -> None
-  | _ -> Raise.fail "Z3 protocol error on check_sat in %s" (get_context_string ())
+  | _ -> Raise.fail "Z3 protocol error on check_sat in %s" (get_context_string serv)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -218,23 +219,22 @@ let reset () =
     using {!ContextCounter} is advised.
 *)
 
-(** Open a new context with a name. Ensure the server is started *)
-let open_context name =
-  ensure_started ();
+(** Open a new context with a name. *)
+let open_context serv name =
   if z3_trace then begin
     debug "Opening context %s" name;
-    context := { name; num = 0 } :: !context
+    serv.context <- { name; num = 0 } :: serv.context
   end;
-  command Ast.Push
+  send_smt serv Ast.Push
 
-(** Closes current context *)
-let close_context () =
+(** Closes current context of the server *)
+let close_context serv =
   if z3_trace then (
-    let { name; num } = List.hd !context in
+    let { name; num } = List.hd serv.context in
     debug "Closing context %s at %d" name num;
-    context := List.tl !context
+    serv.context <- List.tl serv.context
   );
-  command Ast.Pop
+  send_smt serv Ast.Pop
 
 (** Module for handling a context numbering scheme automatically.
 
@@ -246,19 +246,25 @@ let close_context () =
 module ContextCounter (S : Logs.String) = struct
   let counter = Counter.make 0
 
+  (** Open a new context of that [ContextCounter]. Ensure the server is started *)
   let openc () =
-    if z3_trace then open_context (Printf.sprintf "%s:%d" S.str (Counter.get counter))
-    else open_context S.str
+    let serv = ensure_started_get () in
+    if z3_trace then open_context serv (Printf.sprintf "%s:%d" S.str (Counter.get counter))
+    else open_context serv S.str
 
+  (** Get the current context number *)
   let num () = Counter.read counter
 
+  (** Close a context opened with {!openc}. Assert that the current context
+      was indeed opened by this module *)
   let closec () =
+    let serv = get_server () in
     begin
       if z3_trace then
-        let { name; _ } = List.hd !context in
+        let { name; _ } = List.hd serv.context in
         Scanf.sscanf name "%s@:%d" (fun n _ -> assert (n = S.str))
     end;
-    close_context ()
+    close_context serv
 end
 
 (*****************************************************************************)
@@ -266,7 +272,7 @@ end
 (*****************************************************************************)
 (** {1 High level interaction }
 
-    This section provide functors that can be instantiated to get easy to use SMT functionality *)
+    This section provide functor that can be instantiated to get easy to use SMT functionality *)
 
 (** The functors in this section require a bit more support from variable than plain {!Exp.Var} *)
 module type Var = sig
@@ -282,16 +288,17 @@ end
 module type S = sig
   type var
 
+  (*****************************************************************************)
+  (*****************************************************************************)
+  (*****************************************************************************)
   (** {1 Variable declarations }
 
       The goal of those operation is to declare variables with their types to the SMT solver.
       The {!Htbl} allow to declare every variable only once.
   *)
-  type exp = (var, Ast.no) ExpTyped.t
 
-  (*****************************************************************************)
-  (*****************************************************************************)
-  (*****************************************************************************)
+  (** The type of expression on which SMT operation are made *)
+  type exp = (var, Ast.no) ExpTyped.t
 
   (** Hash tables over variables *)
   module Htbl : Hashtbl.S with type key = var
@@ -347,7 +354,7 @@ module type S = sig
   (*****************************************************************************)
   (*****************************************************************************)
   (*****************************************************************************)
-  (** {1 Context less operation }
+  (** {1:nocontext Context less operation }
       Those operations do not require a context to operate. They require not setup and
       tear-down. They are standalone and fully automated.
 
@@ -398,7 +405,7 @@ module Make (Var : Var) : S with type var = Var.t = struct
   let simplify serv (e : Exp.t) : Exp.t =
     e |> AstManip.allow_mem |> AstManip.allow_lets
     |> Ast.simplify_smt ~flags:serv.config.simplify_opts
-    |> request ~ppv:Var.pp |> expect_exp |> AstManip.unfold_lets
+    |> request ~ppv:Var.pp |> expect_exp serv |> AstManip.unfold_lets
     |> AstManip.exp_conv_var Var.of_string
     |> AstManip.expect_no_mem
     |> ExpTyped.add_type ~ty_of_var:(Fun.const Var.ty)
@@ -423,10 +430,10 @@ module Make (Var : Var) : S with type var = Var.t = struct
     send_assert serv e
 
   let check serv (e : Exp.t) : bool option =
-    open_context "check";
+    open_context serv "check";
     send_assert serv (ExpTyped.not e);
     let res = is_context_sat serv |> Opt.map not in
-    close_context ();
+    close_context serv;
     res
 
   let check_full ?(hyps : Exp.t list = []) (e : Exp.t) : bool option =
@@ -440,10 +447,10 @@ module Make (Var : Var) : S with type var = Var.t = struct
     res
 
   let check_sat serv (e : Exp.t) : bool option =
-    open_context "check_sat";
+    open_context serv "check_sat";
     send_assert serv e;
     let res = is_context_sat serv in
-    close_context ();
+    close_context serv;
     res
 
   let check_sat_full (asserts : Exp.t list) : bool option =

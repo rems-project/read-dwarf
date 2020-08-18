@@ -4,7 +4,7 @@
 
     The precedence are the ones from C/C++ and Ocaml with some tweaks.
     In particular the precedence between bitwise operation and arithmetic operation
-    are speparated to parenthesis will always be required between them.
+    are separated, so parenthesis will always be required between them.
 
     The order is:
     - Extraction and extension

@@ -1,4 +1,17 @@
-(** This module represent architectural locations *)
+(** This module represent architectural locations. Locations in DWARF
+    information are represented as a little stack language (represented as
+    {!dwop}[ list]) which describes how to compute the target value from the
+    current concrete state. This computation can be arbitrarily complex, for
+    example take half of the value from the high bits of a register and then the
+    other half from memory at a specific address coming from another register.
+
+    Those expression are not directly usable to guide the type inference, as
+    we would much more like simple direct information like "This value is in that
+    register". To solve this, there is a custom type {!t} that interpret simple
+    static locations directly and leaves more complex location uninterpreted.
+
+    This interpretation is currently very basic. It remains to be seen if it
+    actually need to be improved.*)
 
 open Fun
 
@@ -14,7 +27,7 @@ type t =
   | Register of Reg.t  (** In the register *)
   | RegisterOffset of Reg.t * int  (** At register + offset address *)
   | StackFrame of int  (** On the stackFrame with offset *)
-  | Global of Elf.SymTbl.sym_offset  (** Global variable *)
+  | Global of Elf.SymTbl.sym_offset  (** Global variable with an offset *)
   | Dwarf of dwop list  (** Uninterpreted dwarf location *)
 
 (** The type of a location in linksem format *)
@@ -33,9 +46,8 @@ let vDW_OP_breg0 : int = Z.to_int Dwarf.vDW_OP_breg0
 
 (** Convert a linksem location description into a {!Loc.t}
 
-    Very naive for now : If the list has a single element that we can translate directly, we do,
-    otherwise, we dump it into the Dwarf constructor
-*)
+    Very naive for now : If the list has a single element that we can translate
+   directly, we do. Otherwise, we dump it into the {!t.Dwarf} constructor *)
 let of_linksem ?(amap = Arch.dwarf_reg_map ()) (elf : Elf.File.t) : linksem_t -> t =
   let int_of_oav : Dwarf.operation_argument_value -> int = function
     | OAV_natural n -> Z.to_int n

@@ -202,7 +202,7 @@ let processing preprocessing pmode (filename, input, (config : IslaServer.config
     let init_state = State.make () in
     State.lock init_state;
     base "Initial state:\n%t\n" (PP.topi State.pp init_state);
-    let end_state = IslaRun.trc init_state trace in
+    let end_state = (IslaRun.trc [@ocaml.warning "-3"] (* deprecated *)) init_state trace in
     base "Final state:\n%t\n" (PP.topi State.pp end_state);
     end_state
   in
@@ -225,7 +225,11 @@ let processing preprocessing pmode (filename, input, (config : IslaServer.config
 let term = Term.(func_option z3 processing $ preprocess $ pmode_term $ isla_term)
 
 let info =
-  let doc = "Test the isla interaction" in
+  let doc =
+    "Test the isla pipeline. Allow to test all the elements of the pipeline individually. In \
+     particular it allows to parse an isla trace text from disk and other similar low-level \
+     testing operation. It completely ignores the IslaCache."
+  in
   Term.(info "isla-test" ~doc ~exits)
 
 let command = (term, info)

@@ -11,10 +11,16 @@ type 'a t
 (** Check if an element is set *)
 val mem : 'a t -> int -> bool
 
+(** Copy the HashVector *)
+val copy : 'a t -> 'a t
+
 exception Exists
 
 (** Set a value. Create a new binding if necessary *)
 val set : 'a t -> int -> 'a -> unit
+
+(** Clear a binding, do nothing is the value is not bound. *)
+val clear : 'a t -> int -> unit
 
 (** Create a new binding. Throws {!Exists} if a binding already exists *)
 val add : 'a t -> int -> 'a -> unit

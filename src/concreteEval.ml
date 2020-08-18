@@ -1,20 +1,8 @@
-(** This module provides a way of making concrete evaluation of an expression.
-    The only required thing is a {!context}.
-*)
+(* The documentation is in the mli file *)
 
-(** A map from variables to concrete values *)
-type 'v context = 'v -> Value.t
-
-(** Thrown when trying to concretely evaluate a symbolic expression *)
 exception Symbolic
 
-(** Evaluate a concrete expression using Z3: TODO
-
-    This is mostly for testing purposes.
-*)
-let eval_z3 ?ctx:(_ = fun _ -> failwith "novar") (_ : ('a, 'v, Ast.no, Ast.no) Ast.exp) : Value.t
-    =
-  failwith "unimplemented"
+type 'v context = 'v -> Value.t
 
 let eval_unop (u : Ast.unop) v =
   match u with
@@ -67,7 +55,7 @@ let eval_binop (b : Ast.no Ast.binop) v v' =
   | Bvcomp bvc -> eval_bvcomp bvc (Value.expect_bv v) (Value.expect_bv v') |> Value.bool
   | Binmem m -> Ast.destr_binmem m
 
-let eval_bvmanyarith (m : Ast.bvmanyarith) bvs =
+let eval_bvmanyarith (m : Ast.bvmanyarith) (bvs : BitVec.t list) =
   let open BitVec in
   match m with
   | Bvand -> List.fold_left_same ( land ) bvs
@@ -83,33 +71,20 @@ let eval_manyop (m : Ast.manyop) vs =
   | Concat -> vs |> List.map Value.expect_bv |> List.fold_left_same BitVec.concat |> Value.bv
   | Bvmanyarith bvma -> eval_bvmanyarith bvma (List.map Value.expect_bv vs) |> Value.bv
 
-(** Evaluate a concrete expression directly without external tool *)
-let rec eval_direct ?(ctxt = fun _ -> raise Symbolic) (e : ('a, 'v, Ast.no, Ast.no) Ast.exp) :
-    Value.t =
+let rec eval ?(ctxt = fun _ -> raise Symbolic) (e : ('a, 'v, Ast.no, Ast.no) Ast.exp) : Value.t =
   match e with
   | Var (v, _) -> ctxt v
   | Bound _ -> .
   | Bits (bv, _) -> bv |> Value.bv
   | Bool (b, _) -> b |> Value.bool
   | Enum (enum, _) -> enum |> Value.enum
-  | Unop (u, v, _) -> v |> eval_direct ~ctxt |> eval_unop u
-  | Binop (b, v, v', _) -> eval_binop b (eval_direct ~ctxt v) (eval_direct ~ctxt v')
-  | Manyop (m, vs, _) -> vs |> List.map (eval_direct ~ctxt) |> eval_manyop m
+  | Unop (u, v, _) -> v |> eval ~ctxt |> eval_unop u
+  | Binop (b, v, v', _) -> eval_binop b (eval ~ctxt v) (eval ~ctxt v')
+  | Manyop (m, vs, _) -> vs |> List.map (eval ~ctxt) |> eval_manyop m
   | Ite (c, e, e', _) ->
-      let cv = eval_direct ~ctxt c in
-      if cv |> Value.expect_bool then eval_direct ~ctxt e else eval_direct ~ctxt e'
+      let cv = eval ~ctxt c in
+      if cv |> Value.expect_bool then eval ~ctxt e else eval ~ctxt e'
   | Let _ -> .
-
-(** Evaluate a concrete expression *)
-let eval = eval_direct
-
-(* let _ =
- *   Tests.add_test "ConcreteEval" (fun () ->
- *       let two = BitVec.of_int ~size:7 2 in
- *       let five = BitVec.of_int ~size:7 5 in
- *       let ten = BitVec.of_int ~size:7 10 in
- *       let exp = Ast.Op.(sdiv (bits two + bits ten) (bits five) = bits two) in
- *       eval_direct exp |> Value.expect_bool) *)
 
 let rec is_concrete (exp : _ Ast.exp) : bool =
   match exp with
@@ -117,6 +92,5 @@ let rec is_concrete (exp : _ Ast.exp) : bool =
   | Var _ -> false
   | exp -> AstManip.direct_exp_for_all_exp is_concrete exp
 
-(** Evaluate an expression if it's concrete and returns [None] otherwise *)
 let eval_if_concrete (exp : _ Ast.exp) : Value.t option =
-  try eval_direct exp |> Opt.some with Symbolic -> None
+  try eval exp |> Opt.some with Symbolic -> None

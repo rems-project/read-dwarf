@@ -34,8 +34,6 @@ let index : (Path.t, ty) IdMap.t = IdMap.make ()
 
 let pp_index () = IdMap.pp ~keys:Path.pp ~vals:pp_ty index
 
-let mem = IdMap.mem_id index
-
 let mem_path = IdMap.mem index
 
 let mem_string = Path.of_string %> mem_path
@@ -54,7 +52,9 @@ let reg_type = IdMap.geti index
 
 let path_type = IdMap.getk index
 
-let add = IdMap.add index
+let add path ty =
+  debug "Adding register %s with type %t" (Path.to_string path) (PP.top pp_ty ty);
+  IdMap.add index path ty
 
 let ensure_add path ty =
   match IdMap.to_ident_opt index path with
@@ -69,7 +69,7 @@ let ensure_add path ty =
       else reg
   | None -> add path ty
 
-let adds = IdMap.adds index
+let adds path ty = add path ty |> ignore
 
 let ensure_adds path ty = ensure_add path ty |> ignore
 
@@ -85,25 +85,12 @@ let pp reg = reg |> to_string |> PP.string
 (*        Register maps                                                      *)
 (*****************************************************************************)
 
-module PMap = struct
-  type reg = t
-
-  let pp_reg = pp
-
-  include HashVector
-
-  let pp conv pm =
-    pm |> HashVector.bindings |> List.map (Pair.map pp_reg conv) |> PP.mapping "regpmap"
-end
-
 module Map = struct
   type reg = t
 
   let pp_reg = pp
 
   include FullVec
-
-  let dummy () = make (fun _ -> failwith "Reg.Map.dummy used")
 
   let init = make
 

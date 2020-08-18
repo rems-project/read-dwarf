@@ -17,8 +17,8 @@ let elf =
 
 let info =
   let doc =
-    "Dump the dwarf information as interpreted by read-dwarf, "
-    ^ "contrary to the rd subcommand that dump it directly from the output of Linksem"
+    "Dump the dwarf information as interpreted by read-dwarf, contrary to the rd subcommand that \
+     dump it directly from the output of Linksem"
   in
   Term.(info "dump-dwarf" ~doc ~exits:default_exits)
 

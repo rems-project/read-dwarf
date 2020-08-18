@@ -1,7 +1,29 @@
 (** This module introduce a type to represent the state of the machine.
 
-    Look at {!t} for more details
- *)
+    The symbolic state in this module do not mathematically represent a single
+    state but a set of concrete state with all the symbolic variable over the
+    whole range of their types. State also contain assertions, and so only
+    represent the subset of concrete states, that satisfy all assertions.
+
+    Currently the state type only represent the register (including system
+    register) and sequential memory part of an actual machine state. Any other
+    architectural state is not represented.
+
+    Additionally, state contain C type information for the {!Ctype} inference
+    system. Those fields are not semantically part of the state and do not
+    influence in any way which concrete states are represented by the symbolic
+    state. Expect for provenance information: Pointers can be tagged with
+    provenance information which mean that they are part of a specific restricted
+    block of memory or the main block. See {!Mem} for more information. Thus all
+    the implicit non-aliasing assertion implied by those provenance field are to
+    be considered as part of the group of assertion restricting the set of
+    concrete state represented by a symbolic state.
+
+    The presence of C types is optional, which means that this state type can be
+    used in a completely untyped context.
+
+    Concrete detail about how symbolic state are represented in Ocaml is in the
+    documentation of {!t}.*)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -10,18 +32,11 @@ end)
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Support types } *)
+(** {1 State id } *)
 
-(** This type is the standard annotation inside the state stucture.
-    For now it is Isla.lrng, but it may change depending on our needs *)
-type annot = Isla.lrng
-
-let dummy_annot = Isla.UnknownRng
-
-(** The type of registers, so basically the machine type of data we represent *)
-type ty = Reg.ty
-
-(** The type of a state ID. for now it's an integer, but it may change later *)
+(** The type of a state ID. for now it's an integer, but it may change later
+    In particular whether a state belong to O0 or O2 may be part of the [id]
+    at some point.*)
 module Id = struct
   type t = int
 
@@ -41,15 +56,27 @@ type id = Id.t
 (*****************************************************************************)
 (** {1 State variable management } *)
 
-(** This module provide state variables *)
+(** This module provide state variables. Those are all symbolic variables that
+    may appear in a state. If the same (in the {!Var.equal} sense) variable
+    appear in two state, that mean that when considered together, there is an
+    implicit relation between them.
+
+    This means that the set of pair of concrete states represented by a pair of
+    symbolic state could be a strict subset of the Cartesian product of the sets
+    of concrete state represented by each symbolic state individually. *)
 module Var = struct
   (** The type of a variable in the state *)
   type t =
-    | Register of Id.t * Reg.t
+    | Register of Id.t * Reg.t  (** The value of this register in this state *)
     | ReadVar of Id.t * int * Ast.Size.t
-    | Arg of int
+        (** The result of a certain read in a certain state.
+            The size part is not semantically important:
+            Two [ReadVar] with same [id] and same number may no have different sizes *)
+    | Arg of int  (** A function argument *)
     | RetArg
-    | RetAddr
+        (** The address to which the return value should be written.
+            This is used only in certain calling conventions *)
+    | RetAddr  (** The return address: The address to which a "return" instruction would jump. *)
 
   (** Convert the variable to the string encoding. For parsing infrastructure reason,
       the encoding must always contain at least one [:]. *)
@@ -117,6 +144,7 @@ module Var = struct
   (** Pretty prints but with bars around *)
   let pp_bar sv = PP.(bar ^^ pp sv ^^ bar)
 
+  (** Get the type of a variable *)
   let ty = function
     | Register (_, r) -> Reg.reg_type r
     | ReadVar (_, _, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
@@ -125,6 +153,7 @@ module Var = struct
     | RetAddr -> Ast.Ty_BitVec 64
 end
 
+(** The type of variables *)
 type var = Var.t
 
 (*****************************************************************************)
@@ -136,19 +165,18 @@ type var = Var.t
 module Exp = struct
   include Exp.Make (Var)
 
+  (** Create an expression from an register and a state id *)
   let of_reg id reg = Var.of_reg id reg |> of_var
 end
 
 type exp = Exp.t
 
-type smt = (Ast.lrng, Var.t, Ast.no, Ast.no) Ast.smt
-
-let pp_smt (smt : smt) = Ast.pp_smt Var.pp (AstManip.smt_allow_lets @@ AstManip.smt_allow_mem smt)
-
-(** Module for optionally typed state expressions *)
+(** Module for optionally typed state expressions.
+    Those are symbolic values which may or may not have a C type.*)
 module Tval = struct
   type t = { ctyp : Ctype.t option; exp : Exp.t }
 
+  (** Make a new typed value with optionally a {!Ctype} *)
   let make ?ctyp exp = { exp; ctyp }
 
   let of_exp = make
@@ -180,17 +208,48 @@ type tval = Tval.t
 (*****************************************************************************)
 (** {1 State memory management } *)
 
-(** This module helps managing the memory part of the state.
+(** This module manages the memory part of the state.
 
-    This type has an imperative interface even if the underlying {!SymbolicFragment}
-    has a pure interface.*)
+    The symbolic memory bounds certain symbolic address to symbolic values, but
+    most addresses are not bound. This basically correspond to a concrete
+    instantiation of a {!SymbolicFragment}.
+
+    However in most case, we have some information that some symbolic value do
+    not alias other symbolic values.For example in no address involving the stack
+    pointer may alias any address no involving the stack pointer except in
+    specific case of escaping which are explicitly not supported (yet). It is
+    intended to support escaping later. There can be other kind of non-aliasing
+    information in case of explicit [restrict] annotation or when implicitly
+    passing or returning value by pointer (which some ABI do when such value are
+    too big).
+
+    In the absence of escaping, such problem can be solved by representing the
+    memory with multiple {!SymbolicFragment}. One for the main memory, and one
+    for each "restricted block". The module encapsulate all those different
+    fragment.
+
+    To manage such a system, we use the C type system to carry around provenance
+    information in the type {!Ctype.provenance}. When doing a {!read} or a
+    {!write}, this provenance is used to route the read or write to the right
+    symbolic block.
+
+    This means that the provenance-tracking part of the C type system must be
+    part of the TCB of read-dwarf as the soundness of the symbolic memory model
+    depend on it.
+
+    Finally, the current implementation is only suitable for sequential
+    execution, a new theoretical model and implementation must be developed for
+    concurrent shared memory.
+
+    Implementation detail: This type has an imperative interface even if the
+    underlying {!SymbolicFragment} has a pure interface.*)
 module Mem = struct
   module Size = Ast.Size
 
   (** The module of state memory fragment *)
   module Fragment = SymbolicFragment.Make (Var)
 
-  (** The index of a symbolic fragment. See {!t} for more explanations  *)
+  (** The index of a symbolic fragment. See {!Mem} for more explanations  *)
   type provenance = Ctype.provenance
 
   (** The type of memory. There is a main memory and a bunch of restricted fragments.
@@ -201,11 +260,14 @@ module Mem = struct
       Some execution contexts may even not have any stacks.*)
   type t = { mutable main : Fragment.t; frags : (Exp.t * Fragment.t) Vec.t }
 
+  (** Empty memory, every address is unbound *)
   let empty () = { main = Fragment.empty; frags = Vec.empty () }
 
+  (** Build a new memory from the old one by keeping the old one as a base *)
   let from mem =
     { main = Fragment.from mem.main; frags = Vec.map (Pair.map Fun.id Fragment.from) mem.frags }
 
+  (** Copy the memory so that is can be mutated separately *)
   let copy mem = { main = mem.main; frags = Vec.copy mem.frags }
 
   (** Add a new fragment with the specified base *)
@@ -254,7 +316,7 @@ module Mem = struct
     update_frag ~provenance wr mem
 
   (** Map a function over all the memory expressions. The semantic meaning of
-      expression must not change *)
+      expressions must not change *)
   let map_mut_exp f mem =
     mem.main <- Fragment.map_exp f mem.main;
     Vec.map_mut (Pair.map f (Fragment.map_exp f)) mem.frags
@@ -276,6 +338,7 @@ module Mem = struct
             mem.frags );
       ]
 
+  (** Check is this memory is empty which means all addresses are undefined *)
   let is_empty mem =
     Fragment.is_empty mem.main && Vec.for_all (Pair.for_all Fun.ctrue Fragment.is_empty) mem.frags
 end
@@ -286,38 +349,57 @@ end
 (** {1 State type } *)
 
 (** Represent the state of the machine.
-    Should only be mutated when created before locking.
 
-    The {!lock} function allow to lock a state for mutation. This is not encoded into
-    the type system (yet) but it should nevertheless be respected. Once a state is locked,
-    it should not be mutated anymore.
+    State are represented by their id and may identified to their id, they may
+   not be two different state (and I mean physical equality here) with same id.
+   See {!stateid}.
 
-    The state are based on a dominator tree from the control flow graph structure.
-    The variable in them are allowed to depend on themselves or any ancestor in the
-    dominator tree. The [base_state] contains the immediate dominator. However a
-    state may not represent a full node of the control flow graph but only the
-    part of that node that represent control-flow coming from specific patha.
-    In that case the dominator notion is only about those paths. State may only
-    refer variables in among their ancestor line. This especially important when
-    merging states.
+    A first remark must be made about mutability: The type itself has an
+   imperative interface, a lot of implicitly or explicitly mutable fields.
+   However, Sometime immutable version of the state are required, so the state
+   has a "locking" mechanism. When the {!locked} field, the state becomes
+   immutable. This is unfortunately not enforced by the type system as that
+   would require to have two different types. However all mutating functions
+   assert that the state is unlocked before doing the mutation. The normal
+   workflow with state is thus to create them unlocked, generaly by {!copy}ing
+   another state, then mutate is to make a new interesting state, and then lock
+   it so that it can be passed around for it's mathematical pure meaning. To
+   lock a state, use the {!lock} function.
 
-    State are represented by their id and may identified to their id, they may not be
-    two different state (and I mean physical equality here) with same id. See {!id2state}
-*)
+    A second subtlety is that state are not represented in a standalone manner,
+   They are represented as diff from a previous state, the {!base_state}. In the
+   idea, this state should be the immediate dominator of the current state in
+   the control flow graph.However a state may not represent a full node of the
+   control flow graph but only the part of that node that represent control-flow
+   coming from specific paths. In that case the dominator notion is only about
+   those paths.
+
+    Assertions ({!asserts}) and memory ({!mem}) are represented as diffs from
+   the base state. In particular all assertion constraining the base state are
+   still constraining the child state.
+
+    This also implies a restriction on state dependent variables like
+   {!Var.Reg}. The id of such variables can only be the id of the current state
+   or one of it's ancestor. Further more if a variable of type {!Var.ReadVar}
+   exists with and id and a number, then the {!read_vars} array of the state
+   with that [id] must contain that number and the sizes must match.
+    Those restriction are not only about semantic meaning but also
+    more practical Ocaml Gc consideration, see {!stateid}.*)
 type t = {
   id : Id.t;
   base_state : t option;  (** The immediate dominator state in the control flow graph *)
   mutable locked : bool;  (** Tells if the state is locked *)
-  mutable regs : Tval.t Reg.Map.t;
-  read_vars : Tval.t Vec.t;
+  mutable regs : Tval.t Reg.Map.t;  (** The values and types of registers *)
+  read_vars : Tval.t Vec.t;  (** The results of reads made since base state *)
   mutable asserts : exp list;  (** Only asserts since base_state *)
   mem : Mem.t;
   elf : Elf.File.t option;
       (** Optionally an ELF file, this may be used when running instructions on
-          the state to provide more concrete values in certain case. It *will*
-          affect the execution behavior. However the symbolic execution should
-          always be more concrete with it than without it *)
-  fenv : Fragment.env;
+          the state to provide more concrete values in certain case (like when
+          reading from [.rodata]). It will affect the execution behavior.
+          However the symbolic execution should always be more concrete with
+          it than without it *)
+  fenv : Fragment.env;  (** The memory type environment. See {!Fragment.env} *)
   mutable last_pc : int;
       (** The PC of the instruction that lead into this state. The state should be
           right after that instruction. This has no semantic meaning as part of the state.
@@ -329,7 +411,29 @@ let equal s s' = Id.equal s.id s'.id
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 State to id management } *)
+(** {1:stateid State to id management }
+
+    Each state has an id and the state can be refereed physically by id. This
+    mean that there cannot be two different physical Ocaml state in the Gc memory
+    that have the same id. Furthermore the {!id2state} map is weak and so do not
+    own the state. This means that possession of an id is the same as having a
+    weak pointer to the state, except for two things:
+    - The id can be serialized and read to external program and files without
+      losing it's meaning.
+    - The id allow to break cyclical type dependency.
+
+    This is in particular useful for variable that contain and id instead of a
+    pointer to the state:
+    - The variable can be serialized in text manner to a SMT solver and keep
+      their meaning.
+    - The {!Var.t} type can be defined before the {!t} type.
+
+    That means that in theory a state could be Garbage collected while a
+    variable still point to it. However a variable is only allowed to exists in a
+    state if the id it points to is among the ancestors via the {!base_state}
+    relationship of the containing state. Since {!base_state} is an GC-owning
+    pointer, this ensure that while the containing state is alive, the variable
+    target state is also alive.*)
 
 (** Global map of states to associate them with identifiers *)
 let id2state : (id, t) WeakMap.t = WeakMap.create 10
@@ -337,8 +441,10 @@ let id2state : (id, t) WeakMap.t = WeakMap.create 10
 (** Next unused id *)
 let next_id = ref 0
 
+(** Get a state from it's [id] *)
 let of_id (id : id) = WeakMap.get id2state id
 
+(** Get the id of a state *)
 let to_id (st : t) = st.id
 
 (*****************************************************************************)
@@ -349,21 +455,30 @@ let to_id (st : t) = st.id
 (** Lock the state. Once a state is locked it should not be mutated anymore *)
 let lock state = state.locked <- true
 
-(** Unlock the state. This is dangerous, do not use if you do not know how to use it *)
-let unsafe_unlock state = state.locked <- false
+(** Unlock the state. This is dangerous, do not use if you do not know how to use it,
+    The only realistic use case, is for calling a simplifier and thus not changing
+    the semantic meaning of the state in any way while mutating it.
+
+    This should be considered deprecated and should disappear at some point.*)
+let unsafe_unlock state = state.locked <- false [@@deprecated "Stop unlocking states"]
 
 (** Tell if the state is locked, in which case it shouldn't be mutated *)
 let is_locked state = state.locked
 
 (** Tell is state is possible.
 
-    A state is impossible if it has a single assert that is [false].
+    A state is impossible if it has a single assert that is [false]. This
+    means that this symbolic state represent the empty set of concrete states.
 
-    {!StateSimplify.ctxfull} will call the SMT solver and set the assertion to that if
+    {!StateSimplify.ctxfull} will call the SMT solver and set the assertions to that if
     required so you should call that function before [is_possible] *)
 let is_possible state = match state.asserts with [Ast.Bool (false, _)] -> false | _ -> true
 
-(** Makes a fresh state with all variable fresh and new *)
+(** Makes a fresh state with all variable fresh and new.
+    This fresh state is unlocked.
+
+    This should only be used by {!Init}, all other state should be
+    derived from {!Init.state}.*)
 let make ?elf () =
   let id = !next_id in
   let state =
@@ -384,14 +499,13 @@ let make ?elf () =
   WeakMap.add id2state id state;
   state
 
-(** Do a deep copy of all the mutable part of the state,
-    so it can be mutated without retro-action.
+(** Do a deep copy of all the mutable part of the state, so it can be mutated
+    without retro-action.
 
-    If the copied state is locked, then new state is based on it,
-    otherwise it is a literal copy.
+    If the source state is locked, then new state is based on it (in the sense
+    of {!t.base_state}), otherwise it is a literal copy of each field.
 
-    The returned state is always unlocked
-*)
+    The returned state is always unlocked *)
 let copy ?elf state =
   let id = !next_id in
   let locked = is_locked state in
@@ -413,12 +527,9 @@ let copy ?elf state =
   WeakMap.add id2state id nstate;
   nstate
 
-(** Copy the state with {!copy} iff it is locked.
+(** Copy the state with {!copy} if and only if it is locked.
     The returned state is always unlocked *)
 let copy_if_locked ?elf state = if is_locked state then copy ?elf state else state
-
-(** Give the previous locked state in this state trace. *)
-let previous state = state.base_state
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -455,7 +566,7 @@ let iter_var (f : var -> unit) s = iter_exp (AstManip.exp_iter_var f) s
 (*****************************************************************************)
 (** {1 State memory accessors } *)
 
-(** Create a new Extra symbolic variable by mutating the state *)
+(** Create a new {!Var.ReadVar} by mutating the state *)
 let make_read (s : t) ?ctyp (size : Mem.Size.t) : var =
   assert (not @@ is_locked s);
   let len = Vec.length s.read_vars in
@@ -463,13 +574,14 @@ let make_read (s : t) ?ctyp (size : Mem.Size.t) : var =
   Vec.add_one s.read_vars { ctyp; exp = Exp.of_var var };
   var
 
+(** Set a {!Var.ReadVar} to a specific value in {!t.read_vars} *)
 let set_read (s : t) (read_num : int) (exp : Exp.t) =
   assert (ExpTyped.get_type exp = ExpTyped.get_type (Vec.get s.read_vars read_num |> Tval.exp));
   Vec.update s.read_vars read_num @@ Tval.map_exp (Fun.const exp)
 
 (** Read memory from rodata.
 
-    TODO Move this code into SymbolicFragment *)
+    TODO Move this code into {!SymbolicFragment}? *)
 let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option =
   match s.elf with
   | Some elf when ConcreteEval.is_concrete addr -> (
@@ -491,6 +603,7 @@ let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option
     This will mutate the state to bind the read result to the newly created read variable.
 
     The [ctyp] parameter may give a type to the read variable.
+    This type is fully trusted and not checked in any way.
 
     The expression could be either:
       - An actual expression if the read could be resolved.

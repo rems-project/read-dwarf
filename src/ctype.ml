@@ -1,8 +1,32 @@
 (** This module provides the internal C-like type system. This type system is
-   slightly different than the normal C type system. This module only provide
-   the Ocaml datastructure to represent those types. The typing rules are
-   implemented in {!TraceCtype}, where they are applied directly on traces.
-*)
+    slightly different than the normal C type system. This module only provide
+    the Ocaml datastructure to represent those types. The typing rules are
+    implemented in {!TraceCtype}, where they are applied directly on traces.
+
+
+    These types follow the normal C type structure except for pointer that are
+    more complex. To handle the fact the C compiler know perfectly the ABI is
+    "allowed" to used it, we have to make pointer type resist manual adjusting of
+    pointer to point to the field of a struct. However the new pointer cannot
+    just have type [field_type*] because one could want to get back a pointer to
+    the whole structure by subtracting an offset from the field pointer. Thus a
+    pointer must never forget information about it's surrounding. Those
+    surrounding are called a {!fragment} and represent all the type of the
+    fragment of memory in which a pointer lies. The pointer is thus represented
+    as a fragment of memory and an offset. Since the pointer type is more complex
+    and pack more information, the surface syntax has changed. A pointer type is
+    written between braces, so [A*] becomes [{A}]. but in more complex cases, all
+    information fit between the braces.
+
+    Furthermore, the fragment part of the pointer do not record any information
+    about aliasing: two different type fragment are perfectly allowed to alias.
+    To handle non-alising property like the stack not aliasing the heap or
+    restrict pointers, pointers also have a [provenance] field. See {!State.Mem}.
+
+    There is another problem: The C language do not define a C type system for the whole
+    program contrary to C++. It defines only a type system per compilation unit.
+    This limitation is two annoying to work with so the module implement
+    some kind of linking of type similar to C++ rules. See {!ctyplink}.*)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -31,7 +55,7 @@ let vDW_ATE_unsigned_char = "DW_ATE_unsigned_char" |> Dwarf.base_type_attribute_
 (** {1 Types } *)
 
 (** This is the provenance of the pointer. This tells to which symbolic memory block
-    a pointer points to. *)
+    a pointer points to. To get the full explanation, go to {!State.Mem} *)
 type provenance = Restricted of int | Main
 
 let pp_provenance =
@@ -278,19 +302,25 @@ let len = sizeof
 (*****************************************************************************)
 (** {1:ctyplink C type linking: From Linksem}
 
-    This section contain the whole hierarchy of function used to convert
-    type from DWARF representation to the internal type system.
+    This section contain the whole hierarchy of function used to convert type
+    from DWARF representation to the internal type system.
 
-    During this conversion, C type linking happens. TODO details
+    During this conversion, C type linking happens. This means that structure
+    with the same name from different compilation unit are identified as being
+    the same. If they do not have the same layout, an error is raised. This would
+    mean that either the C program does very weird thing with it's type that we
+    don't want to verify or more likely that it is ill-formed. As we have to deal
+    with anonymous struct, name are a bit more complex than plain [struct] tags.
+    See {!env} for a description.
 
-    The top-level interface for types is {!of_linksem} and
-    the top-level interface for environement is {!env_of_linksem}
-
-*)
+    The top-level interface for types is {!of_linksem} and the top-level
+    interface for environement is {!env_of_linksem}. Those will be called by
+    {!Dw} at DWARF loading time to generate a coherent type system.*)
 
 (** This type is a conversion context.
-    It role is to contain all the thing that all the function in this section
-    will need to convert type.*)
+
+    Its role is to contain all the things that all the functions in this section
+    will need to convert types.*)
 type conversion_context = { env : env; potential_link_name : string option }
 
 (** Get the id of a linksem [cupdie] *)
@@ -369,8 +399,7 @@ and struc_of_linksem ~cc name size members : struc =
 
 (** Build a struct from it's cupdie and name.
     If [force_complete] is true and the struct is incomplete. It will try
-    to complete is using [cupdie] and throw {!LinkError} if it fails.
-*)
+    to complete is using [cupdie] and throw {!LinkError} if it fails.*)
 and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : unqualified =
   let open Dwarf in
   (* If the struct has no name we fallback on the potential name. If the
@@ -496,20 +525,22 @@ let of_linksem ~env (ltyp : linksem_t) : t =
 
 (** The main environment conversion function.
 
-    This the function that deal with all the type linking process,
-    forward declaration an all that stuff.
+    This the function that deal with all the type linking process, forward
+    declaration an all that stuff.
 
     First it create the indexed linksem environment (member lenv of {!env}),
 
-    Then it register all named structs as incomplete in the environment
-    (to deal with self recursion, only named structs can self-recurse).
+    Then it registers all named structs as incomplete in the environment (to
+    deal with self recursion, only named structs can self-recurse).
 
-    Finally it run {!of_linksem_cc} on all the type with [force_complete] on.
-    During this phase it ignore all {!LinkError} that arise. It assumes that
-    if some thing was incomplete at that point, it will be completed later.
+    Finally it run {!of_linksem_cc} on all the types with [force_complete] on.
+    During this phase it ignore all {!LinkError} that arise. It assumes that if
+    some thing was incomplete at that point, it will become complete later.
 
     Then it can return the freshly built environment.
-*)
+
+    If some structs are still incomplete, but are actually used, the
+    {!LinkError} will be raised at the time of use. *)
 let env_of_linksem (lenv : linksem_env) : env =
   let open Dwarf in
   (* First phase: index them by the cupdie number id *)

@@ -1,4 +1,4 @@
-(** This module provide facility to run {!Isla} trace over state ({!State.t})
+(** This module provide facility to run {!Isla} trace over {{!State}states}
 
     The main functions are {!trc} for pure interface and {!trc_mut} for imperative interface.
 
@@ -7,7 +7,9 @@
     It is for testing purpose only, otherwise use {!TraceRun}. Typing do not work,
     and some other expected behavior may not work either.
 
-*)
+    This module can be considered deprecated/legacy.*)
+
+[@@@ocaml.deprecated "Should not be used by new modules"]
 
 open Isla
 

@@ -1,22 +1,85 @@
 {0 Instruction Pipeline}
 
 This page describe the whole instruction pipeline from how isla is called, to
-how to run them on {!State}s.
+how to run them on {{!State}states}.
+
+The main idea to represent instruction semantics, is that of trace. A trace is a
+list of event that affect the current machine state. Those trace may also
+contain assertions, which means that the trace only decribes the behavior of a
+state that satisfy those assertions, and do not define any behavior for a state
+that do not satisfy those assertion. With a set of such traces you can define
+the behavior of a whole instruction.
+
+If a state statisfy none of the assertion of any traces of an instruction then
+running that instruction on that state is undefined behavior. In pratice even if
+the normal model of sail fully defines an instruction on every state, we will
+manually make some behavior undefined. In particular all processors exceptions
+are considered undefined behavior for now.
+
+In the implementation there is two different fromat for traces: The original
+isla format from the isla tool and a custom simpler format in the {!Trace}
+module.
 
 {1 Isla}
 
+{{:https://github.com/rems-project/isla}Isla}
+is a tool to symbolically execute a Sail ISA semantic description. Isla will
+take such semantics and use it to generate symbolic traces for instructions,
+In this section I describe how I process those traces. The interesting types
+are defined in {!Isla}.
+
 {2 Calling isla}
+
+First to call isla itself. All of this is done in {!IslaServer}. The Isla tool
+suite expect [*.ir] file that is some sort of preprocessed sail source.
+
+This processing is done by [isla-sail], but they can be found in
+{{:https://github.com/rems-project/isla-snapshots}[isla-snapshots]}.
+For now we also keep a working snapshot [aarch64.ir] in the root directory.
+
+To call isla, {!IslaServer} use the [isla-client] program. This program will
+take an hexadecimal opcode and call the [isla_client] sail function in the
+[*.ir] file. This function take the opcode, decode it and run it, all of which
+is done symbolically by isla. [isla-client] then send back a symbolic recording
+of all operations used by the sail code. This code is parsed using the
+[isla-lang] library by the {!Isla} module that is a wrapper around [isla-lang]
+functionality.
 
 {2 Preprocessing of isla traces}
 
+As the raw trace contained by isla are big and contain a lot of useless
+information, I first preprocess them to remove a maximum of useless part in
+{!IslaPreprocess}
+
 {2 Isla traces caching}
+
+Isla trace are {{!Cache}cached} by {!IslaCache} by opcode. This organisation
+assumes that there is no configuration to send to isla before symbolically
+running an instruction and thus each opcode correspond to a single trace
+representation.
 
 {2 Typing and register learning}
 
+Then {!IslaType} can be used to type the isla traces and at the same time
+discover all register used by the trace and thus potentially add them to the
+{!Reg} module.
+
 {2 Running Isla traces directly}
+
+There are two way of used those isla traces, running them directly on states
+with {!IslaRun} which is kind of deprecated, or going trough the internal
+{!Trace} format.
 
 {1 Trace and Instr}
 
-{2 New trace format}
+Even after preprocession, Isla traces are still quite complex. They consider
+meaningful event that in the usual setting are not like reading a register. They
+also contain a lot a possible event about processor sleeping and concurency that
+read-dwarf do not support. Therefore a new trace format has been created in
+{!Trace} that only contains the part of behavior that read-dwarf actually use
+and understand. The trace are also cached in {!TraceCache}.
 
-{2 Instruction representation}
+Full instruction are represented by {!Instr.t} that contain all the traces but
+also additional metadata that can be useful.
+
+See {!SymbolicExecution} to see how to run those traces.

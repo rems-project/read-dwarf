@@ -1,11 +1,10 @@
-(** This module represent an Elf symbol. One important difference with linksem symbols is that
-    the symbols of this module always have the corresponding data (code or initial value).
-    That's why function like {!of_linksem_with_data} exist.
+(** This module represent an Elf symbol. One important difference with linksem
+    symbols is that the symbols of this module always have the corresponding data
+    (code or initial value). That's why function like {!of_linksem_with_data}
+    exist.
 
-    For now addresses are in ints and assume the top bit is 0.
-    It may become Int64.t if required. (or I'll assume sign extension for the last bit)
-
-*)
+    For now addresses are in ints and assume the top bit is sign extended. It
+    may become Int64.t if required *)
 
 (** The type of the ELF symbol *)
 type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
@@ -42,8 +41,7 @@ val typ_of_linksem : linksem_typ -> typ
 (** Get the type from the linksem symbol type *)
 val linksem_typ : linksem_t -> linksem_typ
 
-(** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded.
-*)
+(** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded.*)
 exception LoadingError of string * int
 
 (** Convert a symbol from linksem to read-dwarf representation using the segment data

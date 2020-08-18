@@ -1,5 +1,19 @@
-(* This file use Obj.magic a lot on the AST. No one else is allowed to.
-   On any change to the AST types, all the uses of Obj.magic must be checked again *)
+(** This module provide generic facilities of expression and SMT statements
+    provided by {!Ast}. It is intended to only provide syntactic facilities over
+    {!Ast} types, in particular {!Ast.exp}.
+
+    In particular it provides generic mapping and iteration function over
+    expressions as well a function allowing to convert between the various
+    {!SymbolicExpression.typopt}.
+
+    Warning: due to Ocaml type system limitations mainly
+    {{:https://github.com/ocaml/ocaml/issues/9459} issue [#9456]},
+    this module is sometime required to use {!Obj.magic} in some specific cases.
+    No other module should ever do that.
+    If you need to use [Obj.magic] to bypass Ocaml type system limitation about
+    {!Ast} type, add a function here instead.
+
+*)
 
 open Ast
 
@@ -107,12 +121,10 @@ let direct_exp_exists_exp (p : _ exp -> bool) exp =
     [a_iter_b] take a function [b -> unit] and applies it to all the [b] in [a], and do that
     recursively
 
-    Doing this when a = b is not well defined, and can be easily done using the direct
-    version from previous section.
+    Doing this when [a = b] is not well defined, and can be easily done using the direct
+    version from previous section. *)
 
-*)
-
-(** iterate a function on all the variable of an expression *)
+(** Iterate a function on all the variable of an expression *)
 let rec exp_iter_var (f : 'v -> unit) : ('a, 'v, 'b, 'm) exp -> unit = function
   | Var (v, _) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
@@ -131,6 +143,7 @@ let rec exp_map_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'vb
   | Ite (c, e, e', a) -> Ite (ec c, ec e, ec e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id ec b, List.map (Pair.map Fun.id ec) bs, ec e, l)
 
+(** Iterate a function on all the annotations of an expression *)
 let rec exp_iter_annot (f : 'a -> unit) (exp : ('a, 'v, 'b, 'm) exp) : unit =
   f (annot_exp exp);
   direct_exp_iter_exp (exp_iter_annot f) exp
@@ -166,9 +179,13 @@ let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, '
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Bound variables and let-bindings } *)
+(** {1 Bound variables and let-bindings }
 
-(** Allow bound variables and lets in an expression. *)
+    This section allow to go from expression without let-bindings
+    to expression with them and vice-versa.*)
+
+(** Allow bound variables and lets in an expression.
+    This operation is a no-op and has no runtime cost, it's just a type change.*)
 let allow_lets : ('a, 'v, no, 'm) exp -> ('a, 'v, 'b, 'm) exp =
   (* Check that exp is covariant in the 'b parameter, otherwise this is unsound *)
   let module M : sig
@@ -178,6 +195,7 @@ let allow_lets : ('a, 'v, no, 'm) exp -> ('a, 'v, 'b, 'm) exp =
   end in
   Obj.magic
 
+(** Same as {!allow_lets} but for the {!smt} type *)
 let smt_allow_lets : ('a, 'v, no, 'm) smt -> ('a, 'v, 'b, 'm) smt =
   (* Check that smt is covariant in the 'b parameter, otherwise this is unsound *)
   let module M : sig
@@ -187,7 +205,9 @@ let smt_allow_lets : ('a, 'v, no, 'm) smt -> ('a, 'v, 'b, 'm) smt =
   end in
   Obj.magic
 
-(** Unfold all lets. The output type still allow lets so that the output of this function can still be used without {!allow_bound} *)
+(** Unfold all lets. There are no remaining lets in the output,
+    Therefore the output type of let binding can be anything including {!Ast.no}.
+    In particular doing {!allow_lets} after this function is useless *)
 let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) :
     ('a, 'v, 'b2, 'm) exp =
   let ul = unfold_lets ~context in
@@ -214,7 +234,10 @@ let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) 
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
-(** {1 Memory operation } *)
+(** {1 Memory operation }
+
+    This section allow to go from expression without memory operations
+    to expression with them and vice-versa.*)
 
 (** Allow memory operations in an expression. *)
 let allow_mem : ('a, 'v, 'b, no) exp -> ('a, 'v, 'b, 'm) exp =
@@ -226,16 +249,17 @@ let allow_mem : ('a, 'v, 'b, no) exp -> ('a, 'v, 'b, 'm) exp =
   end in
   Obj.magic
 
+(** Same as {!allow_mem} but for the {!smt} type *)
 let smt_allow_mem : ('a, 'v, 'b, no) smt -> ('a, 'v, 'b, 'm) smt =
   (* Check that smt is covariant in the 'm parameter, otherwise this is unsound *)
   let module M : sig
     type +'m t [@@ocaml.warning "-34"] (* unused type *)
   end = struct
-    type 'm t = (no, no, no, 'm) exp
+    type 'm t = (no, no, no, 'm) smt
   end in
   Obj.magic
 
-(** Allow memory operations in a type. *)
+(** Same as {!allow_mem} but for the {!ty} type *)
 let ty_allow_mem : no ty -> 'm ty =
   (* Check that ty is covariant in the 'm parameter, otherwise this is unsound *)
   let module M : sig
@@ -245,6 +269,13 @@ let ty_allow_mem : no ty -> 'm ty =
   end in
   Obj.magic
 
+(** Check that not memory operation take place in that expression. Return [true]
+    if that's the case and [false] otherwise.
+
+
+    This is not resilient to change of type: If a new memory constructor is added, then
+    this function will be wrong
+*)
 let check_no_mem (e : ('a, 'v, 'b, 'm) exp) : bool =
   let ref_res = ref true in
   let rec check = function
@@ -254,10 +285,13 @@ let check_no_mem (e : ('a, 'v, 'b, 'm) exp) : bool =
   check e;
   !ref_res
 
-(** expect that an [exp] has no memory constructor, and then return it with
-    memory remove from the type. Throws [Failure] if the value had memory constructors.
+(** Expect that an [exp] has no memory constructor, and then return it with
+    memory removed from the type. Throws [Failure] if the value had memory constructors.
 
-    TODO This is not resilient to change of type, find a way to make it resilient *)
+    This is not resilient to change of type, If a new memory constructor is added, then
+    this function will be unsound.
+
+    TODO: Find a way to make it resilient *)
 let expect_no_mem ?(handler = fun () -> failwith "Expected no mem") :
     ('a, 'v, 'b, 'm1) exp -> ('a, 'v, 'b, 'm2) exp =
  fun exp -> if check_no_mem exp then Obj.magic exp else handler ()

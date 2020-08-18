@@ -9,7 +9,7 @@ type t = {
   reg_writes : (Reg.t * State.tval) Vec.t;  (** Stores the delayed register writes *)
   mem_reads : State.tval HashVector.t;  (** Stores the result of memory reads *)
   state : State.t;
-  dwarf : Dw.t option;
+  dwarf : Dw.t option;  (** Optionally DWARF information. If present, typing is enabled *)
 }
 
 (** Build a {!context} from a state *)

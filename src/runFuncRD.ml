@@ -1,7 +1,7 @@
-(** This module is a merge of [rd] sub command and [run-func --loop=1].
-    It will run the equivalent of [run-func --loop=1], and print the instruction like
-    [rd] but with a {!StateDiff} at relevant points.
-*)
+(** This module is a merge of [rd] sub command and [run-func --loop=1]. It will
+    run the equivalent of [run-func --loop=1], and print the instruction like
+    [rd] but will print the state in a light form ({!State.pp_partial}) between
+    instructions.*)
 
 open Cmdliner
 open CommonOpt
@@ -25,7 +25,6 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
   base "Loading ABI";
   let abi = Arch.get_abi api in
   TraceCache.start @@ Arch.get_isla_config ();
-  Init.init ();
   base "Computing entry state";
   let start = Init.state () |> State.copy ~elf |> abi.init in
   base "Loading %s for Analyse" elfname;

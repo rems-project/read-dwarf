@@ -1,16 +1,40 @@
-(** This module defines a new simplified kind of trace to replace Isla traces in the later stages of the instruction processing.
+(** This module defines a new simplified kind of trace to replace Isla traces
+    in the later stages of the instruction semantics processing.
 
     The traces are even simpler and more easily typable.
-    The possible events are in the type {!event} and traces ({!t}) are just list of them.
+    The possible events are in the type {!event} and traces ({!t}) are just list
+    of them.
 
-    Compared to Isla, the concept of reading a register do not exist anymore.
-    Instead, a register can be used as a variable in any expression.
-    When a register appears in an expression, it represents the value of the register at
-    the start of the trace even if that register was written to later.
-    This is why trace are {i not} naively concatenable.
+    Compared to Isla, the concept of reading a register do not exist anymore. Nor
+    the concept of pure symbolic variable or Sail structured values.
+    Instead expression can contain only registers and results of previous memory read
+    as decribe in the type {!Var.t}. All writing event directly write an entire expression.
+    There are no intermediary variable definitions.
 
-    Furthermore, branching do not exist either. Branching instruction are represented by a
-    set of trace.
+    This raise a problem that if an isla trace reads a register after having written
+    to it, then this is ambiguous to represent.
+
+    Thus a partially monadic representation has been chosen:
+    - The effect of writes on registers are delayed to the end, which means that
+      registers variable value in every expression is the value of that register
+      at the beginning of the trace. In particular, if there are two write to
+      the register, only the last one have any effect, the other can be deleted.
+    - The memory operation behave in normal monadic way, in particular
+      a memory read can read the value written by a previous write in the same
+      instruction, even if this is very unlikely.
+
+    In the end, both assertion and register write to different registers can be
+    reordered at will.
+
+    TODO: To make it more clean, getting register writes and assertions out of the trace
+    would make sense like:
+    {[
+    type mem_event = Read of ... | Write of ...
+    type t = { asserts : exp list; reg_writes : (Reg.t * exp) list; mem: mem_event list }
+    ]}
+
+    For all those reason, concatenating two trace semantically is very different that concatenating
+    list of event, and is not implemented yet.
 
     The important functions are {!of_isla} to convert and Isla traces
     and {!simplify} for simplify traces.
@@ -64,6 +88,7 @@ end
 
 type exp = Exp.t
 
+(** The event type. See the {{!Trace}module description} for more details *)
 type event =
   | WriteReg of { reg : Reg.t; value : exp }
   | ReadMem of { addr : exp; value : int; size : Ast.Size.t }
@@ -152,6 +177,7 @@ let exp_of_valu l vc : Isla.valu -> exp = function
 let write_to_valu vc valu exp =
   match valu with Isla.Val_Symbolic i -> HashVector.set vc i exp | _ -> ()
 
+(** Convert an isla event to optionally a Trace event, most events are deleted *)
 let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
     Isla.revent -> event option = function
   | Smt (DeclareConst _, _) -> None

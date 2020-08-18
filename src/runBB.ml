@@ -1,6 +1,4 @@
-(** This module allow to do a test run of all the machinery for a single basic block
-    For now, without branch at the end
-*)
+(** This module allow to do a test run of all the machinery for a single basic block *)
 
 open Cmdliner
 open CommonOpt
@@ -71,7 +69,8 @@ let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
 let get_bb dump reg_types simp_trace code : BB.t =
   IslaCache.start @@ Arch.get_isla_config ();
-  Init.init ();
+  (* I call Init.init manually to print the register types *)
+  Init.init () |> ignore;
   let bb = BB.from_binary code in
   if reg_types then base "Register types:\n%t\n" (PP.topi Reg.pp_index ());
   if simp_trace then begin
@@ -101,7 +100,10 @@ let run_bb norun simp_state bb =
 let term = Term.(const run_bb $ no_run $ simp_state_term $ bb_term)
 
 let info =
-  let doc = "Test operations on a single basic block" in
+  let doc =
+    "Run a basic block. This will run instructions in order, without updating the PC: Any jump \
+     will be ignored."
+  in
   Term.(info "run-bb" ~doc ~exits)
 
 let command = (term, info)

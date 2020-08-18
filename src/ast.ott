@@ -144,7 +144,7 @@ smts :: '' ::=                          {{ ocaml ('a, 'v, 'b, 'm) smt list }}
                                         {{ phantom }}
                                         {{ pp-params ppv }}
                                         {{ menhir-start }}
-                                        {{ menhir-start-type AstDef.rsmts }}
+                                        {{ menhir-start-type AstDef.rsmt list }}
                                         {{ pp ppv x = x |> List.map (pp_smt ppv) |> separate hardline }}
                                         {{ pp-raw ppv x = x |> List.map (pp_raw_smt ppv) |> separate hardline }}
   | smt1 .. smtj                        :: :: Smts {{ ocaml smt0 }}

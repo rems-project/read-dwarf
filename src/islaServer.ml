@@ -16,11 +16,20 @@ module Server = Cmd.SocketServer
 (** The configuration record type *)
 type config = Config.t
 
-(** Bump when updating isla *)
+(** The raw output of the server for an instruction.
+
+    It is a list of traces, each with a flag telling if they are normal traces (no
+    processor exception/fault) or not *)
+type trcs = (bool * Isla.rtrc) list
+
+(** Bump when updating isla. As some point the version checking should move to
+    allow a range of version. Also, right know the cache invalidation is base on
+    this and not on the actual isla version, which may be dangerous.*)
 let required_version = "dev-e6d5ea336532a38c3d196eccac6aa5d7c454f6a1"
 
 let req_num = ref (-1)
 
+(** This instance of socket server for isla *)
 let server = ref None
 
 (** Assume the server is started and get it out of the reference *)
@@ -63,7 +72,8 @@ let raw_stop () =
 (** This should match exactly with the Answer type in isla-client code *)
 type basic_answer = Error | Version of string | StartTraces | Trace of bool * string | EndTraces
 
-(** Read an answer from isla-client. must match exactly write_answer in client.rs *)
+(** Read an answer from isla-client.
+    This must match exactly [write_answer] in [client.rs] in [isla] *)
 let read_basic_answer () =
   let serv = get_server () in
   match Server.read_byte serv with
@@ -88,7 +98,7 @@ let expect_version = function Version s -> s | _ -> failwith "expected version n
 let expect_traces = function Traces tl -> tl | _ -> failwith "expected traces from isla"
 
 (** Expect isla traces and fails if it is not the case, additionally parse them *)
-let expect_parsed_traces a =
+let expect_parsed_traces a : trcs =
   a |> expect_traces
   |> List.mapi (fun i (b, t) ->
          ( b,
@@ -137,12 +147,14 @@ let string_of_request = function
   | VERSION -> "version"
   | STOP -> "stop"
 
+(** Send a string request to the server, and do not wait for any answer *)
 let send_string_request (req : string) : unit =
   let serv = get_server () in
-  req_num := !req_num + 1;
+  incr req_num;
   debug "Sending request %s" req;
   Server.write_string serv req
 
+(** Same as {!request} but takes the request directly as a string *)
 let string_request (req : string) : answer =
   send_string_request req;
   read_answer ()
@@ -154,9 +166,9 @@ let request (req : request) : answer = req |> string_of_request |> string_reques
 
     This is the main entry point of this module.
 *)
-let request_bin_parsed (bin : BytesSeq.t) : (bool * Isla.rtrc) list =
-  ASM bin |> request |> expect_parsed_traces
+let request_bin_parsed (bin : BytesSeq.t) : trcs = ASM bin |> request |> expect_parsed_traces
 
+(** Send a request without expecting any answer *)
 let send_request req = req |> string_of_request |> send_string_request
 
 (** Stop isla client by sending a stop request *)
@@ -215,7 +227,11 @@ module Cmd = struct
   let term = Term.(func_options [isla_client; logs_term; config] server_test $ arch)
 
   let info =
-    let doc = "Raw isla server interaction." in
+    let doc =
+      "Test the raw isla server. Allow to do manual call to the isla server. The input is \
+       un-parsed and transmitted as raw text to isla, however the result is parsed and printed \
+       again as the protocol is partially a binary protocol."
+    in
     Term.(info "isla-server" ~doc ~exits)
 
   let command = (term, info)

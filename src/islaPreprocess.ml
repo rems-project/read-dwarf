@@ -1,24 +1,4 @@
-(** This module is about preprocessing isla traces. This includes:
-
-    - Removing exceptional traces
-    - Removing useless garbage and simplifying
-    - Removing all effect of initialization before cycle
-    - Splitting branches that are non exceptional the right way
-
-    Once preprocessed, there is only a list of traces.
-
-    - Special instructions like smc have zero traces and must be provided with special semantics
-    - Normal instructions have one traces (all exceptional cases are classified as UB)
-    - Branching instruction have more than one traces.
-
-    For example at time of writing,
-    a basic load like "ldr x0, [x1]" has about 1300 variable before preprocessing and
-    27 after.
-
-    TODO: Remove useless register reads (Need a model where reading register has no side effect).
-    TODO: Apply context-free Z3 simplification to expressions
-    TODO: Apply context-full removal of useless assertion (often the same assertion twice or more).
-*)
+(* The documentation is in the mli file *)
 
 open Isla
 
@@ -26,15 +6,24 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
+(** Explain what a variable means in the current context,
+    Each of the variable of the old trace is associated to one of these *)
 type simplify_context_element =
   | Declared of { ty : ty; loc : lrng }
+      (** This mean that the variable has been declared in the old trace with this
+          trace, but not yet in the new trace *)
   | Defined of { exp : rexp; loc : lrng }
+      (** This mean that the variable has been defined in the old trace with this
+          expression, but not yet in the new trace *)
   | Processed of int
+      (** This means that the variable has been be processed and it gives
+          the equivalent variable number in the new trace *)
 
 let expect_processed = function
   | Processed i -> i
   | _ -> Raise.fail "Variables should be processed at this point"
 
+(** Preprocess a single trace *)
 let simplify_trc (Trace events : rtrc) : rtrc =
   (* Phase 1: Discover which variable are actually used *)
   let used = HashVector.empty () in
@@ -124,7 +113,6 @@ let simplify_trc (Trace events : rtrc) : rtrc =
     (1 + Counter.read new_variables);
   Trace (List.rev !res)
 
-(** Preprocess a set of traces. *)
 let preprocess (config : IslaServer.config) (trcs : (bool * rtrc) list) : rtrc list =
   let preprocess_one (b, trc) =
     if not b then None

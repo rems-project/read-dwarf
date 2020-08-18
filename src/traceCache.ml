@@ -1,4 +1,7 @@
-(** This module provides a caching system for fully processed traces *)
+(** This module provides a caching system for fully processed traces
+
+    The top level function to get traces from an opcode is {!get_traces}.
+    This is the function called by the {!Runner}.*)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -117,4 +120,6 @@ let get_traces (opcode : BytesSeq.t) : Trace.t list =
       TC.add cache (Some opcode) straces;
       straces
 
+(** Get a full blown {!Instr} from the opcode, going through the whole Isla pipeline
+    if necessary.*)
 let get_instr (opcode : BytesSeq.t) : Instr.t = Instr.of_traces @@ get_traces opcode

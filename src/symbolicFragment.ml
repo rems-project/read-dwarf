@@ -25,6 +25,7 @@ module type S = sig
 
   module Size = Ast.Size
 
+  (** The type of expressions stored in the fragment *)
   type exp = (var, Ast.no) ExpTyped.t
 
   (** This module provide the concept of memory block, as used by a fragment.
