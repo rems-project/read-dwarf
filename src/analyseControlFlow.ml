@@ -47,7 +47,7 @@ let pp_target_kind_short = function
   | T_branch_cond_successor -> "b.cc-succ"
   | T_branch_register -> "br"
   | T_smc_hvc_successor -> "smc-hvc-succ"
-  | T_out_of_range a -> "out-of-range"
+  | T_out_of_range _ -> "out-of-range"
 
 (*****************************************************************************)
 (**   find targets of each entry of a branch-table description file          *)
@@ -432,7 +432,7 @@ let rec parse_objdump_lines arch lines (next_index : int) (last_address : natura
     match parse_objdump_line arch lines.(next_index) with
     (* skip over unparseable lines *)
     | None -> parse_objdump_lines arch lines (next_index + 1) last_address
-    | Some ((addr, opcode_bytes, mnemonic, operands) as i) -> (
+    | Some ((addr, _opcode_bytes, _mnemonic, _operands) as i) -> (
         match last_address with
         | None -> i :: parse_objdump_lines arch lines (next_index + 1) (Some addr)
         | Some last_address' ->
