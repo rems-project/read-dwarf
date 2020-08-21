@@ -74,6 +74,8 @@ type unqualified =
       (** See {!env} for what the id refers to. The int is the size *)
   | Array of { elem : t; dims : int option list }
   | Enum of { name : string; id : int }  (** See {!env} for what the id refers to *)
+  | FuncPtr (** Hack to accommodate PKVM *)
+  | Missing (** Hack to accommodate PKVM *)
 
 (** The internal representation of generalized C types *)
 and t = {
@@ -284,7 +286,8 @@ let rec sizeof_unqualified = function
   | Machine i -> i
   | Cint { size; _ } -> size
   | Cbool -> 1
-  | Ptr _ -> ptr_size
+  | FuncPtr | Ptr _ -> ptr_size
+  | Missing -> 0
   | Struct { size; _ } -> size
   | Enum _ -> enum_size
   | Array { elem; dims } ->
@@ -343,7 +346,7 @@ let pp_decl (d : Dwarf.decl) =
     Normally this exception should only happen during the initial
     {!env_of_linksem}. If it happens elsewhere, either the code used
     an anonymous struct that do not have C++-like linkage or the
-    compiler did not do it's job.
+    compiler did not do its job.
 *)
 exception LinkError
 
@@ -386,15 +389,18 @@ let rec field_of_linksem ~cc ((_, fname, ltyp, offseto) : linksem_field) : field
   in
   { fname; offset; typ; size }
 
-and field_map_of_linksem ~cc l : FieldMap.t =
-  List.fold_left
-    (fun m f ->
-      let f = field_of_linksem ~cc f in
-      FieldMap.add m f.offset f)
-    FieldMap.empty l
+and field_map_of_linksem name ~cc l : FieldMap.t =
+  let fields = List.map (field_of_linksem ~cc) l in
+  let offsets = List.map (fun f -> f.offset) fields in
+  let sorted = List.sort_uniq Int.compare offsets in
+  if List.length sorted <> List.length offsets then (
+    warn "Struct %s is packed" name;
+    FieldMap.empty
+  )
+  else List.fold_left (fun m f -> FieldMap.add m f.offset f) FieldMap.empty fields
 
 and struc_of_linksem ~cc name size members : struc =
-  let layout = field_map_of_linksem ~cc members in
+  let layout = field_map_of_linksem name ~cc members in
   { name; size; layout; complete = true }
 
 (** Build a struct from it's cupdie and name.
@@ -432,8 +438,13 @@ and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : 
       (* If the struct is not defined, try to define it *)
       match Hashtbl.find cc.env.lenv (ids_of_cupdie cupdie) with
       | CT (CT_struct_union (_, Atk_structure, _, msize, _, Some members)) ->
-          let lsize = expect_some_link msize in
-          let size = Z.to_int lsize in
+          let size =
+            match msize with
+            | Some x -> Z.to_int x
+            | None ->
+                warn "Struct %s doesn't have size" name;
+                0
+          in
           let id = IdMap.add cc.env.structs name @@ incomplete_struct name size in
           let cc = { cc with potential_link_name = Some name } in
           let struc : struc = struc_of_linksem ~cc name size members in
@@ -487,6 +498,8 @@ and unqualified_of_linksem ?(force_complete = false) ~cc : linksem_t -> unqualif
       Machine size
   | CT (CT_enumeration (cupdie, mname, _, _, decl, _)) ->
       enum_type_of_linksem ~cc ~cupdie ~mname ~decl
+  | CT (CT_subroutine (_, _, _, _, _)) -> FuncPtr
+  | CT (CT_missing _) -> Missing
   | _ -> Raise.inv_arg "Converting qualified type in unqualified"
 
 (** Placeholder for whatever the right thing to do is when linksem found no type - TODO: fix *)
@@ -600,6 +613,8 @@ and pp_unqualified = function
   | Array { elem; dims } -> pp_arr elem dims
   | Struct { name; _ } -> dprintf "Struct %s" name
   | Enum { name; _ } -> dprintf "Enum %s" name
+  | FuncPtr -> dprintf "FuncPtr"
+  | Missing -> dprintf "Missing"
 
 and pp_fragment frag =
   group
