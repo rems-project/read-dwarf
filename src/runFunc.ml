@@ -28,7 +28,7 @@ let run_func elfname name dump no_run entry len breakpoints loop =
   begin
     if (not no_run) || dump then
       match func.sym with
-      | None -> fail "Function %s exists in DWARF data but do not have any code" name
+      | None -> fail "Function %s exists in DWARF data but does not have any code" name
       | Some sym ->
           let brks =
             List.map
