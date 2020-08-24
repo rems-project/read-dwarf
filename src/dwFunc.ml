@@ -15,12 +15,12 @@ type func = { name : string; scope : scope; ret : Ctype.t option }
 and scope = { vars : Var.t list; funcs : func list; scopes : scope list }
 
 (** This is the type a dwarf function in linksem *)
-type linksem_func = Dwarf.sdt_subroutine
+type linksem_func = Dwarf.sdt_subroutine  (*PS: why introduce these aliases? *)
 
 (** This is the type a dwarf scope in linksem *)
 type linksem_scope = Dwarf.sdt_lexical_block
 
-(** Create and Dwarf function from it linksem counterpart *)
+(** Create and Dwarf function from its linksem counterpart *)
 let rec func_of_linksem (elf : Elf.File.t) (env : Ctype.env) (lfun : linksem_func) =
   let name = Option.value ~default:"" lfun.ss_name in
   let scope_of_linksem_func (lfun : linksem_func) =
@@ -33,7 +33,7 @@ let rec func_of_linksem (elf : Elf.File.t) (env : Ctype.env) (lfun : linksem_fun
   let ret = Option.map (Ctype.of_linksem ~env) lfun.ss_type in
   { name; scope; ret }
 
-(** Create and Dwarf scope from it linksem counterpart *)
+(** Create and Dwarf scope from its linksem counterpart *)
 and scope_of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lsc : linksem_scope) =
   let vars = List.rev_map (Var.of_linksem elf tenv) lsc.slb_vars in
   let funcs = List.rev_map (func_of_linksem elf tenv) lsc.slb_subroutines in

@@ -5,7 +5,7 @@
     to dump all its modules in the global namespace.*)
 
 module Var = DwVar
-module Func = DwFunc
+module Func = DwFunc  (*PS: why is this renaming a good idea (if it is)? *)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -38,7 +38,7 @@ let dwarferror fmt = Printf.ksprintf (fun s -> raise (DwarfError s)) fmt
 let of_elf (elf : Elf.File.t) =
   info "Loading architecture %s for %s" (ElfFile.machine_to_string elf.machine) elf.filename;
   Arch.load_elf_arch elf;
-  info "Extarcting dwarf of %s" elf.filename;
+  info "Extracting dwarf of %s" elf.filename;
   let ldwarf =
     match Dwarf.extract_dwarf elf.linksem with
     | Some d -> d
