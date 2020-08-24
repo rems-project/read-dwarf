@@ -42,7 +42,7 @@ provide a CLI to run a single function symbolically.
    See {!SymbolicExecution}
  - The we pretty print the results using {!PP} and {!Logs}. See {!Printing}
 
-{1 Detailled pages}
+{1 Detailed pages}
 
 Here is a list of top level pages that explain a subgroup of functionality:
 
@@ -59,8 +59,8 @@ Here is a list of top level pages that explain a subgroup of functionality:
 
 {1 Dependencies}
 
-Here is a list of the dependency library that are used,
-and links to their documentations (for those what have one)
+Here is a list of the dependency libraries that are used,
+and links to their documentation (for those that have some)
 
 - [linksem] : ELF and DWARF Parser and analyzer
 - [isla-lang]: Isla traces parser
