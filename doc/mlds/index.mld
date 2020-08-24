@@ -1,20 +1,20 @@
 {0 read-dwarf }
 
 read-dwarf is badly named C translation validator that happen to read and use
-DWARF information as it's main source of information on the analysed binary
+DWARF information as its main source of information on the analysed binary
 files.
 
-This a documentation of the internal code of read-dwarf.
+This documentation of the internal code of read-dwarf.
 
 {1 Overview }
 
-Currently read-dwarf has not yet the actual infrastructure to find a simulation
+Currently read-dwarf does not yet have the actual infrastructure to find a simulation
 relation between two binaries, however it already has all the necessary
-infrastructure to run symbolicaly a binaries through any control flow path, and
+infrastructure to run symbolicaly a binary through any control flow path, and
 infer the C type along the way. The exact C-like type-system used is a bit more
 advanced than C.
 
-I'll attempts here to give a pipeline overview of what happens when you want to
+I'll attempt here to give a pipeline overview of what happens when you want to
 run a function symbolically. All of this is done by the {!RunFunc} module that
 provide a CLI to run a single function symbolically.
 
@@ -35,32 +35,32 @@ provide a CLI to run a single function symbolically.
  - We create a {!Block} which is a piece of code that can run a delimited block
    of code. We give to it the end conditions provided by the command line like
    potential breakpoints. Then we run it.
- - The {!Block} call the {!Runner} on each instruction as need to move forward
+ - The {!Block} calls the {!Runner} on each instruction as needed to move forward
    and build the tree ({!StateTree}) of possible states. For each instruction,
    the whole {!InstructionPipeline} is run to generate a set of {!Trace}s and
    this set of traces is run on a {!State} to get the next state. 
-   See {!SymbolicExecution}
- - The we pretty print the results using {!PP} and {!Logs}. See {!Printing}
+   See {!SymbolicExecution}.
+ - Then we pretty print the results using {!PP} and {!Logs}. See {!Printing}
 
 {1 Detailed pages}
 
-Here is a list of top level pages that explain a subgroup of functionality:
+Here is a list of top-level pages that each explains a subgroup of functionality:
 
  - {!Utility}: List of modules that provide generic functionality
  - {!Printing}: Generic information about printing and logging
  - {!Configuration}: Configuration organisation
- - {!SymbolicExpressions}: All module related to symbolic expression manipulation
+ - {!SymbolicExpressions}: All modules related to symbolic expression manipulation
  - {!Architecture}: All modules related to achitecture representation
- - {!InstructionPipeline}: All module related to instruction semantics processing.
- - {!BinaryAnalysis}: All module about reading ELF and DWARF information
+ - {!InstructionPipeline}: All modules related to instruction semantics processing.
+ - {!BinaryAnalysis}: All modules about reading ELF and DWARF information
  - {!TypeInference}: All modules about the C type system and type inference.
- - {!SymbolicExecution}: All module related to top-level symbolic execution.
- - {!CLI}: All the modules defining the command line interfaces.
+ - {!SymbolicExecution}: All modules related to top-level symbolic execution.
+ - {!CLI}: All modules defining the command line interfaces.
 
 {1 Dependencies}
 
 Here is a list of the dependency libraries that are used,
-and links to their documentation (for those that have some)
+and links to their documentation (for those that have some).
 
 - [linksem] : ELF and DWARF Parser and analyzer
 - [isla-lang]: Isla traces parser
@@ -74,7 +74,7 @@ and links to their documentation (for those that have some)
 - {{:http://mmottl.github.io/res/api/res/}[res]}: Resizable array.
   Use it via the {!Vec} module
 - {{:http://ocamlgraph.lri.fr/doc/}[ocamlgraph]}: Graph library.
-  Only used in {!Analyse} for now, may be used elsewhere later.
+  Only used in {!Analyse} for now; may be used elsewhere later.
 - {{:http://ocaml-toml.github.io/To.ml/} [toml]} Toml Parsing library. Only used
   in {!Config} to parse the config file. It should not be used elsewhere.
 - {{:https://erratique.ch/software/uutf/doc/Uutf} [uutf]} : Unicode library. 
