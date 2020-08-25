@@ -2,10 +2,6 @@
 
 open ElfSymbol
 
-open Logs.Logger (struct
-  let str = __MODULE__
-end)
-
 type sym = ElfSymbol.t
 
 type linksem_sym = ElfSymbol.linksem_t
