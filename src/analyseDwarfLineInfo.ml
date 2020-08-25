@@ -374,11 +374,7 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
   let comp_dir' =
     match !AnalyseGlobals.comp_dir with
     | None -> comp_dir
-    | Some comp_dir'' -> (
-        match comp_dir with
-        | None -> Some comp_dir''
-        | Some s -> Some (Filename.concat comp_dir'' s)
-      )
+    | Some comp_dir'' -> Some comp_dir''
   in
   subprogram_name ^ ":"
   ^ Nat_big_num.to_string lnr.lnr_line

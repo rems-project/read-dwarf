@@ -7,7 +7,7 @@ open Cmdliner
 open CommonOpt
 
 let comp_dir =
-  let doc = "Path to root directory of compilation, to override DWARF comp_dir if need be" in
+  let doc = "Path to root directory of source files, overriding DWARF comp_dir" in
   setter AnalyseGlobals.comp_dir
     Arg.(value & opt (some string) None & info ["comp_dir"] ~docv:"COMP_DIR" ~doc)
 
