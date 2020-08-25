@@ -1,7 +1,7 @@
-(** This module implement the [rd] subcommand. This the was to original meaning of "read-dwarf".
+(** This module implements the [rd] subcommand. This was to original meaning of "read-dwarf",
     and the first command.
 
-    With {{!RunFuncRD}[run-func-rd]} This is the main used of the {!Analyse} code *)
+    Together with {{!RunFuncRD}[run-func-rd]}, this is the main user of the {!Analyse} code. *)
 
 open Cmdliner
 open CommonOpt

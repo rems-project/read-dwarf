@@ -28,6 +28,7 @@ let pcommands =
     RunInstr.command;
     RunBlock.command;
     RunFuncRD.command;
+    CopySourcesCmd.command;
   ]
 
 (** Add the test command if tests are enabled *)
@@ -35,7 +36,7 @@ let commands = if Tests.enable_tests then Tests.command :: pcommands else pcomma
 
 let _ = Printexc.record_backtrace Config.enable_backtrace
 
-(* Other architecture are unsupported for now. Remove this only when you are explicitely
+(* Other architecture are unsupported for now. Remove this only when you are explicitly
    working on make other architecture work with read-dwarf *)
 let _ = assert ("aarch64" = Arch.module_name)
 
