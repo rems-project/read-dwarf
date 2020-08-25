@@ -9,7 +9,7 @@ open CommonOpt
 let comp_dir =
   let doc = "Path to root directory of source files, overriding DWARF comp_dir" in
   setter AnalyseGlobals.comp_dir
-    Arg.(value & opt (some string) None & info ["comp_dir"] ~docv:"COMP_DIR" ~doc)
+    Arg.(value & opt (some string) None & info ["comp-dir"] ~docv:"COMP_DIR" ~doc)
 
 let clip_binary =
   let doc = "clip binary to first 1000 instructions" in
@@ -67,7 +67,7 @@ let elf2 =
 let qemu_log =
   let doc = "QEMU log file" in
   setter AnalyseGlobals.qemu_log
-    Arg.(value & opt (some non_dir_file) None & info ["qemu_log"] ~docv:"QEMU_LOG_FILE" ~doc)
+    Arg.(value & opt (some non_dir_file) None & info ["qemu-log"] ~docv:"QEMU_LOG_FILE" ~doc)
 
 let out_file =
   let doc = "file for output (optional)" in
@@ -77,18 +77,18 @@ let out_file =
 let cfg_dot_file =
   let doc = "File to output CFG dot to" in
   setter AnalyseGlobals.cfg_dot_file
-    Arg.(value & opt (some string) None & info ["cfg_dot_file"] ~docv:"CFG_DOT_FILE" ~doc)
+    Arg.(value & opt (some string) None & info ["cfg-dot-file"] ~docv:"CFG_DOT_FILE" ~doc)
 
 let cfg_source_nodes =
   let doc = "Optional space-separated list of node labels to start the CFG from" in
   setter AnalyseGlobals.cfg_source_nodes
-    Arg.(value & opt (some string) None & info ["cfg_source_nodes"] ~docv:"CFG_SOURCE_NODES" ~doc)
+    Arg.(value & opt (some string) None & info ["cfg-source-nodes"] ~docv:"CFG_SOURCE_NODES" ~doc)
 
 let cfg_source_nodes2 =
   let doc = "Optional space-separated list of node labels to start the CFG from" in
   setter AnalyseGlobals.cfg_source_nodes2
     Arg.(
-      value & opt (some string) None & info ["cfg_source_nodes2"] ~docv:"CFG_SOURCE_NODES2" ~doc)
+      value & opt (some string) None & info ["cfg-source-nodes2"] ~docv:"CFG_SOURCE_NODES2" ~doc)
 
 let html =
   let doc = "Enables html output" in
