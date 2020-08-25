@@ -5,7 +5,7 @@
     to dump all its modules in the global namespace.*)
 
 module Var = DwVar
-module Func = DwFunc  (*PS: why is this renaming a good idea (if it is)? *)
+module Func = DwFunc (*PS: why is this renaming a good idea (if it is)? *)
 
 open Logs.Logger (struct
   let str = __MODULE__

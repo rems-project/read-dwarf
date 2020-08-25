@@ -74,8 +74,8 @@ type unqualified =
       (** See {!env} for what the id refers to. The int is the size *)
   | Array of { elem : t; dims : int option list }
   | Enum of { name : string; id : int }  (** See {!env} for what the id refers to *)
-  | FuncPtr (** Hack to accommodate PKVM *)
-  | Missing (** Hack to accommodate PKVM *)
+  | FuncPtr  (** Hack to accommodate PKVM *)
+  | Missing  (** Hack to accommodate PKVM *)
 
 (** The internal representation of generalized C types *)
 and t = {

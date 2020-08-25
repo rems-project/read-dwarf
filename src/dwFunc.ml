@@ -15,7 +15,9 @@ type func = { name : string; scope : scope; ret : Ctype.t option }
 and scope = { vars : Var.t list; funcs : func list; scopes : scope list }
 
 (** This is the type a dwarf function in linksem *)
-type linksem_func = Dwarf.sdt_subroutine  (*PS: why introduce these aliases? *)
+type linksem_func = Dwarf.sdt_subroutine
+
+(*PS: why introduce these aliases? *)
 
 (** This is the type a dwarf scope in linksem *)
 type linksem_scope = Dwarf.sdt_lexical_block
