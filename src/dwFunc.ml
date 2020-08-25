@@ -3,6 +3,10 @@
 
 module Var = DwVar
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (** Type of a dwarf function that may or may not be inlined
 
     If this type stand on it's own, then it is inlined. If it is inside a {!t}
@@ -22,7 +26,7 @@ type linksem_func = Dwarf.sdt_subroutine
 (** This is the type a dwarf scope in linksem *)
 type linksem_scope = Dwarf.sdt_lexical_block
 
-(** Create and Dwarf function from its linksem counterpart *)
+(** Create a Dwarf function from its linksem counterpart *)
 let rec func_of_linksem (elf : Elf.File.t) (env : Ctype.env) (lfun : linksem_func) =
   let name = Option.value ~default:"" lfun.ss_name in
   let scope_of_linksem_func (lfun : linksem_func) =
@@ -78,12 +82,27 @@ type t = { sym : Elf.Sym.t option; func : func }
 (** This is the type a dwarf top_level function in linksem *)
 type linksem_t = Dwarf.sdt_subroutine
 
+(*PS another gratuitous alias? *)
+
 (** Create a dwarf top level function from its Linksem counterpart. The ELF file is to get a
     potential matching symbol. For now the matching is made with name only, but in the future
     code addresses may also be used to be more resilient *)
 let of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lfun : linksem_t) =
   let func = func_of_linksem elf tenv lfun in
-  let sym = Elf.SymTbl.of_name_opt elf.symbols func.name in
+  let sym =
+    (* try finding an identically named ELF symbol; if that fails, try finding an ELF symbol with the same address*)
+    match Elf.SymTbl.of_name_opt elf.symbols func.name with
+    | Some sym -> Some sym
+    | None -> (
+        match lfun.ss_entry_address with
+        | Some a -> (
+            match Elf.SymTbl.of_addr_opt elf.symbols (Nat_big_num.to_int a) with
+            | Some sym -> Some sym
+            | None -> None
+          )
+        | None -> None
+      )
+  in
   { sym; func }
 
 (** Get the API of a top level function *)
