@@ -84,9 +84,11 @@ type linksem_t = Dwarf.sdt_subroutine
 
 (*PS another gratuitous alias? *)
 
-(** Create a dwarf top level function from its Linksem counterpart. The ELF file is to get a
-    potential matching symbol. For now the matching is made with name only, but in the future
-    code addresses may also be used to be more resilient *)
+(** Create a dwarf top level function from its Linksem
+   counterpart. The ELF file is to get a potential matching
+   symbol. For now the matching is made with name and then code
+   address, but perhaps the code using this should be rephrased in
+   terms of addresses instead of symbols, to be more resilient *)
 let of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lfun : linksem_t) =
   let func = func_of_linksem elf tenv lfun in
   let sym =
