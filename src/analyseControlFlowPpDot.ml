@@ -761,7 +761,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               in
 
               match
-                find_sdt_subroutine_subroutine is_corresponding_O2_subroutine ss_O2_ambient
+                find_sdt_subroutine_subroutine true is_corresponding_O2_subroutine ss_O2_ambient
               with
               | [ss] -> Some ss
               | [] -> None

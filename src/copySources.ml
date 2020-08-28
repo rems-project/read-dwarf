@@ -10,9 +10,9 @@ let process_file () : unit =
     match !AnalyseGlobals.elf with Some s -> s | None -> fatal "no --elf option\n"
   in
 
-  let src_target_dir =
+  let _ =
     match !AnalyseGlobals.src_target_dir with
-    | Some s -> s
+    | Some s -> ()
     | None -> fatal "no --src-target-dir option\n"
   in
 
@@ -36,15 +36,20 @@ let process_file () : unit =
     | _ -> fatal "multiple distinct comp_dir's: %s" (String.concat " " lnh_comp_dirs)
   in
 
-  let files_of_lnh lnh : (string (*lnh_include_directory*) * string) (*lnfe_path*) list =
+  let files_of_lnh lnh :
+      (string option (*comp_dir*) * string option (*lnh_include_directory*) * string)
+      (*lnfe_path*)
+      list =
     List.map
       (function
         | lnfe ->
-            ( (let dir = Nat_big_num.to_int lnfe.lnfe_directory_index in
-               if dir = 0 then ""
+            ( lnh.lnh_comp_dir,
+              (let dir = Nat_big_num.to_int lnfe.lnfe_directory_index in
+               if dir = 0 then None
                else
-                 Byte_sequence.string_of_byte_sequence
-                   (List.nth lnh.lnh_include_directories (dir - 1))),
+                 Some
+                   (Byte_sequence.string_of_byte_sequence
+                      (List.nth lnh.lnh_include_directories (dir - 1)))),
               Byte_sequence.string_of_byte_sequence lnfe.lnfe_path ))
       lnh.lnh_file_entries
   in
@@ -55,11 +60,15 @@ let process_file () : unit =
   let copies =
     List.map
       (function
-        | (dir, path) ->
-            let source = Filename.concat comp_dir (Filename.concat dir path) in
-            let target = Filename.concat src_target_dir (Filename.concat dir path) in
-            let target_dir = Filename.dirname target in
-            [source; target; target_dir])
+        | (comp_diro, dir, file) ->
+            let (directory_original, directory_replacement) =
+              AnalyseDwarfLineInfo.actual_directories !AnalyseGlobals.src_target_dir
+                (comp_diro, dir, file)
+            in
+
+            let source = Filename.concat directory_original file in
+            let target = Filename.concat directory_replacement file in
+            [source; target; directory_replacement])
       files
   in
 

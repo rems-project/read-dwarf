@@ -279,7 +279,59 @@ let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
 let source_file_cache =
   ref ([] : ((string option * string option * string) * string array option) list)
 
-let source_line (comp_dir, dir, file) n1 =
+let actual_directories replacement (comp_diro, dir, file) : string (*directory_original*) * string
+    (*directory_replacement*) =
+  let ppo a = match a with None -> "none" | Some s -> s in
+  debug "actual_directories %s %s %s" (ppo comp_diro) (ppo dir) file;
+
+  (* linksem provides comp_dir as a string option, but AFAICS it should always be present*)
+  (* dir=None represents a directory index of 0, which "is
+     understood to be the current directory of the compilation". *)
+  (* The DWARF4 spec for the semantics of non-0-index
+     include_directories is unhelpfully nondeterministic: "Each path
+     entry is either a full path name or is relative to the current
+     directory of the compilation.".  In our examples, they appear
+     sometimes to be full path names, which have the comp_dir as a
+     prefix, and sometimes (for .S files) to be relative to
+     comp_dir. *)
+  let comp_dir = match comp_diro with Some comp_dir -> comp_dir | None -> "" in
+
+  let (directory_original, directory_replacement) =
+    match dir with
+    | None -> (
+        (* directory index 0, so use the current directory of compilation, replaced if requested *)
+        let directory_original = comp_dir in
+        match replacement with
+        | None -> (directory_original, directory_original)
+        | Some comp_dir_replacement -> (directory_original, comp_dir_replacement)
+      )
+    | Some d -> (
+        (* non-zero directory index.  First check if it has comp_dir as a prefix *)
+        let has_comp_dir_prefix =
+          String.length d >= String.length comp_dir
+          && String.sub d 0 (String.length comp_dir) = comp_dir
+        in
+
+        let suffix =
+          match has_comp_dir_prefix with
+          | true ->
+              String.sub d (String.length comp_dir) (String.length d - String.length comp_dir)
+          | false ->
+              warn "not has_comp_dir_prefix for %s %s %s" comp_dir d file;
+              d
+        in
+
+        (* prefix with either comp_dir or comp_dir_replacement *)
+        let directory_original = Filename.concat comp_dir suffix in
+        match replacement with
+        | None -> (directory_original, directory_original)
+        | Some comp_dir_replacement ->
+            (directory_original, Filename.concat comp_dir_replacement suffix)
+      )
+  in
+  (directory_original, directory_replacement)
+
+let source_line (comp_diro, dir, file) n1 =
   (* let pp_string_option s = match s with Some s' -> s' | None -> "<none>" in
      Printf.printf "comp_dir=\"%s\"  source_line dir=\"%s\"  file=\"%s\"\n"
        (pp_string_option comp_dir) (pp_string_option dir) file; *)
@@ -291,26 +343,23 @@ let source_line (comp_dir, dir, file) n1 =
 
   let n = n1 - 1 in
   match
-    try Some (List.assoc (comp_dir, dir, file) !source_file_cache) with Not_found -> None
+    try Some (List.assoc (comp_diro, dir, file) !source_file_cache) with Not_found -> None
   with
   | Some (Some lines) -> access_lines lines n
   | Some None -> None
   | None -> (
-      let filename =
-        match (comp_dir, dir, file) with
-        | (Some cd, Some d, f) -> Filename.concat cd (Filename.concat d f)
-        | (Some cd, None, f) -> Filename.concat cd f
-        | (None, Some d, f) -> Filename.concat d f
-        | (None, None, f) -> f
+      let (directory_original, directory_replacement) =
+        actual_directories !AnalyseGlobals.comp_dir (comp_diro, dir, file)
       in
+      let filename = Filename.concat directory_replacement file in
       match read_file_lines filename with
       | Ok lines ->
-          source_file_cache := ((comp_dir, dir, file), Some lines) :: !source_file_cache;
+          source_file_cache := ((comp_diro, dir, file), Some lines) :: !source_file_cache;
           access_lines lines n
       | Error s ->
           (*        source_file_cache := (file, None) :: !source_file_cache;
                   None *)
-          source_file_cache := ((comp_dir, dir, file), None) :: !source_file_cache;
+          source_file_cache := ((comp_diro, dir, file), None) :: !source_file_cache;
           err "filename %s %s" filename s;
           None
     )
@@ -326,33 +375,6 @@ let pp_source_line so column =
         (*" (" ^ s ^ ")"*)
       else s
   | None -> "file not found"
-
-(* OLD source file lines
-let pp_dwarf_source_file_lines m ds (pp_actual_line : bool) (a : natural) : string option =
-  let sls = Dwarf.source_lines_of_address ds a in
-  match sls with
-  | [] -> None
-  | _ ->
-      Some
-        (String.concat ", "
-           (List.map
-              (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
-                let comp_dir' =
-                  match !AnalyseGlobals.comp_dir with
-                  | None -> comp_dir
-                  | Some comp_dir'' -> (
-                      match comp_dir with
-                      | None -> Some comp_dir''
-                      | Some s -> Some (Filename.concat comp_dir'' s)
-                    )
-                in
-                file ^ ":" ^ Nat_big_num.to_string n ^ " (" ^ subprogram_name ^ ")"
-                ^
-                if pp_actual_line then
-                  pp_source_line (source_line (comp_dir', dir, file) (Nat_big_num.to_int n)) 200
-                else "")
-              sls))
-           *)
 
 let mk_subprogram_name (ds : Dwarf.dwarf_static) elifi : string =
   let lnh = elifi.elifi_entry.elie_lnh in
@@ -370,9 +392,6 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
   let ((comp_dir, dir, file), subprogram_name) =
     let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
     (ufe, Dwarf.subprogram_at_line ds.ds_subprogram_line_extents ufe lnr.lnr_line)
-  in
-  let comp_dir' =
-    match !AnalyseGlobals.comp_dir with None -> comp_dir | Some comp_dir'' -> Some comp_dir''
   in
   subprogram_name ^ ":"
   ^ Nat_big_num.to_string lnr.lnr_line
@@ -392,7 +411,7 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
     let line = Nat_big_num.to_int lnr.lnr_line in
     if line = 0 then "line 0"
     else
-      pp_source_line (source_line (comp_dir', dir, file) line) (Nat_big_num.to_int lnr.lnr_column)
+      pp_source_line (source_line (comp_dir, dir, file) line) (Nat_big_num.to_int lnr.lnr_column)
   else ""
 
 (* OLD source line number for O0/2 correlation

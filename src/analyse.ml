@@ -163,13 +163,15 @@ let process_file () : unit =
                 List.map
                   (function
                     | s' -> (
-                        match address_of_elf_symbol test s' with
+                        match
+                          address_of_subroutine_name an.sdt s' (*address_of_elf_symbol test s'*)
+                        with
                         | Some addr -> (
                             let k = an.index_of_address addr in
                             match ano2 with
                             | None -> (k, nesting_init None)
                             | Some an2 -> (
-                                match find_sdt_subroutine_by_name an2.sdt s' with
+                                match find_sdt_subroutine_by_name true an2.sdt s' with
                                 | Some ss -> (k, nesting_init (Some ss))
                                 | None ->
                                     fatal "no corresponding ano2 sdt subroutine found for %s\n" s'
