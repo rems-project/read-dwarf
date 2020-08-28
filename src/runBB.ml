@@ -88,7 +88,7 @@ let run_bb norun simp_state bb =
     let state = BB.run init_state bb in
     if simp_state then begin
       Z3.ensure_started ();
-      State.unsafe_unlock state;
+      (State.unsafe_unlock [@ocaml.warning "-3"] (* deprecated *)) state;
       StateSimplify.ctxfull state;
       State.lock state
     end;

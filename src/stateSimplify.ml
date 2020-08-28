@@ -25,7 +25,7 @@ end)
     in a single false.
 *)
 let ctxfull state =
-  debug "StateSimplifying %d" state.id;
+  debug "StateSimplifying %t" (PP.top State.Id.pp state.id);
   let serv = Z3.ensure_started_get () in
   ContextFull.openc ();
   let declared = Z3St.Htbl.create 100 in
@@ -54,6 +54,6 @@ let ctxfull state =
       state.asserts
   in
   (* If state is impossible then it has a single assertion: false *)
-  if !found_false then state.asserts <- [ExpTyped.false_] else state.asserts <- new_asserts;
+  if !found_false then State.set_impossible state else State.set_asserts state new_asserts;
   debug "closing";
   ContextFull.closec ()

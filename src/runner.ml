@@ -115,7 +115,7 @@ let execute_normal ?(prelock = ignore) ~pc runner (instr : Instr.t) state =
     List.map
       (fun (trc : Instr.trace_meta) ->
         let nstate = State.copy state in
-        nstate.last_pc <- pc;
+        State.set_last_pc nstate pc;
         TraceRun.trace_pc_mut ?dwarf ~next nstate trc.trace;
         nstate)
       instr.traces
@@ -123,7 +123,7 @@ let execute_normal ?(prelock = ignore) ~pc runner (instr : Instr.t) state =
   if not (State.is_locked state) then begin
     match instr.traces with
     | [trc] ->
-        state.last_pc <- pc;
+        State.set_last_pc state pc;
         TraceRun.trace_pc_mut ?dwarf ~next state trc.trace;
         [state]
     | _ ->

@@ -208,7 +208,7 @@ let processing preprocessing pmode (filename, input, (config : IslaServer.config
   in
   let simp state =
     Z3.start ();
-    State.unsafe_unlock state;
+    (State.unsafe_unlock [@ocaml.warning "-3"] (* deprecated *)) state;
     StateSimplify.ctxfull state;
     State.lock state;
     base "Simplified state:\n%t\n" (PP.topi State.pp state);

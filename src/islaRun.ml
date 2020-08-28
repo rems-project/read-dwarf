@@ -109,7 +109,7 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
       let addr =
         exp_of_valu l vc addr |> ExpTyped.extract ~last:(Arch.address_size - 1) ~first:0
       in
-      let size = State.Mem.Size.of_bytes size in
+      let size = Ast.Size.of_bytes size in
       write_to_valu l vc result (State.read_noprov state ~addr ~size)
   | WriteMem (_success, _kind, addr, data, size, l) ->
       debug "Writing Mem";
@@ -117,7 +117,7 @@ let event_mut (vc : value_context) (state : State.t) : Isla.revent -> unit = fun
       let addr =
         exp_of_valu l vc addr |> ExpTyped.extract ~last:(Arch.address_size - 1) ~first:0
       in
-      let size = State.Mem.Size.of_bytes size in
+      let size = Ast.Size.of_bytes size in
       let data = exp_of_valu l vc data in
       State.write_noprov state ~addr ~size data
   | Cycle _ -> () (* Nothing happens here, this is just a marker *)

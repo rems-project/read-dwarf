@@ -225,7 +225,7 @@ let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size :
   match ptrtype with
   | Some { unqualified = Ptr { fragment; offset; provenance }; _ } ->
       let fenv = s.fenv in
-      let bsize = State.Mem.Size.to_bytes size in
+      let bsize = Ast.Size.to_bytes size in
       let ctyp = ptr_deref ~dwarf ~fenv ~size:bsize fragment offset in
       let exp = State.read ~provenance ?ctyp s ~addr ~size in
       { exp; ctyp }

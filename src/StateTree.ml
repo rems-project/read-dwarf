@@ -41,6 +41,9 @@ let pp ppa t =
 let pp_all ppa t =
   let open PP in
   pp ppa t
-  ^^ (map_to_list (fun _ s -> prefix 4 1 (dprintf "State %d:" s.id) (State.pp s)) t
+  ^^ (map_to_list
+        (fun _ s ->
+          prefix 4 1 (dprintf "State ") (concat [colon; nbspace; State.Id.pp s.id; State.pp s]))
+        t
      |> separate hardline
      )

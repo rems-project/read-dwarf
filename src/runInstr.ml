@@ -154,7 +154,7 @@ let run_instr dump_init norun simp_state traces =
         Z3.ensure_started ();
         List.map
           (fun state ->
-            State.unsafe_unlock state;
+            (State.unsafe_unlock [@ocaml.warning "-3"] (* deprecated *)) state;
             StateSimplify.ctxfull state;
             State.lock state;
             state)
