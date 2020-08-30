@@ -293,7 +293,225 @@ let pp_instruction m test an k i =
 
 (*****************************************************************************)
 
+(* 
+
+
+html or ascii
+file-per-compilation-unit or [single file for linksem and single file for read-dwarf]
+files flattened to one dir or files in tree
+
+global
+  list of compilation units
+  
+  .debug_loc section
+  .debug_ranges secion
+  .debug_frame section
+  evaluation of frame data
+  analysis of location data
+  inlined subroutine info (all)
+  inlined subroutine info (by range) (all)
+  simple die tree globals (all)
+  simple die tree locals (all)
+
+  read-dwarf instruction count
+  read-dwarf globals
+  read-dwarf struct/union type definitions
+  read-dwarf call graph
+  read-dwarf transitive call graph
+
+  subprogram line-number extent info
+
+per compilation unit:
+
+  read-dwarf instructions
+  abbreviation table
+  die tree
+  .debug_line section: line number info
+  evaluated line number info
+  simple die tree
+  simple die tree globals
+  simple die tree locals
+  inlined subroutine info
+  inlined subroutine info (by range)
+
+links:
+
+  branch target: link to that line in the read-dwarf instructions. If a function start address, also link to the simple die tree and to the die tree
+  struct/union/enum type definition: link to that entry in the read-dwarf type defns and to the source file decl and to the die tree
+  source line: link somehow to that line in the sources
+  function 
+
+
+   *)
+
+
+let whole_file_chunks m test an =
+(*
+  compilation units
+  
+  .debug_loc section
+  .debug_ranges secion
+  .debug_frame section
+  evaluation of frame data
+  analysis of location data
+  inlined subroutine info (all)
+  inlined subroutine info (by range) (all)
+  simple die tree globals (all)
+  simple die tree locals (all)
+
+  instruction count
+  globals
+  struct/union type definitions
+  call graph
+  transitive call graph
+
+  subprogram line-number extent info
+                  *)
+  let open Dwarf in 
+  let ds = test.dwarf_static in
+  let d = ds.ds_dwarf in 
+  let c = p_context_of_d d in
+  let (cuh_default : compilation_unit_header) = let cu = myhead d.d_compilation_units in cu.cu_header in                    
+  let iss = analyse_inlined_subroutines_sdt_dwarf an.sdt in
+  let (call_graph, transitive_call_graph) =
+    pp_call_graph test
+      ( 
+        an.instructions,
+        an.index_of_address,
+        an.address_of_index,
+        an.indirect_branches ) in
+  [
+    ("compilation_units", "compilation units", "TODO");
+    ("loc", ".debug_loc location lists", pp_loc c cuh_default d.d_loc);
+    ("loc_eval", "evaluated location info", pp_analysed_location_data ds.ds_dwarf ds.ds_analysed_location_data);
+    ("ranges", ".debug_ranges range lists", pp_ranges c cuh_default d.d_ranges);
+    ("frame", ".debug_frame frame info", pp_frame_info c cuh_default d.d_frame_info);
+    ("frame_eval", "evaluated frame info", pp_evaluated_frame_info ds.ds_evaluated_frame_info);      
+    ("inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
+    ("inlined_by_range", "inlined subroutine info by range", pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss));
+    ("sdt_globals", "simple die tree globals", pp_sdt_globals_dwarf an.sdt);
+    ("sdt_locals", "simple die tree locals", pp_sdt_locals_dwarf an.sdt);
+    (*    ("subprogram_line_extents", "subprogram line-number extent info", Dwarf.pp_subprograms ds.ds_subprogram_line_extents);*)
+    ("types", "struct/union/enum type definitions", let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
+                                           String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps));
+    ("call_graph", "call graph", call_graph);
+    ("call_graph_trans", "transitive call graph", transitive_call_graph);
+    ("count", "instruction count", string_of_int (Array.length an.instructions))
+  ]
+
+      
+
+(*      
+      ^ "\n************** .debug_line section: line number info   ****************\n"
+  ^ pp_line_info d.d_line_info
+       ^ "************** simple die tree *************************\n"
+       ^        pp_sdt_dwarf sdt_d
+     ^ "************** line info *************************\n"
+     ^ pp_evaluated_line_info ds.ds_evaluated_line_info
+ *)
+      
+  
+let pp_instructions_ranged m test an (low, high) =
+  (* [ (f k a.(k)) ; (f (k+1) a.(k+1)) ; ... ; (f k' a.(k'-1)) ] *)
+  let rec subarray_map_to_list f a k k' =
+    if k >= k' then [] else f k a.(k) :: subarray_map_to_list f a (k + 1) k'
+  in
+  pp_instruction_init ();
+  String.concat ""
+    (subarray_map_to_list (pp_instruction m test an) an.instructions (an.index_of_address low)
+       (an.index_of_address high))
+
+
+let chunks_of_ranged_cu m test an ((low, high), cu) =
+  let open Dwarf in
+  let ds = test.dwarf_static in
+  let d = ds.ds_dwarf in 
+  let c = p_context_of_d d in
+  let (cu',_,_) = cu.scu_cupdie in
+  let iss = analyse_inlined_subroutines_sdt_compilation_unit cu in
+  let title = "COMPILATION UNIT " ^ cu.Dwarf.scu_name ^ " " ^ pp_addr low ^ " " ^ pp_addr high ^ " " ^ "\n" in
+  let chunks = 
+    [ (* chunk name, title, body *)
+      ("instructions", "instructions", pp_instructions_ranged m test an (low, high));
+      ("header", "header", pp_compilation_unit_header cu'.cu_header);
+      ("die_abbrev",".debug_abbrev die abbreviation table", pp_abbreviations_table cu'.cu_abbreviations_table);
+      ("die", ".debug_info die tree", pp_die c cu'.cu_header d.d_str true (*indent*) (Nat_big_num.of_int 0) true cu'.cu_die);
+      ("line", ".debug_line line number info", let lnp = line_number_program_of_compilation_unit d cu' in  pp_line_number_program lnp);
+      ("line_eval", ".debug_line evaluated line info", 
+       let lnrs = evaluated_line_info_of_compilation_unit d cu' ds.ds_evaluated_line_info in
+       pp_line_number_registerss lnrs);
+      ("sdt", "simple die tree", pp_sdt_compilation_unit (Nat_big_num.of_int 0) cu);
+      ("sdt_globals", "simple die tree globals", pp_sdt_globals_compilation_unit (Nat_big_num.of_int 0) cu);
+      ("sdt_locals", "simple die tree locals", pp_sdt_locals_compilation_unit (Nat_big_num.of_int 0) cu);
+      ("inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
+      ("inlined_by_range", "inlined subroutine info by range", pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss))
+    ] in
+  (title, chunks)
+
+
+  
 let pp_test_analysis m test an =
+  (* pick address ranges for each compilation unit.  In pkvm all compilation units currently have exactly one range, the lowest-address range starts at the start of the code, and they happen to be in address order (though I don't want to depend on that). But these ranges are not contiguous, so instead we'll use the range from the start of one to the start of the next, except for the last *)
+  let rangeless_compilation_units : Dwarf.sdt_compilation_unit list =
+    List.concat_map
+      (function
+        | (cu : Dwarf.sdt_compilation_unit) -> (
+            match cu.scu_pc_ranges with None -> [cu] | Some ranges -> []
+          ))
+      an.sdt.Dwarf.sd_compilation_units
+  in
+  let ranges_of_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+    List.concat_map
+      (function
+        | (cu : Dwarf.sdt_compilation_unit) -> (
+            match cu.scu_pc_ranges with
+            | None -> []
+            | Some ranges -> List.map (function (low, high) -> ((low, high), cu)) ranges
+          ))
+      an.sdt.Dwarf.sd_compilation_units
+  in
+  let ranges_of_compilation_units' : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+    List.sort
+      (function
+        | ((low, high), cu) -> (
+            function ((low', high'), cu') -> compare low low'
+          ))
+      ranges_of_compilation_units
+  in
+
+  let re_ranged_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+    let rec f (rcus : ((addr * addr) * Dwarf.sdt_compilation_unit) list) : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+      match rcus with
+      | ((low, high), cu) :: (((low', high'), cu') :: _ as rcus') -> ((low, low'), cu) :: f rcus'
+      | [((low, high), cu)] ->
+          [((low, an.instructions.(Array.length an.instructions - 1).i_addr), cu)]
+      | [] -> []
+    in
+    f ranges_of_compilation_units'
+  in
+
+  String.concat ""
+    (List.map
+       (function cu -> "no range " ^ cu.Dwarf.scu_name ^ "\n")
+       rangeless_compilation_units)
+  ^ String.concat ""
+      (List.map
+         (function
+           | ((low, high), cu) ->
+               pp_addr low ^ " " ^ pp_addr high ^ " " ^ cu.Dwarf.scu_name ^ "\n")
+         ranges_of_compilation_units')
+(*
+  ^
+    let chunks = chunks_of_ranged_compilation_units m test an 
+
+    String.concat ""
+      (List.map
+
+'''''
+
+         re_ranged_compilation_units)
+ *)
+  ^
   match m with
   | Ascii ->
       "* ************* instruction count *****************\n"
@@ -302,7 +520,7 @@ let pp_test_analysis m test an =
       ^ pp_vars an.ranged_vars_at_instructions.rvai_globals
       (*  ^ "************** locals *****************\n"
   ^ pp_ranged_vars
- *)
+        *)
       ^ "\n* ************* instructions *****************\n"
       ^ ( pp_instruction_init ();
           String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an) an.instructions))
@@ -318,12 +536,13 @@ let pp_test_analysis m test an =
       (*  ^ "\n* ************* branch targets *****************\n"*)
       (*  ^ pp_branch_targets instructions*)
       ^ "\n* ************* call graph *****************\n"
-      ^ pp_call_graph test
-          ( (*instructions,*)
+      ^ let (call_graph, transitive_call_graph) = pp_call_graph test
+          ( 
             an.instructions,
             an.index_of_address,
             an.address_of_index,
-            an.indirect_branches )
+            an.indirect_branches ) in
+        call_graph  ^ "* ************* transitive call graph **************\n" ^ transitive_call_graph
   | Html ->
       (* "\n* ************* instructions *****************\n" *)
       pp_instruction_init ();

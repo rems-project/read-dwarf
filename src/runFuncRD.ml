@@ -30,9 +30,7 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
   base "Loading %s for Analyse" elfname;
   let analyse_test = AnalyseElf.parse_elf_file elfname in
   base "Analysing %s for Analyse" elfname;
-  let analyse_analysis =
-    AnalyseCollected.mk_analysis analyse_test objdump_d branchtables
-  in
+  let analyse_analysis = AnalyseCollected.mk_analysis analyse_test objdump_d branchtables in
   let print_analyse_instruction pc =
     let pc = Z.of_int pc in
     let index = analyse_analysis.index_of_address pc in
@@ -114,10 +112,8 @@ let objdump_d =
 let branch_table =
   let doc = "File containing branch table base addresses and sizes" in
   Arg.(
-(* required *)
-    value
-    & opt (some non_dir_file) None
-    & info ["branch-tables"] ~docv:"BRANCH_TABLES_FILE" ~doc)
+    (* required *)
+    value & opt (some non_dir_file) None & info ["branch-tables"] ~docv:"BRANCH_TABLES_FILE" ~doc)
 
 let breakpoints =
   let doc =

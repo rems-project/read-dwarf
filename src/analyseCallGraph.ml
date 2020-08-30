@@ -184,5 +184,4 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
          transitive_call_graph)
   in
 
-  pp_call_graph call_graph ^ "* ************* transitive call graph **************\n"
-  ^ pp_transitive_call_graph transitive_call_graph
+  (pp_call_graph call_graph, pp_transitive_call_graph transitive_call_graph)

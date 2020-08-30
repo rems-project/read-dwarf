@@ -22,6 +22,8 @@ let cfg_source_nodes2 = ref (None : string option)
 
 let out_file = ref (None : string option)
 
+let out_dir = ref (None : string option)
+
 let clip_binary = ref false
 
 let show_vars = ref true

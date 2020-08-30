@@ -70,9 +70,14 @@ let qemu_log =
     Arg.(value & opt (some non_dir_file) None & info ["qemu-log"] ~docv:"QEMU_LOG_FILE" ~doc)
 
 let out_file =
-  let doc = "file for output (optional)" in
+  let doc = "file for single-file output (optional)" in
   setter AnalyseGlobals.out_file
     Arg.(value & opt (some string) None & info ["o"; "out"] ~docv:"OUT_FILE" ~doc)
+
+let out_dir =
+  let doc = "directory for multiple-file output (optional)" in
+  setter AnalyseGlobals.out_dir
+    Arg.(value & opt (some string) None & info ["out-dir"] ~docv:"OUT_DIR" ~doc)
 
 let cfg_dot_file =
   let doc = "File to output CFG dot to" in
