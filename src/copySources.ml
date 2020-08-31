@@ -4,6 +4,8 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
+open AnalyseUtils
+
 let process_file () : unit =
   (* TODO: make idiomatic Cmdliner :-(  *)
   let filename_elf =
@@ -73,13 +75,6 @@ let process_file () : unit =
   in
 
   (*Printf.printf "%s" (Dwarf.pad_rows (  ["source=";  "target=";  "targetdir="]::copies));*)
-  let sys_command s =
-    if !AnalyseGlobals.copy_sources_dry_run then Printf.printf "dry run: %s\n" s
-    else
-      let exit_code = Sys.command s in
-      if exit_code <> 0 then fatal "sys_command %s failed with exit code %d" s exit_code else ()
-  in
-
   let copy [source; target; target_dir] =
     sys_command ("mkdir -p " ^ Filename.quote target_dir);
     sys_command ("cp -a " ^ Filename.quote source ^ " " ^ Filename.quote target)

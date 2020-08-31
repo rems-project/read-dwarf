@@ -1,5 +1,9 @@
 (** Miscellaneous types and utility functions used throughout the analyse code *)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (** TODO: Maybe just use Z.t everywhere (it's shorter) *)
 type natural = Nat_big_num.num
 
@@ -45,3 +49,11 @@ let html_escape s =
       | c -> Buffer.add_char buf c)
     s;
   Buffer.contents buf
+
+let esc m s = match m with AnalyseTypes.Ascii -> s | AnalyseTypes.Html -> html_escape s
+
+let sys_command s =
+  if !AnalyseGlobals.copy_sources_dry_run then Printf.printf "dry run: %s\n" s
+  else
+    let exit_code = Sys.command s in
+    if exit_code <> 0 then fatal "sys_command %s failed with exit code %d" s exit_code else ()

@@ -344,62 +344,107 @@ links:
 
    *)
 
+let chunk_filename_whole m filename_stem chunk_name : string (*path*) * string (*file*) =
+  ("", (*   filename_stem
+   ^*) chunk_name ^ match m with Ascii -> "" | Html -> ".html")
 
-let whole_file_chunks m test an =
-(*
-  compilation units
-  
-  .debug_loc section
-  .debug_ranges secion
-  .debug_frame section
-  evaluation of frame data
-  analysis of location data
-  inlined subroutine info (all)
-  inlined subroutine info (by range) (all)
-  simple die tree globals (all)
-  simple die tree locals (all)
+let chunk_filename_per_cu m filename_stem chunk_name cu : string (*path*) * string (*file*) =
+  let dirname = Filename.dirname cu.Dwarf.scu_name in
+  let basename = Filename.basename cu.Dwarf.scu_name in
+  let extension = Filename.extension basename in
+  let basename_chopped = Filename.chop_extension basename in
+  let extension_mangled = String.map (function c -> if c = '.' then '_' else c) extension in
+  let cu_name = basename_chopped ^ extension_mangled in
+  ( "",
+    (*filename_stem
+   ^ "_" 
+   ^ *)
+    cu_name ^ "_" ^ chunk_name ^ match m with Ascii -> "" | Html -> ".html" )
 
-  instruction count
-  globals
-  struct/union type definitions
-  call graph
-  transitive call graph
+let wrap_chunks m chunks =
+  List.map
+    (function
+      | (chunk_name, chunk_title, chunk_body) -> (chunk_name, chunk_title, esc m chunk_body))
+    chunks
 
-  subprogram line-number extent info
-                  *)
-  let open Dwarf in 
+let whole_file_chunks m test an filename_stem cu_files =
+  let open Dwarf in
   let ds = test.dwarf_static in
-  let d = ds.ds_dwarf in 
+  let d = ds.ds_dwarf in
   let c = p_context_of_d d in
-  let (cuh_default : compilation_unit_header) = let cu = myhead d.d_compilation_units in cu.cu_header in                    
+  let (cuh_default : compilation_unit_header) =
+    let cu = myhead d.d_compilation_units in
+    cu.cu_header
+  in
   let iss = analyse_inlined_subroutines_sdt_dwarf an.sdt in
   let (call_graph, transitive_call_graph) =
     pp_call_graph test
-      ( 
-        an.instructions,
-        an.index_of_address,
-        an.address_of_index,
-        an.indirect_branches ) in
-  [
-    ("compilation_units", "compilation units", "TODO");
-    ("loc", ".debug_loc location lists", pp_loc c cuh_default d.d_loc);
-    ("loc_eval", "evaluated location info", pp_analysed_location_data ds.ds_dwarf ds.ds_analysed_location_data);
-    ("ranges", ".debug_ranges range lists", pp_ranges c cuh_default d.d_ranges);
-    ("frame", ".debug_frame frame info", pp_frame_info c cuh_default d.d_frame_info);
-    ("frame_eval", "evaluated frame info", pp_evaluated_frame_info ds.ds_evaluated_frame_info);      
-    ("inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
-    ("inlined_by_range", "inlined subroutine info by range", pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss));
-    ("sdt_globals", "simple die tree globals", pp_sdt_globals_dwarf an.sdt);
-    ("sdt_locals", "simple die tree locals", pp_sdt_locals_dwarf an.sdt);
-    (*    ("subprogram_line_extents", "subprogram line-number extent info", Dwarf.pp_subprograms ds.ds_subprogram_line_extents);*)
-    ("types", "struct/union/enum type definitions", let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
-                                           String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps));
-    ("call_graph", "call graph", call_graph);
-    ("call_graph_trans", "transitive call graph", transitive_call_graph);
-    ("count", "instruction count", string_of_int (Array.length an.instructions))
-  ]
+      (an.instructions, an.index_of_address, an.address_of_index, an.indirect_branches)
+  in
 
-      
+  let cu_index_body =
+    String.concat ""
+      (List.map
+         (function
+           | per_cu_files -> (
+               match per_cu_files with
+               | (path, filename, cu_title, chunk_title)
+                 :: (path', filename', cu_title', chunk_title') :: _ -> (
+                   match m with
+                   | Ascii -> cu_title ^ " " ^ filename ^ " " ^ filename' ^ "n"
+                   | Html ->
+                       "<a href=\"" ^ filename' ^ "\">" ^ cu_title ^ "</a> " ^ "<a href=\""
+                       ^ filename ^ "\">" ^ chunk_title ^ "</a> "
+                       (*    ^ "<a href=\"" ^ filename' ^ "\">" ^ chunk_title' ^ "</a>"*)
+                       ^ "\n"
+                 )
+             ))
+         cu_files)
+  in
+  let chunks =
+    (* ("compilation_units"             , "compilation units",         cu_index_body)
+    ::*)
+    wrap_chunks m
+      [
+        ("_loc", ".debug_loc location lists", pp_loc c cuh_default d.d_loc);
+        ( "_loc_eval",
+          "evaluated location info",
+          pp_analysed_location_data ds.ds_dwarf ds.ds_analysed_location_data );
+        ("_ranges", ".debug_ranges range lists", pp_ranges c cuh_default d.d_ranges);
+        ("_frame", ".debug_frame frame info", pp_frame_info c cuh_default d.d_frame_info);
+        ("_frame_eval", "evaluated frame info", pp_evaluated_frame_info ds.ds_evaluated_frame_info);
+        ("_inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
+        ( "_inlined_by_range",
+          "inlined subroutine info by range",
+          pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
+        ("_sdt_globals", "simple die tree globals", pp_sdt_globals_dwarf an.sdt);
+        ("_sdt_locals", "simple die tree locals", pp_sdt_locals_dwarf an.sdt);
+        (*    ("subprogram_line_extents" , "subprogram line-number extent info", Dwarf.pp_subprograms ds.ds_subprogram_line_extents);*)
+        ( "_types",
+          "struct/union/enum type definitions",
+          let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
+          String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps) );
+        ("_call_graph", "call graph", call_graph);
+        ("_call_graph_trans", "transitive call graph", transitive_call_graph);
+        ("_count", "instruction count", string_of_int (Array.length an.instructions));
+      ]
+  in
+  let index_chunk =
+    ( "index",
+      "index",
+      cu_index_body ^ "\n"
+      ^ String.concat ""
+          (List.map
+             (function
+               | (chunk_name, chunk_title, chunk_body) -> (
+                   let (path, filename) = chunk_filename_whole m filename_stem chunk_name in
+                   match m with
+                   | Ascii -> chunk_title ^ " " ^ filename
+                   | Html -> "<a href=\"" ^ filename ^ "\">" ^ chunk_title ^ "</a>\n"
+                 ))
+             chunks) )
+  in
+  index_chunk :: chunks
 
 (*      
       ^ "\n************** .debug_line section: line number info   ****************\n"
@@ -409,8 +454,7 @@ let whole_file_chunks m test an =
      ^ "************** line info *************************\n"
      ^ pp_evaluated_line_info ds.ds_evaluated_line_info
  *)
-      
-  
+
 let pp_instructions_ranged m test an (low, high) =
   (* [ (f k a.(k)) ; (f (k+1) a.(k+1)) ; ... ; (f k' a.(k'-1)) ] *)
   let rec subarray_map_to_list f a k k' =
@@ -421,35 +465,131 @@ let pp_instructions_ranged m test an (low, high) =
     (subarray_map_to_list (pp_instruction m test an) an.instructions (an.index_of_address low)
        (an.index_of_address high))
 
-
-let chunks_of_ranged_cu m test an ((low, high), cu) =
+let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   let open Dwarf in
   let ds = test.dwarf_static in
-  let d = ds.ds_dwarf in 
+  let d = ds.ds_dwarf in
   let c = p_context_of_d d in
-  let (cu',_,_) = cu.scu_cupdie in
+  let (cu', _, _) = cu.scu_cupdie in
   let iss = analyse_inlined_subroutines_sdt_compilation_unit cu in
-  let title = "COMPILATION UNIT " ^ cu.Dwarf.scu_name ^ " " ^ pp_addr low ^ " " ^ pp_addr high ^ " " ^ "\n" in
-  let chunks = 
-    [ (* chunk name, title, body *)
-      ("instructions", "instructions", pp_instructions_ranged m test an (low, high));
-      ("header", "header", pp_compilation_unit_header cu'.cu_header);
-      ("die_abbrev",".debug_abbrev die abbreviation table", pp_abbreviations_table cu'.cu_abbreviations_table);
-      ("die", ".debug_info die tree", pp_die c cu'.cu_header d.d_str true (*indent*) (Nat_big_num.of_int 0) true cu'.cu_die);
-      ("line", ".debug_line line number info", let lnp = line_number_program_of_compilation_unit d cu' in  pp_line_number_program lnp);
-      ("line_eval", ".debug_line evaluated line info", 
-       let lnrs = evaluated_line_info_of_compilation_unit d cu' ds.ds_evaluated_line_info in
-       pp_line_number_registerss lnrs);
-      ("sdt", "simple die tree", pp_sdt_compilation_unit (Nat_big_num.of_int 0) cu);
-      ("sdt_globals", "simple die tree globals", pp_sdt_globals_compilation_unit (Nat_big_num.of_int 0) cu);
-      ("sdt_locals", "simple die tree locals", pp_sdt_locals_compilation_unit (Nat_big_num.of_int 0) cu);
-      ("inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
-      ("inlined_by_range", "inlined subroutine info by range", pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss))
-    ] in
-  (title, chunks)
+  let title = "Compilation unit " ^ pp_addr low ^ " " ^ pp_addr high ^ " " ^ cu.Dwarf.scu_name in
+  let chunks =
+    ("instructions", "instructions", pp_instructions_ranged m test an (low, high))
+    :: wrap_chunks m
+         [
+           (* chunk name, title, body *)
+           ("header", "header", pp_compilation_unit_header cu'.cu_header);
+           ( "die_abbrev",
+             ".debug_abbrev die abbreviation table",
+             pp_abbreviations_table cu'.cu_abbreviations_table );
+           ( "die",
+             ".debug_info die tree",
+             pp_die c cu'.cu_header d.d_str true (*indent*) (Nat_big_num.of_int 0) true cu'.cu_die
+           );
+           ( "line",
+             ".debug_line line number info",
+             let lnp = line_number_program_of_compilation_unit d cu' in
+             pp_line_number_program lnp );
+           ( "line_eval",
+             ".debug_line evaluated line info",
+             let lnrs = evaluated_line_info_of_compilation_unit d cu' ds.ds_evaluated_line_info in
+             pp_line_number_registerss lnrs );
+           ("sdt", "simple die tree", pp_sdt_compilation_unit (Nat_big_num.of_int 0) cu);
+           ( "sdt_globals",
+             "simple die tree globals",
+             pp_sdt_globals_compilation_unit (Nat_big_num.of_int 0) cu );
+           ( "sdt_locals",
+             "simple die tree locals",
+             pp_sdt_locals_compilation_unit (Nat_big_num.of_int 0) cu );
+           ("inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
+           ( "inlined_by_range",
+             "inlined subroutine info by range",
+             pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
+         ]
+  in
+  let index_chunk =
+    ( "index",
+      "index",
+      String.concat ""
+        (List.map
+           (function
+             | (chunk_name, chunk_title, chunk_body) -> (
+                 let (path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
+                 match m with
+                 | Ascii -> chunk_title ^ " " ^ filename
+                 | Html -> "<a href=\"" ^ filename ^ "\">" ^ chunk_title ^ "</a>\n"
+               ))
+           chunks) )
+  in
+  (title, index_chunk :: chunks)
 
+let wrap_body m (chunk_name, chunk_title, chunk_body) =
+  match m with
+  | Ascii ->
+      ( if chunk_name = "instructions" then
+        match read_file_lines "emacs-highlighting" with
+        | Error _ -> "Error: no emacs-highlighting file\n"
+        | Ok lines -> String.concat "\n" (Array.to_list lines)
+      else ""
+      )
+      ^ "* ************* " ^ chunk_title ^ " **********\n" ^ chunk_body
+  | Html -> (
+      ( if chunk_name = "instructions" then
+        match read_file_lines "html-preamble-insts.html" with
+        | Error _ -> "Error: no html-preamble-insts.html file\n"
+        | Ok lines -> String.concat "\n" (Array.to_list lines)
+      else
+        match read_file_lines "html-preamble.html" with
+        | Error _ -> "Error: no html-preamble.html file\n"
+        | Ok lines -> String.concat "\n" (Array.to_list lines)
+      )
+      ^ "<h1>" ^ chunk_title ^ "</h1>\n" ^ chunk_body
+      ^
+      match read_file_lines "html-postamble.html" with
+      | Error _ -> "Error: no html-postamble.html file\n"
+      | Ok lines -> String.concat "\n" (Array.to_list lines)
+    )
 
-  
+let output_file (path, filename, body) =
+  let out_dir = match !AnalyseGlobals.out_dir with Some s -> s | None -> "" in
+  (*sys_command ("mkdir -p " ^ Filename.quote out_dir);*)
+  let c =
+    match !AnalyseGlobals.out_dir with
+    | Some out_dir -> open_out (Filename.concat out_dir (Filename.concat path filename))
+    | None -> stdout
+  in
+  Printf.fprintf c "%s" body;
+  match !AnalyseGlobals.out_dir with Some out_dir -> close_out c | None -> ()
+
+let output_whole_file_files m test an filename_stem cu_files =
+  let chunks = whole_file_chunks m test an filename_stem cu_files in
+  List.iter
+    (function
+      | (chunk_name, chunk_title, chunk_body) ->
+          let (path, filename) = chunk_filename_whole m filename_stem chunk_name in
+          let body = wrap_body m (chunk_name, chunk_title, chunk_body) in
+          output_file (path, filename, body))
+    chunks
+
+let output_per_cu_files m test an filename_stem re_ranged_compilation_units =
+  List.map
+    (function
+      | ((low, high), cu) ->
+          let (cu_title, chunks) =
+            chunks_of_ranged_cu m test an filename_stem ((low, high), cu)
+          in
+          List.map
+            (function
+              | (chunk_name, chunk_title, chunk_body) ->
+                  let (path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
+                  let body =
+                    wrap_body m (chunk_name, cu_title ^ "\n" ^ chunk_title, chunk_body)
+                  in
+                  output_file (path, filename, body);
+                  (path, filename, cu_title, chunk_title))
+            chunks)
+    re_ranged_compilation_units
+
 let pp_test_analysis m test an =
   (* pick address ranges for each compilation unit.  In pkvm all compilation units currently have exactly one range, the lowest-address range starts at the start of the code, and they happen to be in address order (though I don't want to depend on that). But these ranges are not contiguous, so instead we'll use the range from the start of one to the start of the next, except for the last *)
   let rangeless_compilation_units : Dwarf.sdt_compilation_unit list =
@@ -480,7 +620,8 @@ let pp_test_analysis m test an =
   in
 
   let re_ranged_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
-    let rec f (rcus : ((addr * addr) * Dwarf.sdt_compilation_unit) list) : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+    let rec f (rcus : ((addr * addr) * Dwarf.sdt_compilation_unit) list) :
+        ((addr * addr) * Dwarf.sdt_compilation_unit) list =
       match rcus with
       | ((low, high), cu) :: (((low', high'), cu') :: _ as rcus') -> ((low, low'), cu) :: f rcus'
       | [((low, high), cu)] ->
@@ -489,6 +630,12 @@ let pp_test_analysis m test an =
     in
     f ranges_of_compilation_units'
   in
+
+  let filename_stem = "" in
+
+  let cu_files = output_per_cu_files m test an filename_stem re_ranged_compilation_units in
+
+  output_whole_file_files m test an filename_stem cu_files;
 
   String.concat ""
     (List.map
@@ -500,7 +647,7 @@ let pp_test_analysis m test an =
            | ((low, high), cu) ->
                pp_addr low ^ " " ^ pp_addr high ^ " " ^ cu.Dwarf.scu_name ^ "\n")
          ranges_of_compilation_units')
-(*
+  (*
   ^
     let chunks = chunks_of_ranged_compilation_units m test an 
 
@@ -536,13 +683,13 @@ let pp_test_analysis m test an =
       (*  ^ "\n* ************* branch targets *****************\n"*)
       (*  ^ pp_branch_targets instructions*)
       ^ "\n* ************* call graph *****************\n"
-      ^ let (call_graph, transitive_call_graph) = pp_call_graph test
-          ( 
-            an.instructions,
-            an.index_of_address,
-            an.address_of_index,
-            an.indirect_branches ) in
-        call_graph  ^ "* ************* transitive call graph **************\n" ^ transitive_call_graph
+      ^
+      let (call_graph, transitive_call_graph) =
+        pp_call_graph test
+          (an.instructions, an.index_of_address, an.address_of_index, an.indirect_branches)
+      in
+      call_graph ^ "* ************* transitive call graph **************\n"
+      ^ transitive_call_graph
   | Html ->
       (* "\n* ************* instructions *****************\n" *)
       pp_instruction_init ();

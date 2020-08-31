@@ -117,6 +117,7 @@ let options =
     qemu_log;
     clip_binary;
     out_file;
+    out_dir;
     cfg_dot_file;
     cfg_source_nodes;
     cfg_source_nodes2;
