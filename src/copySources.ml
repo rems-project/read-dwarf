@@ -14,7 +14,7 @@ let process_file () : unit =
 
   let _ =
     match !AnalyseGlobals.src_target_dir with
-    | Some s -> ()
+    | Some _ -> ()
     | None -> fatal "no --src-target-dir option\n"
   in
 
@@ -70,12 +70,12 @@ let process_file () : unit =
 
             let source = Filename.concat directory_original file in
             let target = Filename.concat directory_replacement file in
-            [source; target; directory_replacement])
+            (source, target, directory_replacement))
       files
   in
 
   (*Printf.printf "%s" (Dwarf.pad_rows (  ["source=";  "target=";  "targetdir="]::copies));*)
-  let copy [source; target; target_dir] =
+  let copy (source, target, target_dir) =
     sys_command ("mkdir -p " ^ Filename.quote target_dir);
     sys_command ("cp -a " ^ Filename.quote source ^ " " ^ Filename.quote target)
   in
