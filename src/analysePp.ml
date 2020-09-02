@@ -1,3 +1,8 @@
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
+
 open AnalyseTypes
 open AnalyseUtils
 open AnalyseElfTypes
@@ -40,14 +45,14 @@ let render_colour = function
   | Render_ctrlflow -> "white"
 
 let render_class_name = function
-  | Render_symbol_star -> "symbol_star"
-  | Render_symbol_nostar -> "symbol_nostar"
+  | Render_symbol_star -> "symbol-star"
+  | Render_symbol_nostar -> "symbol-nostar"
   | Render_source -> "source"
   | Render_frame -> "frame"
   | Render_instruction -> "instruction"
   | Render_vars -> "vars"
-  | Render_vars_new -> "vars_new"
-  | Render_vars_old -> "vars_old"
+  | Render_vars_new -> "vars-new"
+  | Render_vars_old -> "vars-old"
   | Render_inlining -> "inlining"
   | Render_ctrlflow -> "ctrlflow"
 
@@ -212,7 +217,7 @@ let pp_instruction m test an k i =
         ^ css m Render_ctrlflow an.rendered_control_flow_inbetweens.(k)
         ^ ""
         ^ css m Render_source
-            (pp_dwarf_source_file_lines' test.dwarf_static !AnalyseGlobals.show_source multiple
+            (pp_dwarf_source_file_lines' m test.dwarf_static !AnalyseGlobals.show_source multiple
                elifi)
         ^ "\n"
       in
@@ -358,6 +363,23 @@ links:
 
    *)
 
+
+let skylight () =
+  match !AnalyseGlobals.comp_dir with
+  | None -> fatal "skylight: no --comp_dir"
+  | Some comp_dir ->
+     match !AnalyseGlobals.out_dir with
+     | None -> fatal "skylight: no --out_dir"
+     | Some out_dir ->
+        let filename = out_dir ^ ".files" in 
+        sys_command ("find " ^ comp_dir ^ " -type f | while read f; do echo ${f} ; done > " ^ filename);
+        match read_file_lines filename with
+        | Error s -> fatal "skylight: %s" s
+        | Ok files ->
+           Array.iter (function file -> sys_command ("skylighting -n " ^ file ^ " > " ^ Filename.concat out_dir (Filename.basename file ^ ".html"))) files
+          
+
+        
 let chunk_filename_whole m filename_stem chunk_name : string (*path*) * string (*file*) =
   ("", (*   filename_stem
    ^*) chunk_name ^ match m with Ascii -> "" | Html -> ".html")
@@ -667,6 +689,8 @@ let pp_test_analysis m test an =
 
   output_whole_file_files m test an filename_stem cu_files;
 
+  skylight ();
+  
   String.concat ""
     (List.map
        (function cu -> "no range " ^ cu.Dwarf.scu_name ^ "\n")

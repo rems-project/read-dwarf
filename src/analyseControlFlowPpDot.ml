@@ -375,6 +375,7 @@ let colours = List.filter (function c -> not (List.mem c colours_dot_complains))
 let include_tooltips = true
 
 let mk_ppd_instruction test an label k _nesting =
+  let m = AnalyseTypes.Html in
   if include_tooltips then
     (* TODO: reduce the nasty code duplication between this and pp_instruction *)
     let i = an.instructions.(k) in
@@ -385,7 +386,7 @@ let mk_ppd_instruction test an label k _nesting =
     let lines =
       [label]
       @ List.map
-          (pp_dwarf_source_file_lines' test.dwarf_static !AnalyseGlobals.show_source false)
+          (pp_dwarf_source_file_lines' m test.dwarf_static !AnalyseGlobals.show_source false)
           an.line_info.(k)
       (* the address and (hex) instruction *)
       @ [

@@ -7,6 +7,7 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
+open AnalyseTypes
 open AnalyseUtils
 open AnalyseControlFlowTypes
 open AnalyseElfTypes
@@ -385,7 +386,7 @@ let mk_subprogram_name (ds : Dwarf.dwarf_static) elifi : string =
   in
   subprogram_name
 
-let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool) multiple elifi :
+let pp_dwarf_source_file_lines' m (ds : Dwarf.dwarf_static) (pp_actual_line : bool) multiple elifi :
     string =
   let lnh = elifi.elifi_entry.elie_lnh in
   let lnr = elifi.elifi_entry.elie_lnr in
@@ -393,11 +394,15 @@ let pp_dwarf_source_file_lines' (ds : Dwarf.dwarf_static) (pp_actual_line : bool
     let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
     (ufe, Dwarf.subprogram_at_line ds.ds_subprogram_line_extents ufe lnr.lnr_line)
   in
-  subprogram_name ^ ":"
+  let wrap_link m s = match m with
+    | Ascii -> s
+    | Html -> "@<a class=\"link-inst\" href=\"" ^ "" ^ file ^ ".html#" ^ Nat_big_num.to_string lnr.lnr_line ^ "\">" ^ s ^ "</a>@ "
+  in
+  wrap_link m (subprogram_name ^ ":"
   ^ Nat_big_num.to_string lnr.lnr_line
   ^ "."
   ^ Nat_big_num.to_string lnr.lnr_column
-  ^ " (" ^ file ^ ")"
+  ^ " (" ^ file ^ ")")
   (*  ^ (if elifi.elifi_start then "S" else "s")*)
   ^ (if lnr.lnr_is_stmt then "S" else "s")
   ^ (if lnr.lnr_basic_block then "B" else "b")

@@ -7,10 +7,10 @@
       background-color:black;
       color:white;
       }
-      .symbol_star {
+      .symbol-star {
       color: gold;
       }
-      .symbol_nostar {
+      .symbol-nostar {
       color: moccasin;
       }
       .source {
@@ -43,15 +43,42 @@
       text-decoration: none;
       }
       
+      a:hover {
+      color: aqua;
+      background-color: transparent;
+      text-decoration: underline;
+      }
+      
       a:visited {
-      color: pink;
+      color: aqua;
       background-color: transparent;
       text-decoration: none;
       }
+
+
+
+      a.link-inst:link {
+      color: darkorange;
+      background-color: transparent;
+      text-decoration: none;
+      }
+      
+      a.link-inst:hover {
+      color: darkorange;
+      background-color: transparent;
+      text-decoration: underline;
+      }
+      
+      a.link-inst:visited {
+      color: darkorange;
+      background-color: transparent;
+      text-decoration: none;
+      }
+
     </style>
 
     
   </head>
   <body>
     <pre>
-Key: <span class="symbol_star">ELF symbol (primary)</span> <span class="symbol_nostar">ELF symbol</span> <span class="source">source</span> <span class="frame">frame</span> <span class="instruction">instruction</span> <span class="vars-new">variable (range start)</span> <span class="vars-old">variable (range end)</span> <span class="inlining">inlining</span> <span class="ctrlflow">control-flow</span>
+Key: <span class="symbol-star">ELF symbol (primary)</span> <span class="symbol-nostar">ELF symbol</span> <span class="source">source (with column ║)</span> <span class="frame">frame</span> <span class="instruction">instruction</span> <span class="vars-new">+variable (range start)</span> <span class="vars-old">-variable (range end)</span> <span class="inlining">inlining</span> <span class="ctrlflow">control-flow</span> forwards branch ──>   backwards branch ══>
