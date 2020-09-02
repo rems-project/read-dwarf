@@ -38,22 +38,28 @@ let read_file_lines (name : string) : (string array, string) result =
 
 (** escape HTML *)
 let html_escape s =
-  let escaping = ref true in 
+  let escaping = ref true in
   let buf = Buffer.create (String.length s) in
   String.iter
-    (function c -> match c with
-     (* truly horrible hackery *)
-     | c when c='@' -> escaping := not !escaping
-     | c -> match !escaping with
-            | true -> (match c with
-                      | '&' -> Buffer.add_string buf "&amp"
-                      | '<' -> Buffer.add_string buf "&lt"
-                      | '>' -> Buffer.add_string buf "&gt"
-                      | '\"' -> Buffer.add_string buf "&quot"
-                      | '\'' -> Buffer.add_string buf "&apos"
-                      | c -> Buffer.add_char buf c)
-
-            | false -> Buffer.add_char buf c)
+    (function
+      | c -> (
+          match c with
+          (* truly horrible hackery *)
+          | c when c = '@' -> escaping := not !escaping
+          | c -> (
+              match !escaping with
+              | true -> (
+                  match c with
+                  | '&' -> Buffer.add_string buf "&amp"
+                  | '<' -> Buffer.add_string buf "&lt"
+                  | '>' -> Buffer.add_string buf "&gt"
+                  | '\"' -> Buffer.add_string buf "&quot"
+                  | '\'' -> Buffer.add_string buf "&apos"
+                  | c -> Buffer.add_char buf c
+                )
+              | false -> Buffer.add_char buf c
+            )
+        ))
     s;
   Buffer.contents buf
 

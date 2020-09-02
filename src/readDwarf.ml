@@ -11,6 +11,10 @@ let dry_run =
   setter AnalyseGlobals.copy_sources_dry_run
     Arg.(value & flag & info ["dry-run"] ~docv:"DRY_RUN" ~doc)
 
+let skylight =
+  let doc = "skylight" in
+  setter AnalyseGlobals.skylight Arg.(value & flag & info ["skylight"] ~docv:"SKYLIGHT" ~doc)
+
 let comp_dir =
   let doc = "Path to root directory of source files, overriding DWARF comp_dir" in
   setter AnalyseGlobals.comp_dir
@@ -109,6 +113,7 @@ let html =
 
 let options =
   [
+    skylight;
     dry_run;
     comp_dir;
     no_vars;

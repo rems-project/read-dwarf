@@ -2,7 +2,6 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-
 open AnalyseTypes
 open AnalyseUtils
 open AnalyseElfTypes
@@ -56,14 +55,10 @@ let render_class_name = function
   | Render_inlining -> "inlining"
   | Render_ctrlflow -> "ctrlflow"
 
-type html_idiom =
-  | HI_span
-  | HI_pre
-  | HI_classless_span
-  | HI_font
+type html_idiom = HI_span | HI_pre | HI_classless_span | HI_font
 
 let html_idiom = HI_span
-  
+
 let css m (rk : render_kind) s =
   match m with
   | Ascii -> s
@@ -75,22 +70,24 @@ let css m (rk : render_kind) s =
         String.concat "\n"
           (List.map
              (function
-               | line ->
-                  match html_idiom with
-                  (* the browser HTML rendering of large files can be very slow, hence this experimentation *)
-                  | HI_span -> 
-                     (* try with a span for each unit *)
-                     "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</span>" (*"</" ^ render_class_name rk ^ ">"*)
-                  | HI_pre -> 
-                     (* try with a pre for each unit *)
-                     "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"
-                  | HI_classless_span -> 
-                     (* try with a classless span for each unit *)
-                     "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"
-                  | HI_font -> 
-                     (* try with an html font for each unit (NOT HTML5) - best on large files so far - ok on firefox; too slow on chromium*)
-                     "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>"
-             )
+               | line -> (
+                   match html_idiom with
+                   (* the browser HTML rendering of large files can be very slow, hence this experimentation *)
+                   | HI_span ->
+                       (* try with a span for each unit *)
+                       "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line
+                       ^ "</span>"
+                       (*"</" ^ render_class_name rk ^ ">"*)
+                   | HI_pre ->
+                       (* try with a pre for each unit *)
+                       "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"
+                   | HI_classless_span ->
+                       (* try with a classless span for each unit *)
+                       "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"
+                   | HI_font ->
+                       (* try with an html font for each unit (NOT HTML5) - best on large files so far - ok on firefox; too slow on chromium*)
+                       "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>"
+                 ))
              lines)
 
 (*****************************************************************************)
@@ -363,23 +360,37 @@ links:
 
    *)
 
-
 let skylight () =
   match !AnalyseGlobals.comp_dir with
   | None -> fatal "skylight: no --comp_dir"
-  | Some comp_dir ->
-     match !AnalyseGlobals.out_dir with
-     | None -> fatal "skylight: no --out_dir"
-     | Some out_dir ->
-        let filename = out_dir ^ ".files" in 
-        sys_command ("find " ^ comp_dir ^ " -type f | while read f; do echo ${f} ; done > " ^ filename);
-        match read_file_lines filename with
-        | Error s -> fatal "skylight: %s" s
-        | Ok files ->
-           Array.iter (function file -> sys_command ("skylighting -n " ^ file ^ " > " ^ Filename.concat out_dir (Filename.basename file ^ ".html"))) files
-          
+  | Some comp_dir -> (
+      match !AnalyseGlobals.out_dir with
+      | None -> fatal "skylight: no --out_dir"
+      | Some out_dir -> (
+          let filename = out_dir ^ ".files" in
+          sys_command
+            ("find " ^ comp_dir ^ " -type f | while read f; do echo ${f} ; done > " ^ filename);
+          match read_file_lines filename with
+          | Error s -> fatal "skylight: %s" s
+          | Ok files ->
+              let links =
+                List.map
+                  (function
+                    | file ->
+                        let target = Filename.basename file ^ ".html" in
+                        if !AnalyseGlobals.skylight then
+                          sys_command
+                            ("skylighting -n " ^ file ^ " > " ^ Filename.concat out_dir target)
+                        else ();
+                        let link = "@<a href=\"" ^ target ^ "\">" ^ file ^ "</a>@\n" in
+                        link)
+                  (Array.to_list files)
+              in
+              let chunk_body = String.concat "" links in
+              chunk_body
+        )
+    )
 
-        
 let chunk_filename_whole m filename_stem chunk_name : string (*path*) * string (*file*) =
   ("", (*   filename_stem
    ^*) chunk_name ^ match m with Ascii -> "" | Html -> ".html")
@@ -418,13 +429,15 @@ let whole_file_chunks m test an filename_stem cu_files =
       (an.instructions, an.index_of_address, an.address_of_index, an.indirect_branches)
   in
 
+  let sources_chunk_body = skylight () in
+
   let cu_index_body =
     String.concat ""
       (List.map
          (function
            | per_cu_files -> (
                match per_cu_files with
-(*               | (path, filename, cu_title, chunk_title)
+               (*               | (path, filename, cu_title, chunk_title)
                  :: (path', filename', cu_title', chunk_title') :: _ -> (
                    match m with
                    | Ascii -> cu_title ^ " " ^ filename ^ " " ^ filename' ^ "\n"
@@ -439,14 +452,13 @@ let whole_file_chunks m test an filename_stem cu_files =
                    match m with
                    | Ascii -> cu_title ^ " " ^ filename ^ "\n"
                    | Html ->
-                       "<a href=\"" ^ filename ^ "\">" ^ cu_title ^ "</a> " (*^ "<a href=\""
+                       "<a href=\"" ^ filename ^ "\">" ^ cu_title ^ "</a> "
+                       (*^ "<a href=\""
                        ^ filename ^ "\">" ^ chunk_title ^ "</a> "*)
                        (*    ^ "<a href=\"" ^ filename' ^ "\">" ^ chunk_title' ^ "</a>"*)
                        ^ "\n"
                  )
-
-
-         ))
+             ))
          cu_files)
   in
   let chunks =
@@ -480,7 +492,7 @@ let whole_file_chunks m test an filename_stem cu_files =
   let index_chunk =
     ( "index",
       "index",
-      cu_index_body ^ "\n"
+      "<a href=\"sources.html\">source files</a>\n\n" ^ cu_index_body ^ "\n"
       ^ String.concat ""
           (List.map
              (function
@@ -492,7 +504,8 @@ let whole_file_chunks m test an filename_stem cu_files =
                  ))
              chunks) )
   in
-  index_chunk :: chunks
+  let sources_chunk = ("sources", "source files", sources_chunk_body) in
+  (index_chunk :: wrap_chunks m [sources_chunk]) @ chunks
 
 (*      
       ^ "\n************** .debug_line section: line number info   ****************\n"
@@ -522,57 +535,59 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   let iss = analyse_inlined_subroutines_sdt_compilation_unit cu in
   let title = "Compilation unit " ^ pp_addr low ^ " " ^ pp_addr high ^ " " ^ cu.Dwarf.scu_name in
   let chunks0 =
-     wrap_chunks m
-         [
-           (* chunk name, title, body *)
-           ("header", "header", pp_compilation_unit_header cu'.cu_header);
-           ( "die_abbrev",
-             ".debug_abbrev die abbreviation table",
-             pp_abbreviations_table cu'.cu_abbreviations_table );
-           ( "die",
-             ".debug_info die tree",
-             pp_die c cu'.cu_header d.d_str true (*indent*) (Nat_big_num.of_int 0) true cu'.cu_die
-           );
-           ( "line",
-             ".debug_line line number info",
-             let lnp = line_number_program_of_compilation_unit d cu' in
-             pp_line_number_program lnp );
-           ( "line_eval",
-             ".debug_line evaluated line info",
-             let lnrs = evaluated_line_info_of_compilation_unit d cu' ds.ds_evaluated_line_info in
-             pp_line_number_registerss lnrs );
-           ("sdt", "simple die tree", pp_sdt_compilation_unit (Nat_big_num.of_int 0) cu);
-           ( "sdt_globals",
-             "simple die tree globals",
-             pp_sdt_globals_compilation_unit (Nat_big_num.of_int 0) cu );
-           ( "sdt_locals",
-             "simple die tree locals",
-             pp_sdt_locals_compilation_unit (Nat_big_num.of_int 0) cu );
-           ("inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
-           ( "inlined_by_range",
-             "inlined subroutine info by range",
-             pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
-         ]
+    wrap_chunks m
+      [
+        (* chunk name, title, body *)
+        ("header", "header", pp_compilation_unit_header cu'.cu_header);
+        ( "die_abbrev",
+          ".debug_abbrev die abbreviation table",
+          pp_abbreviations_table cu'.cu_abbreviations_table );
+        ( "die",
+          ".debug_info die tree",
+          pp_die c cu'.cu_header d.d_str true (*indent*) (Nat_big_num.of_int 0) true cu'.cu_die );
+        ( "line",
+          ".debug_line line number info",
+          let lnp = line_number_program_of_compilation_unit d cu' in
+          pp_line_number_program lnp );
+        ( "line_eval",
+          ".debug_line evaluated line info",
+          let lnrs = evaluated_line_info_of_compilation_unit d cu' ds.ds_evaluated_line_info in
+          pp_line_number_registerss lnrs );
+        ("sdt", "simple die tree", pp_sdt_compilation_unit (Nat_big_num.of_int 0) cu);
+        ( "sdt_globals",
+          "simple die tree globals",
+          pp_sdt_globals_compilation_unit (Nat_big_num.of_int 0) cu );
+        ( "sdt_locals",
+          "simple die tree locals",
+          pp_sdt_locals_compilation_unit (Nat_big_num.of_int 0) cu );
+        ("inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
+        ( "inlined_by_range",
+          "inlined subroutine info by range",
+          pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
+      ]
   in
   let index_body =
     String.concat ""
-        (List.map
-           (function
-             | (chunk_name, chunk_title, chunk_body) -> (
+      (List.map
+         (function
+           | (chunk_name, chunk_title, chunk_body) -> (
                let (path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
-                 match m with
-                 | Ascii -> chunk_title ^ " " ^ filename
-                 | Html -> "<a href=\"" ^ filename ^ "\">" ^ chunk_title ^ "</a>\n"
-           ))
-           chunks0) in
-(*  let index_chunk =
+               match m with
+               | Ascii -> chunk_title ^ " " ^ filename
+               | Html -> "<a href=\"" ^ filename ^ "\">" ^ chunk_title ^ "</a>\n"
+             ))
+         chunks0)
+  in
+  (*  let index_chunk =
     ( "index",
       "index",
       index_body) *)
-  let instructions_chunk = 
-    ("instructions", "instructions", index_body ^ "\n" ^pp_instructions_ranged m test an (low, high))
-
+  let instructions_chunk =
+    ( "instructions",
+      "instructions",
+      index_body ^ "\n" ^ pp_instructions_ranged m test an (low, high) )
   in
+
   (title, instructions_chunk :: chunks0)
 
 let wrap_body m (chunk_name, chunk_title, chunk_body) =
@@ -689,8 +704,6 @@ let pp_test_analysis m test an =
 
   output_whole_file_files m test an filename_stem cu_files;
 
-  skylight ();
-  
   String.concat ""
     (List.map
        (function cu -> "no range " ^ cu.Dwarf.scu_name ^ "\n")
