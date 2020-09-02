@@ -51,6 +51,14 @@ let render_class_name = function
   | Render_inlining -> "inlining"
   | Render_ctrlflow -> "ctrlflow"
 
+type html_idiom =
+  | HI_span
+  | HI_pre
+  | HI_classless_span
+  | HI_font
+
+let html_idiom = HI_span
+  
 let css m (rk : render_kind) s =
   match m with
   | Ascii -> s
@@ -63,15 +71,21 @@ let css m (rk : render_kind) s =
           (List.map
              (function
                | line ->
-                   (* try with a span for each unit *)
-                   (*                "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</" ^ render_class_name rk ^ ">"
-)*)
-                   (* try with a pre for each unit *)
-                   (*               "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"*)
-                   (* try with a classless span for each unit *)
-                   (*               "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"*)
-                   (* try with an html font for each unit (NOT HTML5) - best so far - ok on firefox; too slow on chromium*)
-                   "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>")
+                  match html_idiom with
+                  (* the browser HTML rendering of large files can be very slow, hence this experimentation *)
+                  | HI_span -> 
+                     (* try with a span for each unit *)
+                     "<span class=\"" ^ render_class_name rk ^ "\">" ^ html_escape line ^ "</span>" (*"</" ^ render_class_name rk ^ ">"*)
+                  | HI_pre -> 
+                     (* try with a pre for each unit *)
+                     "<pre color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</pre>"
+                  | HI_classless_span -> 
+                     (* try with a classless span for each unit *)
+                     "<span color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</span>"
+                  | HI_font -> 
+                     (* try with an html font for each unit (NOT HTML5) - best on large files so far - ok on firefox; too slow on chromium*)
+                     "<font color=\"" ^ render_colour rk ^ "\">" ^ html_escape line ^ "</font>"
+             )
              lines)
 
 (*****************************************************************************)
@@ -388,17 +402,29 @@ let whole_file_chunks m test an filename_stem cu_files =
          (function
            | per_cu_files -> (
                match per_cu_files with
-               | (path, filename, cu_title, chunk_title)
+(*               | (path, filename, cu_title, chunk_title)
                  :: (path', filename', cu_title', chunk_title') :: _ -> (
                    match m with
-                   | Ascii -> cu_title ^ " " ^ filename ^ " " ^ filename' ^ "n"
+                   | Ascii -> cu_title ^ " " ^ filename ^ " " ^ filename' ^ "\n"
                    | Html ->
                        "<a href=\"" ^ filename' ^ "\">" ^ cu_title ^ "</a> " ^ "<a href=\""
                        ^ filename ^ "\">" ^ chunk_title ^ "</a> "
                        (*    ^ "<a href=\"" ^ filename' ^ "\">" ^ chunk_title' ^ "</a>"*)
                        ^ "\n"
                  )
-             ))
+ *)
+               | (path, filename, cu_title, chunk_title) :: _ -> (
+                   match m with
+                   | Ascii -> cu_title ^ " " ^ filename ^ "\n"
+                   | Html ->
+                       "<a href=\"" ^ filename ^ "\">" ^ cu_title ^ "</a> " (*^ "<a href=\""
+                       ^ filename ^ "\">" ^ chunk_title ^ "</a> "*)
+                       (*    ^ "<a href=\"" ^ filename' ^ "\">" ^ chunk_title' ^ "</a>"*)
+                       ^ "\n"
+                 )
+
+
+         ))
          cu_files)
   in
   let chunks =
@@ -473,9 +499,8 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   let (cu', _, _) = cu.scu_cupdie in
   let iss = analyse_inlined_subroutines_sdt_compilation_unit cu in
   let title = "Compilation unit " ^ pp_addr low ^ " " ^ pp_addr high ^ " " ^ cu.Dwarf.scu_name in
-  let chunks =
-    ("instructions", "instructions", pp_instructions_ranged m test an (low, high))
-    :: wrap_chunks m
+  let chunks0 =
+     wrap_chunks m
          [
            (* chunk name, title, body *)
            ("header", "header", pp_compilation_unit_header cu'.cu_header);
@@ -507,21 +532,26 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
              pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
          ]
   in
-  let index_chunk =
-    ( "index",
-      "index",
-      String.concat ""
+  let index_body =
+    String.concat ""
         (List.map
            (function
              | (chunk_name, chunk_title, chunk_body) -> (
-                 let (path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
+               let (path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
                  match m with
                  | Ascii -> chunk_title ^ " " ^ filename
                  | Html -> "<a href=\"" ^ filename ^ "\">" ^ chunk_title ^ "</a>\n"
-               ))
-           chunks) )
+           ))
+           chunks0) in
+(*  let index_chunk =
+    ( "index",
+      "index",
+      index_body) *)
+  let instructions_chunk = 
+    ("instructions", "instructions", index_body ^ "\n" ^pp_instructions_ranged m test an (low, high))
+
   in
-  (title, index_chunk :: chunks)
+  (title, instructions_chunk :: chunks0)
 
 let wrap_body m (chunk_name, chunk_title, chunk_body) =
   match m with
