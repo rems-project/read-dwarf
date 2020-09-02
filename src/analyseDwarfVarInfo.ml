@@ -273,7 +273,7 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
       rvai_remaining.(k) <- remaining';
       f addr current remaining' (k + 1)
   in
-  f (Nat_big_num.of_int 0) [] locals_by_pc_ranges 0;
+  f (Nat_big_num.of_int (0 - 1)) [] locals_by_pc_ranges 0;
 
   {
     rvai_globals = globals_dwarf sdt_d;

@@ -659,50 +659,55 @@ let output_per_cu_files m test an filename_stem re_ranged_compilation_units =
 
 let pp_test_analysis m test an =
   (* pick address ranges for each compilation unit.  In pkvm all compilation units currently have exactly one range, the lowest-address range starts at the start of the code, and they happen to be in address order (though I don't want to depend on that). But these ranges are not contiguous, so instead we'll use the range from the start of one to the start of the next, except for the last *)
-  let rangeless_compilation_units : Dwarf.sdt_compilation_unit list =
-    List.concat_map
-      (function
-        | (cu : Dwarf.sdt_compilation_unit) -> (
-            match cu.scu_pc_ranges with None -> [cu] | Some ranges -> []
-          ))
-      an.sdt.Dwarf.sd_compilation_units
-  in
-  let ranges_of_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
-    List.concat_map
-      (function
-        | (cu : Dwarf.sdt_compilation_unit) -> (
-            match cu.scu_pc_ranges with
-            | None -> []
-            | Some ranges -> List.map (function (low, high) -> ((low, high), cu)) ranges
-          ))
-      an.sdt.Dwarf.sd_compilation_units
-  in
-  let ranges_of_compilation_units' : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
-    List.sort
-      (function
-        | ((low, high), cu) -> (
-            function ((low', high'), cu') -> compare low low'
-          ))
-      ranges_of_compilation_units
-  in
+  ( match !AnalyseGlobals.out_dir with
+  | None -> ()
+  | Some _ ->
+      let rangeless_compilation_units : Dwarf.sdt_compilation_unit list =
+        List.concat_map
+          (function
+            | (cu : Dwarf.sdt_compilation_unit) -> (
+                match cu.scu_pc_ranges with None -> [cu] | Some ranges -> []
+              ))
+          an.sdt.Dwarf.sd_compilation_units
+      in
+      let ranges_of_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+        List.concat_map
+          (function
+            | (cu : Dwarf.sdt_compilation_unit) -> (
+                match cu.scu_pc_ranges with
+                | None -> []
+                | Some ranges -> List.map (function (low, high) -> ((low, high), cu)) ranges
+              ))
+          an.sdt.Dwarf.sd_compilation_units
+      in
+      let ranges_of_compilation_units' : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+        List.sort
+          (function
+            | ((low, high), cu) -> (
+                function ((low', high'), cu') -> compare low low'
+              ))
+          ranges_of_compilation_units
+      in
 
-  let re_ranged_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
-    let rec f (rcus : ((addr * addr) * Dwarf.sdt_compilation_unit) list) :
-        ((addr * addr) * Dwarf.sdt_compilation_unit) list =
-      match rcus with
-      | ((low, high), cu) :: (((low', high'), cu') :: _ as rcus') -> ((low, low'), cu) :: f rcus'
-      | [((low, high), cu)] ->
-          [((low, an.instructions.(Array.length an.instructions - 1).i_addr), cu)]
-      | [] -> []
-    in
-    f ranges_of_compilation_units'
-  in
+      let re_ranged_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+        let rec f (rcus : ((addr * addr) * Dwarf.sdt_compilation_unit) list) :
+            ((addr * addr) * Dwarf.sdt_compilation_unit) list =
+          match rcus with
+          | ((low, high), cu) :: (((low', high'), cu') :: _ as rcus') ->
+              ((low, low'), cu) :: f rcus'
+          | [((low, high), cu)] ->
+              [((low, an.instructions.(Array.length an.instructions - 1).i_addr), cu)]
+          | [] -> []
+        in
+        f ranges_of_compilation_units'
+      in
 
-  let filename_stem = "" in
+      let filename_stem = "" in
 
-  let cu_files = output_per_cu_files m test an filename_stem re_ranged_compilation_units in
+      let cu_files = output_per_cu_files m test an filename_stem re_ranged_compilation_units in
 
-  output_whole_file_files m test an filename_stem cu_files;
+      output_whole_file_files m test an filename_stem cu_files
+      (*
 
   String.concat ""
     (List.map
@@ -714,7 +719,8 @@ let pp_test_analysis m test an =
            | ((low, high), cu) ->
                pp_addr low ^ " " ^ pp_addr high ^ " " ^ cu.Dwarf.scu_name ^ "\n")
          ranges_of_compilation_units')
-  (*
+     *)
+      (*
   ^
     let chunks = chunks_of_ranged_compilation_units m test an 
 
@@ -725,7 +731,7 @@ let pp_test_analysis m test an =
 
          re_ranged_compilation_units)
  *)
-  ^
+  );
   match m with
   | Ascii ->
       "* ************* instruction count *****************\n"
