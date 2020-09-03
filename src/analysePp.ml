@@ -391,12 +391,12 @@ let skylight () =
         )
     )
 
-let chunk_filename_whole m filename_stem chunk_name : string (*path*) * string (*file*) =
+let chunk_filename_whole m _filename_stem chunk_name : string (*path*) * string (*file*) =
   ("", (*   filename_stem
    ^*) chunk_name ^ match m with Ascii -> "" | Html -> ".html")
 
-let chunk_filename_per_cu m filename_stem chunk_name cu : string (*path*) * string (*file*) =
-  let dirname = Filename.dirname cu.Dwarf.scu_name in
+let chunk_filename_per_cu m _filename_stem chunk_name cu : string (*path*) * string (*file*) =
+  let _dirname = Filename.dirname cu.Dwarf.scu_name in
   let basename = Filename.basename cu.Dwarf.scu_name in
   let extension = Filename.extension basename in
   let basename_chopped = Filename.chop_extension basename in
@@ -434,30 +434,16 @@ let whole_file_chunks m test an filename_stem cu_files =
   let cu_index_body =
     String.concat ""
       (List.map
-         (function
-           | per_cu_files -> (
-               match per_cu_files with
-               (*               | (path, filename, cu_title, chunk_title)
-                 :: (path', filename', cu_title', chunk_title') :: _ -> (
-                   match m with
-                   | Ascii -> cu_title ^ " " ^ filename ^ " " ^ filename' ^ "\n"
-                   | Html ->
-                       "<a href=\"" ^ filename' ^ "\">" ^ cu_title ^ "</a> " ^ "<a href=\""
-                       ^ filename ^ "\">" ^ chunk_title ^ "</a> "
-                       (*    ^ "<a href=\"" ^ filename' ^ "\">" ^ chunk_title' ^ "</a>"*)
-                       ^ "\n"
-                 )
- *)
-               | (path, filename, cu_title, chunk_title) :: _ -> (
-                   match m with
-                   | Ascii -> cu_title ^ " " ^ filename ^ "\n"
-                   | Html ->
-                       "<a href=\"" ^ filename ^ "\">" ^ cu_title ^ "</a> "
-                       (*^ "<a href=\""
-                       ^ filename ^ "\">" ^ chunk_title ^ "</a> "*)
-                       (*    ^ "<a href=\"" ^ filename' ^ "\">" ^ chunk_title' ^ "</a>"*)
-                       ^ "\n"
-                 )
+         (function[@ocaml.warning "-8"] (* inexhaustive pattern match *)
+           | (_path, filename, cu_title, _chunk_title) :: _ as _per_cu_files -> (
+               match m with
+               | Ascii -> cu_title ^ " " ^ filename ^ "\n"
+               | Html ->
+                   "<a href=\"" ^ filename ^ "\">" ^ cu_title ^ "</a> "
+                   (*^ "<a href=\""
+                   ^ filename ^ "\">" ^ chunk_title ^ "</a> "*)
+                   (*    ^ "<a href=\"" ^ filename' ^ "\">" ^ chunk_title' ^ "</a>"*)
+                   ^ "\n"
              ))
          cu_files)
   in
@@ -496,8 +482,8 @@ let whole_file_chunks m test an filename_stem cu_files =
       ^ String.concat ""
           (List.map
              (function
-               | (chunk_name, chunk_title, chunk_body) -> (
-                   let (path, filename) = chunk_filename_whole m filename_stem chunk_name in
+               | (chunk_name, chunk_title, _chunk_body) -> (
+                   let (_path, filename) = chunk_filename_whole m filename_stem chunk_name in
                    match m with
                    | Ascii -> chunk_title ^ " " ^ filename
                    | Html -> "<a href=\"" ^ filename ^ "\">" ^ chunk_title ^ "</a>\n"
@@ -570,8 +556,8 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
     String.concat ""
       (List.map
          (function
-           | (chunk_name, chunk_title, chunk_body) -> (
-               let (path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
+           | (chunk_name, chunk_title, _chunk_body) -> (
+               let (_path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
                match m with
                | Ascii -> chunk_title ^ " " ^ filename
                | Html -> "<a href=\"" ^ filename ^ "\">" ^ chunk_title ^ "</a>\n"
@@ -618,7 +604,7 @@ let wrap_body m (chunk_name, chunk_title, chunk_body) =
     )
 
 let output_file (path, filename, body) =
-  let out_dir = match !AnalyseGlobals.out_dir with Some s -> s | None -> "" in
+  let _out_dir = match !AnalyseGlobals.out_dir with Some s -> s | None -> "" in
   (*sys_command ("mkdir -p " ^ Filename.quote out_dir);*)
   let c =
     match !AnalyseGlobals.out_dir with
@@ -626,7 +612,7 @@ let output_file (path, filename, body) =
     | None -> stdout
   in
   Printf.fprintf c "%s" body;
-  match !AnalyseGlobals.out_dir with Some out_dir -> close_out c | None -> ()
+  match !AnalyseGlobals.out_dir with Some _out_dir -> close_out c | None -> ()
 
 let output_whole_file_files m test an filename_stem cu_files =
   let chunks = whole_file_chunks m test an filename_stem cu_files in
@@ -662,11 +648,11 @@ let pp_test_analysis m test an =
   ( match !AnalyseGlobals.out_dir with
   | None -> ()
   | Some _ ->
-      let rangeless_compilation_units : Dwarf.sdt_compilation_unit list =
+      let _rangeless_compilation_units : Dwarf.sdt_compilation_unit list =
         List.concat_map
           (function
             | (cu : Dwarf.sdt_compilation_unit) -> (
-                match cu.scu_pc_ranges with None -> [cu] | Some ranges -> []
+                match cu.scu_pc_ranges with None -> [cu] | Some _ranges -> []
               ))
           an.sdt.Dwarf.sd_compilation_units
       in
@@ -683,8 +669,8 @@ let pp_test_analysis m test an =
       let ranges_of_compilation_units' : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
         List.sort
           (function
-            | ((low, high), cu) -> (
-                function ((low', high'), cu') -> compare low low'
+            | ((low, _high), _cu) -> (
+                function ((low', _high'), _cu') -> compare low low'
               ))
           ranges_of_compilation_units
       in
@@ -693,9 +679,9 @@ let pp_test_analysis m test an =
         let rec f (rcus : ((addr * addr) * Dwarf.sdt_compilation_unit) list) :
             ((addr * addr) * Dwarf.sdt_compilation_unit) list =
           match rcus with
-          | ((low, high), cu) :: (((low', high'), cu') :: _ as rcus') ->
+          | ((low, _high), cu) :: (((low', _high'), _cu') :: _ as rcus') ->
               ((low, low'), cu) :: f rcus'
-          | [((low, high), cu)] ->
+          | [((low, _high), cu)] ->
               [((low, an.instructions.(Array.length an.instructions - 1).i_addr), cu)]
           | [] -> []
         in

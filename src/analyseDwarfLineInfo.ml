@@ -349,7 +349,7 @@ let source_line (comp_diro, dir, file) n1 =
   | Some (Some lines) -> access_lines lines n
   | Some None -> None
   | None -> (
-      let (directory_original, directory_replacement) =
+      let (_directory_original, directory_replacement) =
         actual_directories !AnalyseGlobals.comp_dir (comp_diro, dir, file)
       in
       let filename = Filename.concat directory_replacement file in

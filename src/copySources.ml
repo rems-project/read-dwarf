@@ -27,17 +27,6 @@ let process_file () : unit =
   let open Dwarf in
   let lnhs : line_number_header list = List.map fst evaluated_line_info in
 
-  let lnh_comp_dirs : string list =
-    List.sort_uniq compare (List.filter_map (fun lnh -> lnh.lnh_comp_dir) lnhs)
-  in
-
-  let comp_dir =
-    match lnh_comp_dirs with
-    | [] -> fatal "no comp_dir"
-    | [comp_dir] -> comp_dir
-    | _ -> fatal "multiple distinct comp_dir's: %s" (String.concat " " lnh_comp_dirs)
-  in
-
   let files_of_lnh lnh :
       (string option (*comp_dir*) * string option (*lnh_include_directory*) * string)
       (*lnfe_path*)

@@ -13,8 +13,8 @@ open AnalyseElf
 (*open AnalyseControlFlowTypes*)
 open AnalyseCollectedType
 
-(*open AnalyseDwarfLineInfo   *)
-open AnalyseElfSymbols
+(*open AnalyseDwarfLineInfo*)
+(*open AnalyseElfSymbols*)
 
 (*open AnalyseDwarfFrameInfo*)
 (*open AnalyseControlFlowTypes*)
@@ -155,7 +155,7 @@ let process_file () : unit =
 
           let an2 = mk_analysis test2 filename_objdump_d2 filename_branch_tables_option_2 in
 
-          let parse_source_node_list test an (ano2 : analysis option) (so : string option) :
+          let parse_source_node_list _test an (ano2 : analysis option) (so : string option) :
               (index * nesting) list =
             match so with
             | None -> []
