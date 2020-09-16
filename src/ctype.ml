@@ -1,32 +1,32 @@
 (** This module provides the internal C-like type system. This type system is
-    slightly different than the normal C type system. This module only provide
+    slightly different than the normal C type system. This module only provides
     the Ocaml datastructure to represent those types. The typing rules are
     implemented in {!TraceCtype}, where they are applied directly on traces.
 
 
-    These types follow the normal C type structure except for pointer that are
-    more complex. To handle the fact the C compiler know perfectly the ABI is
-    "allowed" to used it, we have to make pointer type resist manual adjusting of
-    pointer to point to the field of a struct. However the new pointer cannot
+    These types follow the normal C type structure except for pointers that are
+    more complex. To handle the fact that the C compiler knows perfectly the ABI and is
+    "allowed" to used it, we have to make pointer types resist manual adjusting of
+    pointers to point to the field of a struct. However the new pointer cannot
     just have type [field_type*] because one could want to get back a pointer to
     the whole structure by subtracting an offset from the field pointer. Thus a
-    pointer must never forget information about it's surrounding. Those
-    surrounding are called a {!fragment} and represent all the type of the
+    pointer must never forget information about its surroundings. Those
+    surroundings are called a {!fragment} and represent all the type information of the
     fragment of memory in which a pointer lies. The pointer is thus represented
     as a fragment of memory and an offset. Since the pointer type is more complex
-    and pack more information, the surface syntax has changed. A pointer type is
-    written between braces, so [A*] becomes [{A}]. but in more complex cases, all
-    information fit between the braces.
+    and packs more information, the surface syntax has changed. A pointer type is
+    written between braces, so [A*] becomes [{A}], but in more complex cases, all
+    informations fit between the braces.
 
-    Furthermore, the fragment part of the pointer do not record any information
-    about aliasing: two different type fragment are perfectly allowed to alias.
-    To handle non-alising property like the stack not aliasing the heap or
+    Furthermore, the fragment part of the pointer does not record any information
+    about aliasing: two different type fragments are perfectly allowed to alias.
+    To handle non-aliasing properties, like the stack not aliasing the heap or
     restrict pointers, pointers also have a [provenance] field. See {!State.Mem}.
 
-    There is another problem: The C language do not define a C type system for the whole
-    program contrary to C++. It defines only a type system per compilation unit.
-    This limitation is two annoying to work with so the module implement
-    some kind of linking of type similar to C++ rules. See {!ctyplink}.*)
+    There is another problem: The C language does not define a C type system for the whole
+    program, contrary to C++. It defines only a type system per compilation unit.
+    This limitation is too annoying to work with so the module implements
+    some kind of linking of types, similar to C++ rules. See {!ctyplink}.*)
 
 open Logs.Logger (struct
   let str = __MODULE__

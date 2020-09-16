@@ -1,21 +1,21 @@
 (** This module provide most of the C type inference logic
 
     An important remark about this logic is that all types are optional. The
-    absence of types is like a poison that propagate to the end, meaning that if
-    any value in expression do not have a C type, then the whole expression won't
-    have one. This behavior may need to be though of again.
+    absence of types is like a poison that propagates to the end, meaning that if
+    any value in expression does not have a C type, then the whole expression won't
+    have one. This behavior may need to be thought of again.
 
     The second important remark is that we don't really care about
     the typing of non-pointer values. Whether an plain integer
     is an [int] or a [long] is completely irrelevant to us.
     On the other hand, whether a pointer is a [int*] or a [long*] is
-    very important. That's why more non-pointer type will
+    very important. That's why more non-pointer types will
     decay to {!Ctype.Machine} in all rules.
 
     The type inference is decomposed in two parts:
     - First, we have to type {{!exp} expressions} themselves as if they
-      were expression on C values and not machine values.
-    - Second, we have to type effect like {{!read}reading} and {{!write}writing}
+      were expressions on C values and not machine values.
+    - Second, we have to type effects like {{!read}reading} and {{!write}writing}
       to memory *)
 
 open Logs.Logger (struct
