@@ -1,12 +1,12 @@
 [RunFunc]: Running hyp_get_page_tv_test3 in pkvm-O0/el2.elf
 [RunFunc]: Loading pkvm-O0/el2.elf
-[RunFunc]: API api{ args = {0 -> {: Struct hyp_page[]}}; ret = none }
+[RunFunc]: API api{ args = {0 -> {: Struct hyp_page[]}}; ret = int(s32) }
 [RunFunc]: Loading ABI
 [RunFunc]: Computing entry state
 [RunFunc]: Start running
 [RunFunc]: Run tree:
 * Start: 1
-* Branch at 0x4115d0: 2
+* Branch at 0x4115d4: 2
 |* End (PC |retaddr:| is symbolic): 4
 * End (PC |retaddr:| is symbolic): 3
 State 
@@ -114,7 +114,7 @@ State
     : 2state{
       id = 2;
       base_state = 1;
-      last_pc = 0x4115cc;
+      last_pc = 0x4115d0;
       regs =
         regmap{
           R0 -> |arg:0| : {: Struct hyp_page[]};
@@ -150,7 +150,7 @@ State
           R30 -> |retaddr:| : {: somewhere in global};
           R31 -> |reg:0:R31|;
           SP_EL2 -> -0x10 + |reg:1:SP_EL2| : {block 0: at -0x10 in frag 0};
-          _PC -> 0x4115d0 : constexpr {: at 0x4115d0 in global};
+          _PC -> 0x4115d4 : constexpr {: at 0x4115d4 in global};
           PSTATE.N -> |reg:1:PSTATE.N|;
           PSTATE.Z -> |reg:1:PSTATE.Z|;
           PSTATE.C -> |reg:1:PSTATE.C|;
@@ -199,7 +199,7 @@ State
           __currentInstr -> -0x2afcdfe1:32;
           BTypeNext -> |reg:0:BTypeNext|
         };
-      fenv = state{ frags = {0 -> frag{-0x8 -> {: Struct hyp_page[]}}} };
+      fenv = state{ frags = {0 -> frag{-0x10 -> {: Struct hyp_page[]}}} };
       read_vars = {0 -> |arg:0| : {: Struct hyp_page[]}};
       memory =
         {
@@ -209,8 +209,8 @@ State
               0 ->
                 |reg:1:SP_EL2|[0:51] :
                   symfrag{
-                    trace = [ Writing 64 bits with |arg:0| at -0x8; Reading 64 bits in |read:2:0| from: -0x8 ];
-                    ccache = {-0x8 -> |arg:0| of 64 bits};
+                    trace = [ Writing 64 bits with |arg:0| at -0x10; Reading 64 bits in |read:2:0| from: -0x10 ];
+                    ccache = {-0x10 -> |arg:0| of 64 bits};
                     scache = {}
                   }
             }
@@ -221,10 +221,10 @@ State
     : 3state{
       id = 3;
       base_state = 2;
-      last_pc = 0x4115f0;
+      last_pc = 0x411608;
       regs =
         regmap{
-          R0 -> |arg:0| : {: Struct hyp_page[]};
+          R0 -> 0xffffffff;
           R1 -> |reg:1:R1|;
           R2 -> |reg:1:R2|;
           R3 -> |reg:1:R3|;
@@ -232,7 +232,7 @@ State
           R5 -> |reg:1:R5|;
           R6 -> |reg:1:R6|;
           R7 -> |reg:1:R7|;
-          R8 -> |arg:0| : {: Struct hyp_page[]};
+          R8 -> 0xffffffff : constexpr M8;
           R9 -> |reg:1:R9|;
           R10 -> |reg:1:R10|;
           R11 -> |reg:1:R11|;
@@ -306,12 +306,21 @@ State
           __currentInstr -> -0x2afcdfe1:32;
           BTypeNext -> 0x0:2
         };
-      fenv = state{ frags = {0 -> frag{-0x8 -> {: Struct hyp_page[]}}} };
-      read_vars = {};
+      fenv = state{ frags = {0 -> frag{-0x10 -> {: Struct hyp_page[]}; -0x4 -> constexpr M4}} };
+      read_vars = {0 -> -0x1:32 : constexpr M4};
       memory =
         {
           main = symfrag{ trace = []; ccache = {}; scache = {} };
-          frags = {0 -> |reg:1:SP_EL2|[0:51] : symfrag{ trace = []; ccache = {-0x8 -> |arg:0| of 64 bits}; scache = {} }}
+          frags =
+            {
+              0 ->
+                |reg:1:SP_EL2|[0:51] :
+                  symfrag{
+                    trace = [ Writing 32 bits with -0x1:32 at -0x4; Reading 32 bits in |read:3:0:32bits| from: -0x4 ];
+                    ccache = {-0x10 -> |arg:0| of 64 bits; -0x4 -> -0x1:32 of 32 bits};
+                    scache = {}
+                  }
+            }
         };
       asserts = assert: |arg:0| = 0x0
     }
@@ -319,10 +328,10 @@ State
     : 4state{
       id = 4;
       base_state = 2;
-      last_pc = 0x4115f0;
+      last_pc = 0x411608;
       regs =
         regmap{
-          R0 -> |arg:0| : {: Struct hyp_page[]};
+          R0 -> 0x0:32.|read:4:1:32bits|;
           R1 -> |reg:1:R1|;
           R2 -> |reg:1:R2|;
           R3 -> |reg:1:R3|;
@@ -331,8 +340,8 @@ State
           R6 -> |reg:1:R6|;
           R7 -> |reg:1:R7|;
           R8 -> |arg:0| : {: Struct hyp_page[]};
-          R9 -> 0x0:32.(0x1:32 + |read:4:1:32bits|);
-          R10 -> |reg:1:R10|;
+          R9 -> 0x0:32.|read:4:1:32bits|;
+          R10 -> 0x0:32.(0x1:32 + |read:4:1:32bits|);
           R11 -> |reg:1:R11|;
           R12 -> |reg:1:R12|;
           R13 -> |reg:1:R13|;
@@ -404,8 +413,8 @@ State
           __currentInstr -> -0x2afcdfe1:32;
           BTypeNext -> 0x0:2
         };
-      fenv = state{ frags = {0 -> frag{-0x8 -> {: Struct hyp_page[]}}} };
-      read_vars = {0 -> |arg:0| : {: Struct hyp_page[]}; 1 -> |read:4:1:32bits| : int(s32)};
+      fenv = state{ frags = {0 -> frag{-0x10 -> {: Struct hyp_page[]}}} };
+      read_vars = {0 -> |arg:0| : {: Struct hyp_page[]}; 1 -> |read:4:1:32bits| : int(s32); 2 -> |read:4:1:32bits|};
       memory =
         {
           main =
@@ -423,8 +432,13 @@ State
               0 ->
                 |reg:1:SP_EL2|[0:51] :
                   symfrag{
-                    trace = [ Reading 64 bits in |read:4:0| from: -0x8 ];
-                    ccache = {-0x8 -> |arg:0| of 64 bits};
+                    trace =
+                      [
+                        Reading 64 bits in |read:4:0| from: -0x10;
+                        Writing 32 bits with |read:4:1:32bits| at -0x4;
+                        Reading 32 bits in |read:4:2:32bits| from: -0x4
+                      ];
+                    ccache = {-0x10 -> |arg:0| of 64 bits; -0x4 -> |read:4:1:32bits| of 32 bits};
                     scache = {}
                   }
             }

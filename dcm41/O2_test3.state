@@ -1,12 +1,12 @@
 [RunFunc]: Running hyp_get_page_tv_test3 in pkvm-O2/el2.elf
 [RunFunc]: Loading pkvm-O2/el2.elf
-[RunFunc]: API api{ args = {0 -> {: Struct hyp_page[]}}; ret = none }
+[RunFunc]: API api{ args = {0 -> {: Struct hyp_page[]}}; ret = int(s32) }
 [RunFunc]: Loading ABI
 [RunFunc]: Computing entry state
 [RunFunc]: Start running
 [RunFunc]: Run tree:
 * Start: 1
-* Branch at 0x4093b8: 2
+* Branch at 0x4093bc: 2
 |* End (PC |retaddr:| is symbolic): 4
 * End (PC |retaddr:| is symbolic): 3
 State 
@@ -150,7 +150,7 @@ State
           R30 -> |retaddr:| : {: somewhere in global};
           R31 -> |reg:0:R31|;
           SP_EL2 -> |reg:1:SP_EL2| : {block 0: frag 0};
-          _PC -> 0x4093b8 : constexpr {: at 0x4093b8 in global};
+          _PC -> 0x4093bc : constexpr {: at 0x4093bc in global};
           PSTATE.N -> |reg:1:PSTATE.N|;
           PSTATE.Z -> |reg:1:PSTATE.Z|;
           PSTATE.C -> |reg:1:PSTATE.C|;
@@ -212,10 +212,10 @@ State
     : 3state{
       id = 3;
       base_state = 2;
-      last_pc = 0x4093c8;
+      last_pc = 0x4093d8;
       regs =
         regmap{
-          R0 -> |arg:0| : {: Struct hyp_page[]};
+          R0 -> 0xffffffff : constexpr M8;
           R1 -> |reg:1:R1|;
           R2 -> |reg:1:R2|;
           R3 -> |reg:1:R3|;
@@ -310,10 +310,10 @@ State
     : 4state{
       id = 4;
       base_state = 2;
-      last_pc = 0x4093c8;
+      last_pc = 0x4093d0;
       regs =
         regmap{
-          R0 -> |arg:0| : {: Struct hyp_page[]};
+          R0 -> 0x0:32.|read:4:0:32bits|;
           R1 -> |reg:1:R1|;
           R2 -> |reg:1:R2|;
           R3 -> |reg:1:R3|;
@@ -321,8 +321,8 @@ State
           R5 -> |reg:1:R5|;
           R6 -> |reg:1:R6|;
           R7 -> |reg:1:R7|;
-          R8 -> 0x0:32.(0x1:32 + |read:4:0:32bits|);
-          R9 -> |reg:1:R9|;
+          R8 -> |arg:0| : {: Struct hyp_page[]};
+          R9 -> 0x0:32.(0x1:32 + |read:4:0:32bits|);
           R10 -> |reg:1:R10|;
           R11 -> |reg:1:R11|;
           R12 -> |reg:1:R12|;
