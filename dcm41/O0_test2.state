@@ -1,6 +1,6 @@
 [RunFunc]: Running hyp_get_page_tv_test2 in pkvm-O0/el2.elf
 [RunFunc]: Loading pkvm-O0/el2.elf
-[RunFunc]: API api{ args = {0 -> {: Struct hyp_page[]}}; ret = none }
+[RunFunc]: API api{ args = {0 -> {: Struct hyp_page[]}}; ret = int(s32) }
 [RunFunc]: Loading ABI
 [RunFunc]: Computing entry state
 [RunFunc]: Start running
@@ -112,10 +112,10 @@ State
     : 2state{
       id = 2;
       base_state = 1;
-      last_pc = 0x4115c0;
+      last_pc = 0x4115c4;
       regs =
         regmap{
-          R0 -> |arg:0| : {: Struct hyp_page[]};
+          R0 -> 0x0:32.|read:2:1:32bits|;
           R1 -> |reg:1:R1|;
           R2 -> |reg:1:R2|;
           R3 -> |reg:1:R3|;
@@ -124,8 +124,8 @@ State
           R6 -> |reg:1:R6|;
           R7 -> |reg:1:R7|;
           R8 -> |arg:0| : {: Struct hyp_page[]};
-          R9 -> 0x0:32.(0x1:32 + |read:2:1:32bits|);
-          R10 -> |reg:1:R10|;
+          R9 -> 0x0:32.|read:2:1:32bits|;
+          R10 -> 0x0:32.(0x1:32 + |read:2:1:32bits|);
           R11 -> |reg:1:R11|;
           R12 -> |reg:1:R12|;
           R13 -> |reg:1:R13|;
