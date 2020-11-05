@@ -227,6 +227,7 @@ type tval = Tval.t
     Implementation detail: This type has an imperative interface even if the
     underlying {!SymbolicFragment} has a pure interface.*)
 module Mem : sig
+
   type t
 
   (** Add a new fragment with the specified base *)
