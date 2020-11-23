@@ -89,6 +89,8 @@ let annot_exp : ('a, 'v, 'b, 'm) exp -> 'a = function
   | Vec (_, a) -> a
   | Ite (_, _, _, a) -> a
   | Let (_, _, _, a) -> a
+(*| Exists (_, _, _, _, a) -> a *)
+(*| Call (_, _, _, a) -> a *)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -110,6 +112,8 @@ let direct_exp_map_exp (f : ('a, 'v, 'b, 'm) exp -> ('a, 'v, 'b, 'm) exp) = func
   | Vec (el, a) -> Vec (List.map f el, a)
   | Ite (c, e, e', l) -> Ite (f c, f e, f e', l)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id f b, List.map (Pair.map Fun.id f) bs, f e, l)
+(*| Exists (b, ty, b_tys, e, l) -> Exists (b, ty,  b_tys, f e, l) *)
+(*| Call (v, e, es, l) -> Call (v, f e, List.map f es, l) *)
   | Bound _ as b -> b
   | Bits _ as b -> b
   | Bool _ as b -> b
@@ -131,6 +135,8 @@ let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
       i (snd b);
       List.iter (Pair.iter ignore i) bs;
       i e
+(*| Exists (_, _, _, e, _) -> i e *)
+(*| Call (_, e, es, _) -> List.iter i (e :: es) *)
   | Bits _ -> ()
   | Bool _ -> ()
   | Enum _ -> ()
@@ -144,6 +150,8 @@ let direct_exp_fold_left_exp (f : 'a -> _ exp -> 'a) (v : 'a) = function
   | Manyop (_, el, _) -> List.fold_left f v el
   | Ite (c, e, e', _) -> f (f (f v c) e) e'
   | Let (b, bs, e, _) -> f (List.fold_left (fun v (_, e) -> f v e) (f v (snd b)) bs) e
+(*| Exists (_, _, _, e, _) -> f v e *)
+(*| Call (_, e, es, _) -> List.fold_left f v (e :: es) *)
   | Bits _ -> v
   | Bool _ -> v
   | Enum _ -> v
@@ -192,6 +200,8 @@ let rec exp_map_var : type va vb a b m. (va -> vb) -> (a, va, b, m) exp -> (a, v
   | Vec (el, a) -> Vec (List.map ec el, a)
   | Ite (c, e, e', a) -> Ite (ec c, ec e, ec e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id ec b, List.map (Pair.map Fun.id ec) bs, ec e, l)
+(*| Exists (b, ty, b_tys, e, l) -> Exists (b, ty, b_tys, ec e, l) *)
+(*| Call (v, e, es, l) -> Call (conv v, ec e, List.map ec es, l) *)
 
 (** Iterate a function on all the annotations of an expression *)
 let rec exp_iter_annot (f : 'a -> unit) (exp : ('a, 'v, 'b, 'm) exp) : unit =
@@ -227,6 +237,8 @@ let rec exp_var_subst :
   | Vec (el, a) -> Vec (List.map es el, a)
   | Ite (c, e, e', a) -> Ite (es c, es e, es e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id es b, List.map (Pair.map Fun.id es) bs, es e, l)
+(*| Exists (b, ty, b_tys, e, a) -> Exists (b, ty, b_tys, es e, a) *)
+(*| Call (_, e, es_, a) -> Call (Raise.todo(), es e, List.map es es_, a) *)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -276,6 +288,8 @@ let rec unfold_lets :
       let res = ul e in
       List.iter (Pair.iter (Hashtbl.remove context) ignore) (b :: bs);
       res
+(*| Call _ -> Raise.todo () *)
+(*| Exists _ -> Raise.unreachable () *)
   | Bits _ as b -> b
   | Bool _ as b -> b
   | Enum _ as e -> e

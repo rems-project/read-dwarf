@@ -76,5 +76,11 @@ let map_var ~(ctxt : t) (v : Base.Var.t) (a : Ast.no Ast.ty) : State.var =
   | NonDet (i, size) -> State.Var.NonDet (i, size)
   | Read (i, size) -> State.Var.ReadVar (ctxt.state.id, i, size)
 
+let map_var ~(ctxt : t) (v : Base.Var.t) (a : Ast.no Ast.ty) : State.var =
+  assert (Base.Var.ty v = a);
+  match v with
+  | Register reg -> State.Var.Register (ctxt.state.id, reg)
+  | Read (i, size) -> State.Var.ReadVar (ctxt.state.id, i, size)
+
 (** Tell if typing should enabled with this context *)
 let typing_enabled ~(ctxt : t) = ctxt.dwarf <> None

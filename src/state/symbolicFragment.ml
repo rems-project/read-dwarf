@@ -94,12 +94,10 @@ module type S = sig
 
   (** This module provide the trace of reads and writes to a symbolic fragment. *)
   module Event : sig
-    
     (** Types of memory events *)
     type t =
-      | Read of Block.t * var (** From [Block.t], read [var] *)
-      | Write of Block.t * exp (** To [Block.t], write [exp] *)
-
+      | Read of Block.t * var  (** From [Block.t], read [var] *)
+      | Write of Block.t * exp  (** To [Block.t], write [exp] *)
   end
 
   (** The type of a memory fragment *)
