@@ -157,6 +157,11 @@ let ite ~cond e e' : ('v, 'm) t =
   assert (typ = get_type e');
   Ite (cond, e, e', typ)
 
+(* let pred b ty b_tys e : ('v, 'm) t = *)
+(*   let typ = get_type e in *)
+(*   assert (typ |> is_bool); *)
+(*   Exists (b, ty, b_tys, e, typ) *)
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -210,7 +215,12 @@ let comp comp a b = binop (Bvcomp comp) a b
 
     It will still [assert] that an expression is well typed as a side effect.
 *)
-let rec add_type ~(ty_of_var : 'a -> 'v -> 'm ty) (exp : ('a, 'v, no, 'm) exp) : ('v, 'm) t =
+let rec add_type :
+  type a v m.
+  ty_of_var:(a -> v -> m ty) ->
+  (a, v, no, m) exp ->
+  (v, m) t =
+  fun ~ty_of_var exp ->
   let at = add_type ~ty_of_var in
   match exp with
   | Var (v, a) -> var ~typ:(ty_of_var a v) v
@@ -222,6 +232,8 @@ let rec add_type ~(ty_of_var : 'a -> 'v -> 'm ty) (exp : ('a, 'v, no, 'm) exp) :
   | Binop (op, e, e', _) -> binop op (at e) (at e')
   | Manyop (op, el, _) -> manyop op (List.map at el)
   | Ite (cond, e, e', _) -> ite ~cond:(at cond) (at e) (at e')
+(*| Exists (b, ty, b_tys, e, _) -> pred b ty b_tys (at e) *)
+(*| Call _ -> Raise.todo() *)
   | Let _ -> .
 
 (** Check if an expression is well typed *)

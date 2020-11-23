@@ -445,6 +445,16 @@ module Make (Var : Var) : S with type var = Var.t = struct
       Htbl.add declared var ()
     end
 
+  (* let define_func_always serv var args res_ty (body : Exp.t) =                                  *)
+  (*   let def = Ast.DefineFun (var, args, res_ty, Ast.Manip.(body |> allow_mem |> allow_lets)) in *)
+  (*   send_smt serv ~ppv:Var.pp def                                                               *)
+  (*                                                                                               *)
+  (* let define_func serv ~declared var args res_ty body =                                         *)
+  (*   if not @@ Htbl.mem declared var then begin                                                  *)
+  (*     define_func_always serv var args res_ty body;                                             *)
+  (*     Htbl.add declared var ()                                                                  *)
+  (*   end                                                                                         *)
+
   let declare_vars serv ~declared exp = Ast.Manip.exp_iter_var (declare_var serv ~declared) exp
 
   let simplify serv (e : Exp.t) : Exp.t =

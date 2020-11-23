@@ -88,6 +88,8 @@ let annot_exp : ('a, 'v, 'b, 'm) exp -> 'a = function
   | Manyop (_, _, a) -> a
   | Ite (_, _, _, a) -> a
   | Let (_, _, _, a) -> a
+(*| Exists (_, _, _, _, a) -> a *)
+(*| Call (_, _, _, a) -> a *)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -108,6 +110,8 @@ let direct_exp_map_exp (f : ('a, 'v, 'b, 'm) exp -> ('a, 'v, 'b, 'm) exp) = func
   | Manyop (m, el, l) -> Manyop (m, List.map f el, l)
   | Ite (c, e, e', l) -> Ite (f c, f e, f e', l)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id f b, List.map (Pair.map Fun.id f) bs, f e, l)
+(*| Exists (b, ty, b_tys, e, l) -> Exists (b, ty,  b_tys, f e, l) *)
+(*| Call (v, e, es, l) -> Call (v, f e, List.map f es, l) *)
   | Bound _ as b -> b
   | Bits _ as b -> b
   | Bool _ as b -> b
@@ -128,6 +132,8 @@ let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
       i (snd b);
       List.iter (Pair.iter ignore i) bs;
       i e
+(*| Exists (_, _, _, e, _) -> i e *)
+(*| Call (_, e, es, _) -> List.iter i (e :: es) *)
   | Bits _ -> ()
   | Bool _ -> ()
   | Enum _ -> ()
@@ -140,6 +146,8 @@ let direct_exp_fold_left_exp (f : 'a -> _ exp -> 'a) (v : 'a) = function
   | Manyop (_, el, _) -> List.fold_left f v el
   | Ite (c, e, e', _) -> f (f (f v c) e) e'
   | Let (b, bs, e, _) -> f (List.fold_left (fun v (_, e) -> f v e) (f v (snd b)) bs) e
+(*| Exists (_, _, _, e, _) -> f v e *)
+(*| Call (_, e, es, _) -> List.fold_left f v (e :: es) *)
   | Bits _ -> v
   | Bool _ -> v
   | Enum _ -> v
@@ -173,7 +181,12 @@ let rec exp_iter_var (f : 'v -> unit) : ('a, 'v, 'b, 'm) exp -> unit = function
   | Var (v, _) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
 
-let rec exp_map_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'vb', 'b, 'm) exp =
+let rec exp_map_var :
+    type va vb a b m.
+    (va -> vb) ->
+    (a, va, b, m) exp ->
+    (a, vb, b, m) exp =
+  fun conv exp ->
   let ec = exp_map_var conv in
   match exp with
   | Var (v, a) -> Var (conv v, a)
@@ -186,6 +199,8 @@ let rec exp_map_var (conv : 'va -> 'vb) (exp : ('a, 'va, 'b, 'm) exp) : ('a, 'vb
   | Manyop (m, el, a) -> Manyop (m, List.map ec el, a)
   | Ite (c, e, e', a) -> Ite (ec c, ec e, ec e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id ec b, List.map (Pair.map Fun.id ec) bs, ec e, l)
+(*| Exists (b, ty, b_tys, e, l) -> Exists (b, ty, b_tys, ec e, l) *)
+(*| Call (v, e, es, l) -> Call (conv v, ec e, List.map ec es, l) *)
 
 (** Iterate a function on all the annotations of an expression *)
 let rec exp_iter_annot (f : 'a -> unit) (exp : ('a, 'v, 'b, 'm) exp) : unit =
@@ -205,8 +220,12 @@ let rec exp_iter_annot (f : 'a -> unit) (exp : ('a, 'v, 'b, 'm) exp) : unit =
 let exp_conv_var = exp_map_var
 
 (** Substitute variable with expression according to substitution function *)
-let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, 'va, 'b, 'm) exp) :
-    ('a, 'vb, 'b, 'm) exp =
+let rec exp_var_subst :
+  type va a vb b m.
+  (va -> a -> (a, vb, b, m) exp) ->
+  (a, va, b, m) exp ->
+  (a, vb, b, m) exp =
+  fun subst exp ->
   let es = exp_var_subst subst in
   match exp with
   | Var (v, a) -> subst v a
@@ -219,6 +238,8 @@ let rec exp_var_subst (subst : 'va -> 'a -> ('a, 'vb, 'b, 'm) exp) (exp : ('a, '
   | Manyop (m, el, a) -> Manyop (m, List.map es el, a)
   | Ite (c, e, e', a) -> Ite (es c, es e, es e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id es b, List.map (Pair.map Fun.id es) bs, es e, l)
+(*| Exists (b, ty, b_tys, e, a) -> Exists (b, ty, b_tys, es e, a) *)
+(*| Call (_, e, es_, a) -> Call (Raise.todo(), es e, List.map es es_, a) *)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -252,8 +273,11 @@ let smt_allow_lets : ('a, 'v, no, 'm) smt -> ('a, 'v, 'b, 'm) smt =
 (** Unfold all lets. There are no remaining lets in the output,
     Therefore the output type of let binding can be anything including {!Ast.no}.
     In particular doing {!allow_lets} after this function is useless *)
-let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) :
-    ('a, 'v, 'b2, 'm) exp =
+let rec unfold_lets :
+  type b1 a v b2 m.
+  ?context:(b1, (a, v, b2, m) exp) Hashtbl.t ->
+  (a, v, b1, m) exp -> (a, v, b2, m) exp =
+  fun ?(context = Hashtbl.create 5) exp ->
   let ul = unfold_lets ~context in
   match exp with
   | Bound (b, _) -> Hashtbl.find context b
@@ -266,6 +290,8 @@ let rec unfold_lets ?(context = Hashtbl.create 5) (exp : ('a, 'v, 'b1, 'm) exp) 
       let res = ul e in
       List.iter (Pair.iter (Hashtbl.remove context) ignore) (b :: bs);
       res
+(*| Call _ -> Raise.todo () *)
+(*| Exists _ -> Raise.unreachable () *)
   | Bits _ as b -> b
   | Bool _ as b -> b
   | Enum _ as e -> e

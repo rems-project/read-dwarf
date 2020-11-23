@@ -154,6 +154,8 @@ exp :: '' ::=                           {{ aux _ annot }}
   | ( manyop exp1 .. expj )             :: :: Manyop
   | ( ite exp1 exp2 exp3 )              :: :: Ite
   | ( let ( bind bind1 .. bindj ) exp2 ) :: :: Let
+% | ( exists ( ( bbvar ty ) ( bbvar1 ty1 ) .. ( bbvarj tyj ) ) exp ) :: :: Exists
+% | ( var exp exp1 .. expj )            :: :: Call
 
 
 ty :: 'Ty_' ::=                         {{ auxparam 'm }}
@@ -176,6 +178,8 @@ smt :: '' ::=                           {{ auxparam ('a, 'v, 'b, 'm) }}
                                         {{ menhir-start-type Def.rsmt }}
   | ( declare-const var ty )            :: :: DeclareConst
   | ( define-const var exp )            :: :: DefineConst
+% | ( declare-fun var ( ty1 .. tyj ) ty ) :: :: DeclareFun
+% | ( define-fun var ( ( bbvar1 ty1 ) .. ( bbvarj tyj ) ) ty exp ) :: :: DefineFun
   | ( assert exp )                      :: :: Assert
   | ( simplify exp fbool1 .. fboolj )   :: :: Simplify
   | ( push )                            :: :: Push
