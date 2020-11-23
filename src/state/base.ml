@@ -200,6 +200,9 @@ module Mem = struct
       Some execution contexts may even not have any stacks.*)
   type t = { mutable main : Fragment.t; frags : (Exp.t * Fragment.t) Vec.t }
 
+  (** Get the main fragment of memory *)
+  let get_main { main; frags = _ } = main
+
   (** Empty memory, every address is unbound *)
   let empty () = { main = Fragment.empty; frags = Vec.empty () }
 
@@ -207,7 +210,7 @@ module Mem = struct
   let from mem =
     { main = Fragment.from mem.main; frags = Vec.map (Pair.map Fun.id Fragment.from) mem.frags }
 
-  (** Copy the memory so that is can be mutated separately *)
+  (** Copy the memory so that it can be mutated separately *)
   let copy mem = { main = mem.main; frags = Vec.copy mem.frags }
 
   (** Add a new fragment with the specified base *)

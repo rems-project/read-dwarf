@@ -222,7 +222,7 @@ let enum_size = 4
 
 (* TODO The polymorphic compare is incidentally correct now, but may not be later.
    Additionally a custom equality that only check struct ids would be faster *)
-let equal ct ct' = ct = ct'
+let equal (ct : t) (ct' : t) = ct = ct'
 
 (*****************************************************************************)
 (*****************************************************************************)

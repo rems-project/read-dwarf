@@ -1,10 +1,3 @@
-[RunFunc]: Running hyp_get_page_tv_test2 in pkvm-O0/el2.elf
-[RunFunc]: Loading pkvm-O0/el2.elf
-[RunFunc]: API api{ args = {0 -> {: Struct hyp_page[]}}; ret = int(s32) }
-[RunFunc]: Loading ABI
-[RunFunc]: Computing entry state
-[RunFunc]: Start running
-[RunFunc]: Run tree:
 * Start: 1
 * End (PC |retaddr:| is symbolic): 2
 State 
@@ -57,28 +50,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.D -> 0:1;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.I -> 0:1;
-          PSTATE.nRW -> 0:1;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.F -> 0:1;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.EL -> -0x2:2;
           PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.A -> 0:1;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.F -> 0:1;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
           PSTATE.SP -> 1:1;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
           PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
+          PSTATE.A -> 0:1;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.I -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.D -> 0:1;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -158,28 +151,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.D -> 0:1;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.I -> 0:1;
-          PSTATE.nRW -> 0:1;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.F -> 0:1;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.EL -> -0x2:2;
           PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.A -> 0:1;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.F -> 0:1;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
           PSTATE.SP -> 1:1;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
           PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
+          PSTATE.A -> 0:1;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.I -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.D -> 0:1;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;

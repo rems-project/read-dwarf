@@ -44,7 +44,7 @@
 
 include Base
 
-(* Unfortunate hack to have tests inline tests run. *)
+(* Unfortunate hack to have inline tests run. *)
 module Base = Base
 module Cache = Cache
 module Conv = Conv

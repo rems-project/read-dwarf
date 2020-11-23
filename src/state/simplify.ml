@@ -69,7 +69,7 @@ end)
     in a single false.
 *)
 let ctxfull state =
-  debug "StateSimplifying %t" (Pp.top Id.pp state.id);
+  debug "Simplifying state %t" (Pp.top Id.pp state.id);
   let serv = Z3.ensure_started_get () in
   ContextFull.openc ();
   let declared = Z3St.Htbl.create 100 in

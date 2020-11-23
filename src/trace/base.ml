@@ -126,7 +126,7 @@ module Var = struct
 end
 
 (** A trace expression. No let bindings, no memory operations *)
-module PPExp = Exp.PpExp
+module ExpPp = Exp.Pp
 
 module Typed = Exp.Typed
 
@@ -153,7 +153,7 @@ type t = event list
 (** {1 Pretty printing } *)
 
 (** Pretty print an expression *)
-let pp_exp e = PPExp.pp_exp Var.pp e
+let pp_exp e = ExpPp.pp_exp Var.pp e
 
 (** Pretty print an event *)
 let pp_event =

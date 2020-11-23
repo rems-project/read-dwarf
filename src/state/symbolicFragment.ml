@@ -92,8 +92,21 @@ module type S = sig
     val make_split : ?bounds:int * int -> exp -> Size.t -> t
   end
 
+  (** This module provide the trace of reads and writes to a symbolic fragment. *)
+  module Event : sig
+    
+    (** Types of memory events *)
+    type t =
+      | Read of Block.t * var (** From [Block.t], read [var] *)
+      | Write of Block.t * exp (** To [Block.t], write [exp] *)
+
+  end
+
   (** The type of a memory fragment *)
   type t
+
+  (** Get the trace of given fragment *)
+  val get_trace : t -> Event.t list
 
   (** The empty memory fragment. Any read will be symbolic *)
   val empty : t
@@ -272,6 +285,8 @@ module Make (Var : Exp.Var) : S with type var = Var.t = struct
      the whole SElem must be deleted.
      *)
   type t = { base : t option; trace : Event.t list; ccache : CCache.t; scache : SCache.t }
+
+  let get_trace { base = _; trace; ccache = _; scache = _ } = trace
 
   let empty = { base = None; trace = []; ccache = CCache.empty; scache = SCache.empty }
 

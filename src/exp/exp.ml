@@ -115,3 +115,6 @@ module Make (Var : Var) : S with type var = Var.t = struct
 
   let add_type e = Typed.add_type ~ty_of_var:(Fun.const Var.ty) e
 end
+
+module Pp = PpExp
+
