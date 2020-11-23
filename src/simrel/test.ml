@@ -19,7 +19,7 @@ let tree_pair name : tree pair =
 let main () =
   let test2 = tree_pair "hyp_get_page_tv_test2" in
   let test2_matched = match_up test2 in
-  base "%s" (if test2_related test2_matched then "SAME" else "DIFF");
+  base "%s" (if Test2.related test2_matched then "SAME" else "DIFF");
   ignore test2_matched
 
 let () =
