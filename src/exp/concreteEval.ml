@@ -128,8 +128,8 @@ let rec eval ?(ctxt = fun _ -> raise Symbolic) (e : ('a, 'v, Ast.no, Ast.no) Ast
   | Ite (c, e, e', _) ->
       let cv = eval ~ctxt c in
       if cv |> Value.expect_bool then eval ~ctxt e else eval ~ctxt e'
-(*| Call _ -> Raise.todo () *)
-(*| Exists _ *)
+  (*| Call _ -> Raise.todo () *)
+  (*| Exists _ *)
   | Let _ -> .
 
 let rec is_concrete (exp : _ Ast.exp) : bool =

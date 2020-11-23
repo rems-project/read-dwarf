@@ -220,10 +220,9 @@ let pp_bind_types ppv (b_tys : ('v * Ast.no Ast.ty) list) : document list =
 
 let pp_exists (docs : document list) (doc : document) : document =
   let docs = separate space docs |> nest 4 |> group in
-  !^"exists"  ^/^ parens docs ^^ parens doc |> group
+  !^"exists" ^/^ parens docs ^^ parens doc |> group
 
-let pp_call sym docs =
-  separate (space ^^ sym ^^ nbspace) docs |> nest 4 |> group
+let pp_call sym docs = separate (space ^^ sym ^^ nbspace) docs |> nest 4 |> group
 
 (** Pretty print an expression and return its precedence *)
 let rec pp_exp_prec ppv : ('a, 'v, Ast.no, Ast.no) Ast.exp -> document * prec =
@@ -253,14 +252,14 @@ let rec pp_exp_prec ppv : ('a, 'v, Ast.no, Ast.no) Ast.exp -> document * prec =
       let doc = parens_if ~outer @@ pp_exp_prec ppv e in
       let doc' = parens_if ~outer @@ pp_exp_prec ppv e' in
       (pp_if docc doc doc', outer)
-(*| Exists (b, ty, b_tys, e, _) -> *)
-(*  let docs = pp_bind_types ppv ((b,ty) :: b_tys) in *)
-(*  let (doc, prec) = pp_exp_prec ppv e in *)
-(*  (pp_exists docs doc, prec) *)
-(*| Call (v, e, es, _) -> *)
-(*  let outer = IF in *)
-(*  let args = List.map (fun e -> parens_if ~outer @@ pp_exp_prec ppv e) (e :: es) in *)
-(*  (pp_call (ppv v) args, outer) *)
+  (*| Exists (b, ty, b_tys, e, _) -> *)
+  (*  let docs = pp_bind_types ppv ((b,ty) :: b_tys) in *)
+  (*  let (doc, prec) = pp_exp_prec ppv e in *)
+  (*  (pp_exists docs doc, prec) *)
+  (*| Call (v, e, es, _) -> *)
+  (*  let outer = IF in *)
+  (*  let args = List.map (fun e -> parens_if ~outer @@ pp_exp_prec ppv e) (e :: es) in *)
+  (*  (pp_call (ppv v) args, outer) *)
   | Let _ -> .
 
 (** The main function for pretty printing an expression *)
