@@ -1,6 +1,8 @@
 * Start: 1
 * Branch at 0x4115d4: 2
-|* End (PC |retaddr:| is symbolic): 4
+|* Branch at 0x4115e0: 4
+||* End (PC |retaddr:| is symbolic): 6
+|* End (PC |retaddr:| is symbolic): 5
 * End (PC |retaddr:| is symbolic): 3
 State 
     : 1state{
@@ -52,28 +54,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.E -> |reg:0:PSTATE.E|;
-          PSTATE.nRW -> 0:1;
           PSTATE.F -> 0:1;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.SP -> 1:1;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
-          PSTATE.A -> 0:1;
           PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.EL -> -0x2:2;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
           PSTATE.D -> 0:1;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SP -> 1:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.A -> 0:1;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.EL -> -0x2:2;
           PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.E -> |reg:0:PSTATE.E|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -89,6 +91,7 @@ State
           __trickbox_enabled -> false;
           __PC_changed -> false;
           __currentInstr -> -0x2afcdfe1:32;
+          __defaultRAM -> |reg:0:__defaultRAM|;
           BTypeNext -> |reg:0:BTypeNext|
         };
       fenv = state{ frags = {0 -> frag{}} };
@@ -153,28 +156,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.E -> |reg:0:PSTATE.E|;
-          PSTATE.nRW -> 0:1;
           PSTATE.F -> 0:1;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.SP -> 1:1;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
-          PSTATE.A -> 0:1;
           PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.EL -> -0x2:2;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
           PSTATE.D -> 0:1;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SP -> 1:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.A -> 0:1;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.EL -> -0x2:2;
           PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.E -> |reg:0:PSTATE.E|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -190,9 +193,10 @@ State
           __trickbox_enabled -> false;
           __PC_changed -> false;
           __currentInstr -> -0x2afcdfe1:32;
+          __defaultRAM -> |reg:0:__defaultRAM|;
           BTypeNext -> |reg:0:BTypeNext|
         };
-      fenv = state{ frags = {0 -> frag{-0x10 -> {: Struct hyp_page[]}}} };
+      fenv = state{ frags = {0 -> frag{-0x8 -> {: Struct hyp_page[]}}} };
       read_vars = {0 -> |arg:0| : {: Struct hyp_page[]}};
       memory =
         {
@@ -202,8 +206,8 @@ State
               0 ->
                 |reg:1:SP_EL2|[0:51] :
                   symfrag{
-                    trace = [ Writing 64 bits with |arg:0| at -0x10; Reading 64 bits in |read:2:0| from: -0x10 ];
-                    ccache = {-0x10 -> |arg:0| of 64 bits};
+                    trace = [ Writing 64 bits with |arg:0| at -0x8; Reading 64 bits in |read:2:0| from: -0x8 ];
+                    ccache = {-0x8 -> |arg:0| of 64 bits};
                     scache = {}
                   }
             }
@@ -214,7 +218,7 @@ State
     : 3state{
       id = 3;
       base_state = 2;
-      last_pc = 0x411608;
+      last_pc = 0x411630;
       regs =
         regmap{
           R0 -> 0xffffffff;
@@ -260,28 +264,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.E -> |reg:0:PSTATE.E|;
-          PSTATE.nRW -> 0:1;
           PSTATE.F -> 0:1;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.SP -> 1:1;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
-          PSTATE.A -> 0:1;
           PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.EL -> -0x2:2;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
           PSTATE.D -> 0:1;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SP -> 1:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.A -> 0:1;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.EL -> -0x2:2;
           PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.E -> |reg:0:PSTATE.E|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -297,9 +301,10 @@ State
           __trickbox_enabled -> false;
           __PC_changed -> true;
           __currentInstr -> -0x2afcdfe1:32;
+          __defaultRAM -> |reg:0:__defaultRAM|;
           BTypeNext -> 0x0:2
         };
-      fenv = state{ frags = {0 -> frag{-0x10 -> {: Struct hyp_page[]}; -0x4 -> constexpr M4}} };
+      fenv = state{ frags = {0 -> frag{-0x10 -> constexpr M4; -0x8 -> {: Struct hyp_page[]}}} };
       read_vars = {0 -> -0x1:32 : constexpr M4};
       memory =
         {
@@ -309,8 +314,8 @@ State
               0 ->
                 |reg:1:SP_EL2|[0:51] :
                   symfrag{
-                    trace = [ Writing 32 bits with -0x1:32 at -0x4; Reading 32 bits in |read:3:0:32bits| from: -0x4 ];
-                    ccache = {-0x10 -> |arg:0| of 64 bits; -0x4 -> -0x1:32 of 32 bits};
+                    trace = [ Writing 32 bits with -0x1:32 at -0x10; Reading 32 bits in |read:3:0:32bits| from: -0x10 ];
+                    ccache = {-0x10 -> -0x1:32 of 32 bits; -0x8 -> |arg:0| of 64 bits};
                     scache = {}
                   }
             }
@@ -321,10 +326,10 @@ State
     : 4state{
       id = 4;
       base_state = 2;
-      last_pc = 0x411608;
+      last_pc = 0x4115dc;
       regs =
         regmap{
-          R0 -> 0x0:32.|read:4:1:32bits|;
+          R0 -> |arg:0| : {: Struct hyp_page[]};
           R1 -> |reg:1:R1|;
           R2 -> |reg:1:R2|;
           R3 -> |reg:1:R3|;
@@ -333,8 +338,116 @@ State
           R6 -> |reg:1:R6|;
           R7 -> |reg:1:R7|;
           R8 -> |arg:0| : {: Struct hyp_page[]};
-          R9 -> 0x0:32.|read:4:1:32bits|;
-          R10 -> 0x0:32.(0x1:32 + |read:4:1:32bits|);
+          R9 -> |reg:1:R9|;
+          R10 -> |reg:1:R10|;
+          R11 -> |reg:1:R11|;
+          R12 -> |reg:1:R12|;
+          R13 -> |reg:1:R13|;
+          R14 -> |reg:1:R14|;
+          R15 -> |reg:1:R15|;
+          R16 -> |reg:1:R16|;
+          R17 -> |reg:1:R17|;
+          R18 -> |reg:1:R18|;
+          R19 -> |reg:1:R19|;
+          R20 -> |reg:1:R20|;
+          R21 -> |reg:1:R21|;
+          R22 -> |reg:1:R22|;
+          R23 -> |reg:1:R23|;
+          R24 -> |reg:1:R24|;
+          R25 -> |reg:1:R25|;
+          R26 -> |reg:1:R26|;
+          R27 -> |reg:1:R27|;
+          R28 -> |reg:1:R28|;
+          R29 -> |reg:1:R29|;
+          R30 -> |retaddr:| : {: somewhere in global};
+          R31 -> |reg:0:R31|;
+          SP_EL2 -> -0x10 + |reg:1:SP_EL2| : {block 0: at -0x10 in frag 0};
+          _PC -> 0x4115e0 : constexpr {: at 0x4115e0 in global};
+          PSTATE.N -> |reg:1:PSTATE.N|;
+          PSTATE.Z -> |reg:1:PSTATE.Z|;
+          PSTATE.C -> |reg:1:PSTATE.C|;
+          PSTATE.V -> |reg:1:PSTATE.V|;
+          __highest_el_aarch32 -> false;
+          CFG_ID_AA64PFR0_EL1_EL0 -> 0x1:4;
+          CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
+          CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
+          CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
+          PSTATE.F -> 0:1;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
+          PSTATE.I -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SP -> 1:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.A -> 0:1;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.E -> |reg:0:PSTATE.E|;
+          TCR_EL2 -> 0x0;
+          HCR_EL2 -> 0x0;
+          SCTLR_EL2 -> 0x0;
+          MDSCR_EL1 -> 0x0:32;
+          MDCR_EL3 -> 0x0:32;
+          EDSCR -> 0x0:32;
+          OSDLR_EL1 -> 0x0:32;
+          SCR_EL3 -> 0x0:32;
+          OSLSR_EL1 -> 0x0:32;
+          __tlb_enabled -> false;
+          __CNTControlBase -> 0x0:52;
+          MPIDR_EL1 -> 0x0;
+          __trickbox_enabled -> false;
+          __PC_changed -> true;
+          __currentInstr -> -0x2afcdfe1:32;
+          __defaultRAM -> |reg:0:__defaultRAM|;
+          BTypeNext -> |reg:0:BTypeNext|
+        };
+      fenv = state{ frags = {0 -> frag{-0x8 -> {: Struct hyp_page[]}}} };
+      read_vars = {0 -> |arg:0| : {: Struct hyp_page[]}};
+      memory =
+        {
+          main = symfrag{ trace = []; ccache = {}; scache = {} };
+          frags =
+            {
+              0 ->
+                |reg:1:SP_EL2|[0:51] :
+                  symfrag{
+                    trace = [ Reading 64 bits in |read:4:0| from: -0x8 ];
+                    ccache = {-0x8 -> |arg:0| of 64 bits};
+                    scache = {}
+                  }
+            }
+        };
+      asserts = assert: !(|arg:0| = 0x0)
+    }
+State 
+    : 5state{
+      id = 5;
+      base_state = 4;
+      last_pc = 0x411630;
+      regs =
+        regmap{
+          R0 -> 0x0:32.|read:5:1:32bits|;
+          R1 -> |reg:1:R1|;
+          R2 -> |reg:1:R2|;
+          R3 -> |reg:1:R3|;
+          R4 -> |reg:1:R4|;
+          R5 -> |reg:1:R5|;
+          R6 -> |reg:1:R6|;
+          R7 -> |reg:1:R7|;
+          R8 -> |arg:0| : {: Struct hyp_page[]};
+          R9 -> 0x0:32.(0x1:32 + |read:5:1:32bits|);
+          R10 -> |reg:1:R10|;
           R11 -> |reg:1:R11|;
           R12 -> |reg:1:R12|;
           R13 -> |reg:1:R13|;
@@ -367,28 +480,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.E -> |reg:0:PSTATE.E|;
-          PSTATE.nRW -> 0:1;
           PSTATE.F -> 0:1;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.SP -> 1:1;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
-          PSTATE.A -> 0:1;
           PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.EL -> -0x2:2;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
           PSTATE.D -> 0:1;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SP -> 1:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.A -> 0:1;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.EL -> -0x2:2;
           PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.E -> |reg:0:PSTATE.E|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -404,21 +517,28 @@ State
           __trickbox_enabled -> false;
           __PC_changed -> true;
           __currentInstr -> -0x2afcdfe1:32;
+          __defaultRAM -> |reg:0:__defaultRAM|;
           BTypeNext -> 0x0:2
         };
-      fenv = state{ frags = {0 -> frag{-0x10 -> {: Struct hyp_page[]}}} };
-      read_vars = {0 -> |arg:0| : {: Struct hyp_page[]}; 1 -> |read:4:1:32bits| : int(s32); 2 -> |read:4:1:32bits|};
+      fenv = state{ frags = {0 -> frag{-0x8 -> {: Struct hyp_page[]}}} };
+      read_vars =
+        {
+          0 -> |arg:0| : {: Struct hyp_page[]};
+          1 -> |read:5:1:32bits| : int(s32);
+          2 -> |read:5:1:32bits|;
+          3 -> |read:5:1:32bits|
+        };
       memory =
         {
           main =
             symfrag{
               trace =
                 [
-                  Reading 32 bits in |read:4:1:32bits| from: |arg:0|[0:51] + 0x10;
-                  Writing 32 bits with 0x1:32 + |read:4:1:32bits| at |arg:0|[0:51] + 0x10
+                  Reading 32 bits in |read:5:1:32bits| from: |arg:0|[0:51] + 0x10;
+                  Writing 32 bits with 0x1:32 + |read:5:1:32bits| at |arg:0|[0:51] + 0x10
                 ];
               ccache = {};
-              scache = {-0x2000000000000000 -> |arg:0|[0:51] + {0x10 -> 0x1:32 + |read:4:1:32bits| of 32 bits}}
+              scache = {-0x2000000000000000 -> |arg:0|[0:51] + {0x10 -> 0x1:32 + |read:5:1:32bits| of 32 bits}}
             };
           frags =
             {
@@ -427,11 +547,14 @@ State
                   symfrag{
                     trace =
                       [
-                        Reading 64 bits in |read:4:0| from: -0x10;
-                        Writing 32 bits with |read:4:1:32bits| at -0x4;
-                        Reading 32 bits in |read:4:2:32bits| from: -0x4
+                        Reading 64 bits in |read:5:0| from: -0x8;
+                        Writing 32 bits with |read:5:1:32bits| at -0xc;
+                        Reading 32 bits in |read:5:2:32bits| from: -0xc;
+                        Writing 32 bits with |read:5:1:32bits| at -0x10;
+                        Reading 32 bits in |read:5:3:32bits| from: -0x10
                       ];
-                    ccache = {-0x10 -> |arg:0| of 64 bits; -0x4 -> |read:4:1:32bits| of 32 bits};
+                    ccache =
+                      {-0x10 -> |read:5:1:32bits| of 32 bits; -0xc -> |read:5:1:32bits| of 32 bits; -0x8 -> |arg:0| of 64 bits};
                     scache = {}
                   }
             }
@@ -441,5 +564,118 @@ State
         assert: |arg:0| = -0x10 + (0x10 + |arg:0|)[2:63].0x0:2
         assert: (0x10 + |arg:0|)[52:63] = 0x0:12
         assert: |arg:0| = -0x10 + (0x10 + |arg:0|)[2:63].0x0:2
-        assert: !(|arg:0| = 0x0)
+    }
+State 
+    : 6state{
+      id = 6;
+      base_state = 4;
+      last_pc = 0x411630;
+      regs =
+        regmap{
+          R0 -> 0xfffffffe;
+          R1 -> |reg:1:R1|;
+          R2 -> |reg:1:R2|;
+          R3 -> |reg:1:R3|;
+          R4 -> |reg:1:R4|;
+          R5 -> |reg:1:R5|;
+          R6 -> |reg:1:R6|;
+          R7 -> |reg:1:R7|;
+          R8 -> 0xfffffffe : constexpr M8;
+          R9 -> |reg:1:R9|;
+          R10 -> |reg:1:R10|;
+          R11 -> |reg:1:R11|;
+          R12 -> |reg:1:R12|;
+          R13 -> |reg:1:R13|;
+          R14 -> |reg:1:R14|;
+          R15 -> |reg:1:R15|;
+          R16 -> |reg:1:R16|;
+          R17 -> |reg:1:R17|;
+          R18 -> |reg:1:R18|;
+          R19 -> |reg:1:R19|;
+          R20 -> |reg:1:R20|;
+          R21 -> |reg:1:R21|;
+          R22 -> |reg:1:R22|;
+          R23 -> |reg:1:R23|;
+          R24 -> |reg:1:R24|;
+          R25 -> |reg:1:R25|;
+          R26 -> |reg:1:R26|;
+          R27 -> |reg:1:R27|;
+          R28 -> |reg:1:R28|;
+          R29 -> |reg:1:R29|;
+          R30 -> |retaddr:| : {: somewhere in global};
+          R31 -> |reg:0:R31|;
+          SP_EL2 -> |reg:1:SP_EL2| : {block 0: frag 0};
+          _PC -> |retaddr:| : {: somewhere in global};
+          PSTATE.N -> |reg:1:PSTATE.N|;
+          PSTATE.Z -> |reg:1:PSTATE.Z|;
+          PSTATE.C -> |reg:1:PSTATE.C|;
+          PSTATE.V -> |reg:1:PSTATE.V|;
+          __highest_el_aarch32 -> false;
+          CFG_ID_AA64PFR0_EL1_EL0 -> 0x1:4;
+          CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
+          CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
+          CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
+          PSTATE.F -> 0:1;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
+          PSTATE.I -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SP -> 1:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.A -> 0:1;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.T -> |reg:0:PSTATE.T|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.E -> |reg:0:PSTATE.E|;
+          TCR_EL2 -> 0x0;
+          HCR_EL2 -> 0x0;
+          SCTLR_EL2 -> 0x0;
+          MDSCR_EL1 -> 0x0:32;
+          MDCR_EL3 -> 0x0:32;
+          EDSCR -> 0x0:32;
+          OSDLR_EL1 -> 0x0:32;
+          SCR_EL3 -> 0x0:32;
+          OSLSR_EL1 -> 0x0:32;
+          __tlb_enabled -> false;
+          __CNTControlBase -> 0x0:52;
+          MPIDR_EL1 -> 0x0;
+          __trickbox_enabled -> false;
+          __PC_changed -> true;
+          __currentInstr -> -0x2afcdfe1:32;
+          __defaultRAM -> |reg:0:__defaultRAM|;
+          BTypeNext -> 0x0:2
+        };
+      fenv = state{ frags = {0 -> frag{-0xc -> constexpr M4; -0x8 -> {: Struct hyp_page[]}}} };
+      read_vars = {0 -> -0x2:32 : constexpr M4; 1 -> -0x2:32};
+      memory =
+        {
+          main = symfrag{ trace = []; ccache = {}; scache = {} };
+          frags =
+            {
+              0 ->
+                |reg:1:SP_EL2|[0:51] :
+                  symfrag{
+                    trace =
+                      [
+                        Writing 32 bits with -0x2:32 at -0xc;
+                        Reading 32 bits in |read:6:0:32bits| from: -0xc;
+                        Writing 32 bits with -0x2:32 at -0x10;
+                        Reading 32 bits in |read:6:1:32bits| from: -0x10
+                      ];
+                    ccache = {-0x10 -> -0x2:32 of 32 bits; -0xc -> -0x2:32 of 32 bits; -0x8 -> |arg:0| of 64 bits};
+                    scache = {}
+                  }
+            }
+        };
+      asserts = assert: false
     }
