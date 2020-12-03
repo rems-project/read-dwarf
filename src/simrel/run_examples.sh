@@ -37,8 +37,9 @@ function save_state_tree_of_to() {
 function run_examples_level() {
     LEVEL=$1
     copy_elf "$LEVEL"
-    save_state_tree_of_to "$LEVEL" hyp_get_page_tv_test2 "./src/simrel/O${LEVEL}_test2.state"
-    save_state_tree_of_to "$LEVEL" hyp_get_page_tv_test3 "./src/simrel/O${LEVEL}_test3.state"
+#   save_state_tree_of_to "$LEVEL" hyp_get_page_tv_test2 "./src/simrel/O${LEVEL}_test2.state"
+#   save_state_tree_of_to "$LEVEL" hyp_get_page_tv_test3 "./src/simrel/O${LEVEL}_test3.state"
+    save_state_tree_of_to "$LEVEL" hyp_get_page_tv_test "./src/simrel/O${LEVEL}_test4.state"
 }
 
 run_examples_level "2"
