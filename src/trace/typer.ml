@@ -209,6 +209,7 @@ let rec expr ~ctxt (exp : Base.exp) : Ctype.t option =
         else None
     | Bool _ -> None
     | Enum _ -> None
+    | Vec _ -> None
     | Unop (u, e, _) -> expr_tval ~ctxt e |> unop u
     | Binop (b, e, e', _) ->
         let te = expr_tval ~ctxt e in

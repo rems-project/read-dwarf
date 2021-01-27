@@ -163,8 +163,11 @@ let rec type_valu loc (cont : type_context) : valu -> (State.Reg.Path.t * State.
       let+ (path, ty) = type_valu loc cont value in
       (name :: path, ty)
   | Val_Enum (n, _) -> plain (Ty_Enum n)
-  | Val_List _ -> fatal "valu list not implemented"
-  | Val_Vector _ -> fatal "valu list not implemented"
+  | Val_List l | Val_Vector l ->
+      let open List in
+      let* value = l in
+      let+ (path, ty) = type_valu loc cont value in
+      (path, ty)
   | Val_Unit -> fatal "valu unit not implemented"
   | Val_NamedUnit _ -> fatal "valu named unit not implemented"
   | Val_Poison -> fatal "Hey I got poisoned! Bad sail !"

@@ -122,6 +122,7 @@ let rec eval ?(ctxt = fun _ -> raise Symbolic) (e : ('a, 'v, Ast.no, Ast.no) Ast
   | Bits (bv, _) -> bv |> Value.bv
   | Bool (b, _) -> b |> Value.bool
   | Enum (enum, _) -> enum |> Value.enum
+  | Vec (es, _) -> es |> List.map (eval ~ctxt) |> Value.vec
   | Unop (u, v, _) -> v |> eval ~ctxt |> eval_unop u
   | Binop (b, v, v', _) -> eval_binop b (eval ~ctxt v) (eval ~ctxt v')
   | Manyop (m, vs, _) -> vs |> List.map (eval ~ctxt) |> eval_manyop m

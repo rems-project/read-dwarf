@@ -86,6 +86,7 @@ let annot_exp : ('a, 'v, 'b, 'm) exp -> 'a = function
   | Unop (_, _, a) -> a
   | Binop (_, _, _, a) -> a
   | Manyop (_, _, a) -> a
+  | Vec (_, a) -> a
   | Ite (_, _, _, a) -> a
   | Let (_, _, _, a) -> a
 
@@ -109,6 +110,7 @@ let direct_exp_map_exp (f : ('a, 'v, 'b, 'm) exp -> ('a, 'v, 'b, 'm) exp) = func
   | Unop (u, e, l) -> Unop (u, f e, l)
   | Binop (b, e, e', l) -> Binop (b, f e, f e', l)
   | Manyop (m, el, l) -> Manyop (m, List.map f el, l)
+  | Vec (el, a) -> Vec (List.map f el, a)
   | Ite (c, e, e', l) -> Ite (f c, f e, f e', l)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id f b, List.map (Pair.map Fun.id f) bs, f e, l)
   (*| Exists (b, ty, b_tys, e, l) -> Exists (b, ty,  b_tys, f e, l) *)
@@ -125,6 +127,7 @@ let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
       i e;
       i e'
   | Manyop (_, el, _) -> List.iter i el
+  | Vec (el, _) -> List.iter i el
   | Ite (c, e, e', _) ->
       i c;
       i e;
@@ -144,6 +147,7 @@ let direct_exp_iter_exp (i : ('a, 'v, 'b, 'm) exp -> unit) = function
 let direct_exp_fold_left_exp (f : 'a -> _ exp -> 'a) (v : 'a) = function
   | Unop (_, e, _) -> f v e
   | Binop (_, e, e', _) -> f (f v e) e'
+  | Vec (el, _) -> List.fold_left f v el
   | Manyop (_, el, _) -> List.fold_left f v el
   | Ite (c, e, e', _) -> f (f (f v c) e) e'
   | Let (b, bs, e, _) -> f (List.fold_left (fun v (_, e) -> f v e) (f v (snd b)) bs) e
@@ -194,6 +198,7 @@ let rec exp_map_var : type va vb a b m. (va -> vb) -> (a, va, b, m) exp -> (a, v
   | Unop (u, e, a) -> Unop (u, ec e, a)
   | Binop (u, e, e', a) -> Binop (u, ec e, ec e', a)
   | Manyop (m, el, a) -> Manyop (m, List.map ec el, a)
+  | Vec (el, a) -> Vec (List.map ec el, a)
   | Ite (c, e, e', a) -> Ite (ec c, ec e, ec e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id ec b, List.map (Pair.map Fun.id ec) bs, ec e, l)
 
@@ -231,6 +236,7 @@ let rec exp_var_subst :
   | Unop (u, e, a) -> Unop (u, es e, a)
   | Binop (u, e, e', a) -> Binop (u, es e, es e', a)
   | Manyop (m, el, a) -> Manyop (m, List.map es el, a)
+  | Vec (el, a) -> Vec (List.map es el, a)
   | Ite (c, e, e', a) -> Ite (es c, es e, es e', a)
   | Let (b, bs, e, l) -> Let (Pair.map Fun.id es b, List.map (Pair.map Fun.id es) bs, es e, l)
 
@@ -294,6 +300,7 @@ let rec unfold_lets :
   | Unop (u, e, l) -> Unop (u, ul e, l)
   | Binop (b, e, e', l) -> Binop (b, ul e, ul e', l)
   | Manyop (m, el, l) -> Manyop (m, List.map ul el, l)
+  | Vec (el, l) -> Vec (List.map ul el, l)
   | Ite (c, e, e', l) -> Ite (ul c, ul e, ul e', l)
 
 (*****************************************************************************)

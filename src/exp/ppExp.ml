@@ -246,6 +246,9 @@ let rec pp_exp_prec ppv : ('a, 'v, Ast.no, Ast.no) Ast.exp -> document * prec =
       let outer = prec_manyop m in
       let docs = List.map (fun e -> parens_if ~outer @@ pp_exp_prec ppv e) el in
       (pp_manyop m docs, outer)
+  | Vec (el, _) ->
+      let docs = List.map (fun e -> fst @@ pp_exp_prec ppv e) el in
+      (brackets @@ separate comma docs, PARENS)
   | Ite (c, e, e', _) ->
       let outer = IF in
       let docc = parens_if ~outer @@ pp_exp_prec ppv c in

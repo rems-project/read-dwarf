@@ -93,6 +93,11 @@ let bool b : ('v, 'm) t = Bool (b, Ty_Bool)
 
 let enum e : ('v, 'm) t = Enum (e, Ty_Enum (fst e))
 
+(** This is completely arbitrary, because it is not currently used. *)
+let vec_idx_type = Ty_Bool
+
+let vec vs = Vec (vs, Ty_Array (vec_idx_type, get_type @@ List.hd vs))
+
 let unop op (e : ('v, 'm) t) : ('v, 'm) t =
   match op with
   | Not ->
@@ -227,6 +232,9 @@ let rec add_type : type a v m. ty_of_var:(a -> v -> m ty) -> (a, v, no, m) exp -
   | Unop (op, e, _) -> unop op (at e)
   | Binop (op, e, e', _) -> binop op (at e) (at e')
   | Manyop (op, el, _) -> manyop op (List.map at el)
+  | Vec (el, _) ->
+      let el = List.map at el in
+      Vec (el, Ty_Array (vec_idx_type, get_type @@ List.hd el))
   | Ite (cond, e, e', _) -> ite ~cond:(at cond) (at e) (at e')
   (*| Exists (b, ty, b_tys, e, _) -> pred b ty b_tys (at e) *)
   (*| Call _ -> Raise.todo() *)

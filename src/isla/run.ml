@@ -101,12 +101,13 @@ let exp_conv_subst (vc : value_context) (exp : rexp) : State.exp =
     Newly created expression are located with the provided {!lrng}.
 
     If the value is not convertible to a state expression, throw a {!RunError} *)
-let exp_of_valu l vc : valu -> State.exp = function
+let rec exp_of_valu l vc : valu -> State.exp = function
   | Val_Symbolic i -> get_var l vc i
   | Val_Bool b -> Exp.Typed.bool b
   | Val_Bits bv -> Exp.Typed.bits_smt bv
   | Val_I (int, size) -> Exp.Typed.bits_int ~size int
   | Val_Enum (n, a) -> Exp.Typed.enum (n, a)
+  | Val_Vector list -> Exp.Typed.vec @@ List.map (exp_of_valu l vc) list
   | valu -> run_error l "Can't convert %t to a state expression" (Pp.tos pp_valu valu)
 
 (** This function write an expression to symbolic variable.
@@ -124,7 +125,8 @@ let write_to_valu l vc valu exp =
 let event_mut (vc : value_context) (state : State.t) : revent -> unit =
   let module Reg = State.Reg in
   function
-  | Smt (DeclareConst (_, _), _) -> ()
+  | Smt (DeclareConst (i, ty), l) ->
+      write_to_var l vc i State.(Exp.of_var (Var.NonDet (i, Conv.ty ty)))
   | Smt (DefineConst (i, e), l) -> (
       debug "Defining v%i with %t" i (Pp.top pp_exp e);
       (* If the vc_subst_full fails, that means that a variable was not defined,

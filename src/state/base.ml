@@ -73,6 +73,7 @@ module Var = struct
         (** The address to which the return value should be written.
             This is used only in certain calling conventions *)
     | RetAddr  (** The return address: The address to which a "return" instruction would jump. *)
+    | NonDet of int * Ast.no Ast.ty  (** Variable representing non-determinism in the spec *)
 
   let to_string = function
     | Register (state, reg) ->
@@ -84,6 +85,7 @@ module Var = struct
     | Arg num -> Printf.sprintf "arg:%i" num
     | RetArg -> "retarg:"
     | RetAddr -> "retaddr:"
+    | NonDet (num, _) -> Printf.sprintf "nondet:%i" num
 
   let expect_register = function
     | Register (_, reg) -> reg
@@ -137,6 +139,7 @@ module Var = struct
     | Arg _ -> Ast.Ty_BitVec 64
     | RetArg -> Ast.Ty_BitVec 64
     | RetAddr -> Ast.Ty_BitVec 64
+    | NonDet (_, ty) -> ty
 end
 
 type var = Var.t
