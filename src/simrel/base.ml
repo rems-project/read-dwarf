@@ -149,9 +149,15 @@ let rel_to_exp st rel =
         (* NOTE: ignoring stack-locals for now *)
         let except = List.map (function Reg reg -> reg) exclude in
         let mem = MemRel.eq st.o0 st.o2 in
-        let assn = ExTy.(assn_to_exp st.o0 = assn_to_exp st.o2) in
+        (* Be careful, the following can be true together:
+           ( = #x00000000ffffffff |arg:0| )
+           ( = ( = |arg:0| #x0000000000000000 ) ( = |arg:0| #x0000000000000000 ) )
+           So include the assertion itself, not just an equality check. *)
+        let assn_eq, assn =
+          let assn_o0 = assn_to_exp st.o0  in
+          ExTy.(assn_o0 = assn_to_exp st.o2), assn_o0 in
         let regs = RegRel.eq ~except st.o0 st.o2 in
-        regs :: assn :: mem
+        regs :: assn :: assn_eq :: mem
     | Star (sep, rel) ->
         let (excl, exp1) = sep_to_exp st sep in
         let exp2 = rel_to_exp st (excl @ exclude) rel in

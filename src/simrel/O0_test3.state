@@ -1,6 +1,6 @@
 * Start: 1
-* Branch at 0x4115d4: 2
-|* Branch at 0x4115e0: 4
+* Branch at 0x411664: 2
+|* Branch at 0x411670: 4
 ||* End (PC |retaddr:| is symbolic): 6
 |* End (PC |retaddr:| is symbolic): 5
 * End (PC |retaddr:| is symbolic): 3
@@ -54,28 +54,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.F -> 0:1;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.D -> 0:1;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.SP -> 1:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.A -> 0:1;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
           PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.nRW -> 0:1;
-          PSTATE.EL -> -0x2:2;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.F -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.SP -> 1:1;
+          PSTATE.A -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -110,7 +110,7 @@ State
     : 2state{
       id = 2;
       base_state = 1;
-      last_pc = 0x4115d0;
+      last_pc = 0x411660;
       regs =
         regmap{
           R0 -> |arg:0| : {: Struct hyp_page[]};
@@ -146,7 +146,7 @@ State
           R30 -> |retaddr:| : {: somewhere in global};
           R31 -> |reg:0:R31|;
           SP_EL2 -> -0x10 + |reg:1:SP_EL2| : {block 0: at -0x10 in frag 0};
-          _PC -> 0x4115d4 : constexpr {: at 0x4115d4 in global};
+          _PC -> 0x411664 : constexpr {: at 0x411664 in global};
           PSTATE.N -> |reg:1:PSTATE.N|;
           PSTATE.Z -> |reg:1:PSTATE.Z|;
           PSTATE.C -> |reg:1:PSTATE.C|;
@@ -156,28 +156,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.F -> 0:1;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.D -> 0:1;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.SP -> 1:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.A -> 0:1;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
           PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.nRW -> 0:1;
-          PSTATE.EL -> -0x2:2;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.F -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.SP -> 1:1;
+          PSTATE.A -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -218,7 +218,7 @@ State
     : 3state{
       id = 3;
       base_state = 2;
-      last_pc = 0x411630;
+      last_pc = 0x4116c0;
       regs =
         regmap{
           R0 -> 0xffffffff;
@@ -264,28 +264,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.F -> 0:1;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.D -> 0:1;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.SP -> 1:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.A -> 0:1;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
           PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.nRW -> 0:1;
-          PSTATE.EL -> -0x2:2;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.F -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.SP -> 1:1;
+          PSTATE.A -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -326,7 +326,7 @@ State
     : 4state{
       id = 4;
       base_state = 2;
-      last_pc = 0x4115dc;
+      last_pc = 0x41166c;
       regs =
         regmap{
           R0 -> |arg:0| : {: Struct hyp_page[]};
@@ -362,7 +362,7 @@ State
           R30 -> |retaddr:| : {: somewhere in global};
           R31 -> |reg:0:R31|;
           SP_EL2 -> -0x10 + |reg:1:SP_EL2| : {block 0: at -0x10 in frag 0};
-          _PC -> 0x4115e0 : constexpr {: at 0x4115e0 in global};
+          _PC -> 0x411670 : constexpr {: at 0x411670 in global};
           PSTATE.N -> |reg:1:PSTATE.N|;
           PSTATE.Z -> |reg:1:PSTATE.Z|;
           PSTATE.C -> |reg:1:PSTATE.C|;
@@ -372,28 +372,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.F -> 0:1;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.D -> 0:1;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.SP -> 1:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.A -> 0:1;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
           PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.nRW -> 0:1;
-          PSTATE.EL -> -0x2:2;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.F -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.SP -> 1:1;
+          PSTATE.A -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -434,7 +434,7 @@ State
     : 5state{
       id = 5;
       base_state = 4;
-      last_pc = 0x411630;
+      last_pc = 0x4116c0;
       regs =
         regmap{
           R0 -> 0x0:32.|read:5:1:32bits|;
@@ -480,28 +480,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.F -> 0:1;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.D -> 0:1;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.SP -> 1:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.A -> 0:1;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
           PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.nRW -> 0:1;
-          PSTATE.EL -> -0x2:2;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.F -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.SP -> 1:1;
+          PSTATE.A -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;
@@ -569,7 +569,7 @@ State
     : 6state{
       id = 6;
       base_state = 4;
-      last_pc = 0x411630;
+      last_pc = 0x4116c0;
       regs =
         regmap{
           R0 -> 0xfffffffe;
@@ -615,28 +615,28 @@ State
           CFG_ID_AA64PFR0_EL1_EL1 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL2 -> 0x1:4;
           CFG_ID_AA64PFR0_EL1_EL3 -> 0x1:4;
-          PSTATE.F -> 0:1;
-          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
-          PSTATE.J -> |reg:0:PSTATE.J|;
-          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.I -> 0:1;
-          PSTATE.D -> 0:1;
-          PSTATE.GE -> |reg:0:PSTATE.GE|;
-          PSTATE.SP -> 1:1;
-          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
-          PSTATE.M -> |reg:0:PSTATE.M|;
-          PSTATE.A -> 0:1;
-          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
           PSTATE.T -> |reg:0:PSTATE.T|;
-          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
-          PSTATE.SS -> |reg:0:PSTATE.SS|;
-          PSTATE.nRW -> 0:1;
-          PSTATE.EL -> -0x2:2;
-          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
-          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
-          PSTATE.Q -> |reg:0:PSTATE.Q|;
-          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.IL -> |reg:0:PSTATE.IL|;
           PSTATE.E -> |reg:0:PSTATE.E|;
+          PSTATE.M -> |reg:0:PSTATE.M|;
+          PSTATE.UAO -> |reg:0:PSTATE.UAO|;
+          PSTATE.BTYPE -> |reg:0:PSTATE.BTYPE|;
+          PSTATE.SS -> |reg:0:PSTATE.SS|;
+          PSTATE.F -> 0:1;
+          PSTATE.D -> 0:1;
+          PSTATE.TCO -> |reg:0:PSTATE.TCO|;
+          PSTATE.PAN -> |reg:0:PSTATE.PAN|;
+          PSTATE.J -> |reg:0:PSTATE.J|;
+          PSTATE.nRW -> 0:1;
+          PSTATE.Q -> |reg:0:PSTATE.Q|;
+          PSTATE.SP -> 1:1;
+          PSTATE.A -> 0:1;
+          PSTATE.EL -> -0x2:2;
+          PSTATE.DIT -> |reg:0:PSTATE.DIT|;
+          PSTATE.IT -> |reg:0:PSTATE.IT|;
+          PSTATE.GE -> |reg:0:PSTATE.GE|;
+          PSTATE.SSBS -> |reg:0:PSTATE.SSBS|;
           TCR_EL2 -> 0x0;
           HCR_EL2 -> 0x0;
           SCTLR_EL2 -> 0x0;

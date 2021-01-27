@@ -112,7 +112,7 @@ module Var : sig
             This is used only in certain calling conventions *)
     | RetAddr  (** The return address: The address to which a "return" instruction would jump. *)
     | NonDet of int * Ast.Size.t
-        (** Variable representing non-determinism in the spec. Can only be bit-vectors for now. *)
+        (** Variable representing non-determinism in the spec. Can only be a bit-vector for now. *)
 
   (** Convert the variable to the string encoding. For parsing infrastructure reason,
       the encoding must always contain at least one [:]. *)
