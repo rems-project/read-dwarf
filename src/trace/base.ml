@@ -92,6 +92,7 @@ module Var = struct
   type t =
     | Register of Reg.t  (** The value of the register at the beginning of the trace *)
     | Read of int * Ast.Size.t  (** The result of that memory reading operation *)
+    | NonDet of int * Ast.Size.t (** Variable representing non-determinism in the spec *)
 
   (** Convert the variable to the string encoding. For parsing infractructure reason,
       the encoding must always contain at least one [:]. *)
@@ -100,6 +101,9 @@ module Var = struct
     | Read (num, size) ->
         if size = Ast.Size.B64 then Printf.sprintf "read:%i" num
         else Printf.sprintf "read:%i:%dbits" num (Ast.Size.to_bits size)
+    | NonDet (num, size) ->
+        if size = Ast.Size.B64 then Printf.sprintf "nondet:%i" num
+        else Printf.sprintf "nondet:%i:%dbits" num (Ast.Size.to_bits size)
 
   (** Inverse of {!to_string} *)
   let of_string s =
@@ -109,6 +113,10 @@ module Var = struct
     | ["read"; num; size] ->
         let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
         Read (int_of_string num, size)
+    | ["nondet"; num] -> NonDet (int_of_string num, Ast.Size.B64)
+    | ["nondet"; num; size] ->
+        let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
+        NonDet (int_of_string num, size)
     | _ -> Raise.inv_arg "%s is not a Base.Var.t" s
 
   (** Pretty prints the variable *)
@@ -121,6 +129,7 @@ module Var = struct
   let ty = function
     | Register reg -> Reg.reg_type reg
     | Read (_, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
+    | NonDet (_, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
 
   let of_reg reg = Register reg
 end
@@ -146,6 +155,15 @@ type event =
   | Assert of exp
 
 type t = event list
+
+let iter_var f =
+  List.iter (fun event ->
+      let exps = match event with
+        | WriteReg { value; reg = _ } -> [value]
+        | ReadMem { addr; value = _; size = _ } -> [addr]
+        | WriteMem { addr; value; size = _ } -> [addr;value]
+        | Assert exp -> [exp] in
+      List.iter (Ast.Manip.exp_iter_var f) exps)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -230,9 +248,12 @@ let write_to_valu vc valu exp =
 (** Convert an isla event to optionally a Trace event, most events are deleted *)
 let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
     Isla.revent -> event option = function
-  | Smt (DeclareConst _, _) -> None
+  | Smt (DeclareConst (i, ty), _) ->
+    (try (match ty with
+         | Ty_BitVec size -> HashVector.set vc i (Exp.of_var (Var.NonDet (i, Ast.Size.of_bits size)))
+         | _ -> raise OfIslaError ) with OfIslaError -> warn "not setting v%d" i); None
   | Smt (DefineConst (i, e), _) ->
-      (try HashVector.set vc i (exp_conv_subst vc e) with OfIslaError -> ());
+      (try HashVector.set vc i (exp_conv_subst vc e) with OfIslaError -> warn "not setting v%d" i);
       None
   | Smt (Assert e, _) -> Some (Assert (exp_conv_subst vc e))
   | Smt (DefineEnum _, _) -> None
@@ -295,6 +316,19 @@ end)
 
 module Z3Tr = Z3.Make (Var)
 
+module VarTbl = Hashtbl.Make (Var)
+
+let declare_non_det serv events =
+  let declared = VarTbl.create 10 in
+  iter_var (function
+    | Register _ | Read _ -> ()
+    | NonDet _ as var ->
+    if not @@ VarTbl.mem declared @@ var then begin
+      Z3Tr.declare_var_always serv var;
+      VarTbl.add declared var ()
+    end) events
+
+
 (** Simplify a trace by using Z3. Perform both local expression simplification and
     global assertion removal (when an assertion is always true) *)
 let simplify events =
@@ -320,6 +354,7 @@ let simplify events =
   SimpContext.openc ();
   (* declare all registers *)
   State.Reg.iter (fun _ reg _ -> Z3Tr.declare_var_always serv (Register reg));
+  declare_non_det serv events;
   let events = List.filter_map event_simplify events in
   SimpContext.closec ();
   events

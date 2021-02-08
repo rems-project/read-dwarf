@@ -455,7 +455,9 @@ module Make (Var : Var) : S with type var = Var.t = struct
   (*     Htbl.add declared var ()                                                                  *)
   (*   end                                                                                         *)
 
-  let declare_vars serv ~declared exp = Ast.Manip.exp_iter_var (declare_var serv ~declared) exp
+  let declare_vars serv ~declared exp =
+    Ast.Manip.exp_iter_var (declare_var serv ~declared) exp;
+    Htbl.iter (fun x _ -> debug "declared: %t" (Pp.top Var.pp x)) declared
 
   let simplify serv (e : Exp.t) : Exp.t =
     e |> Ast.Manip.allow_mem |> Ast.Manip.allow_lets

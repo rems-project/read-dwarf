@@ -202,6 +202,7 @@ let rec expr ~ctxt (exp : Base.exp) : Ctype.t option =
     match exp with
     | Var (Register reg, _) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
     | Var (Read (r, _), _) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
+    | Var (NonDet _, _) -> None
     | Bits (bv, _) ->
         let size = BitVec.size bv in
         if size mod 8 = 0 || size = Arch.address_size then

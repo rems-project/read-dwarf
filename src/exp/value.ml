@@ -56,7 +56,7 @@ let to_string = function
   | Bool false -> "false"
   | Enum (a, n) -> Printf.sprintf "enum%d/%d" a n
   | Bv bv -> BitVec.to_smt bv
-  | Vec _ -> Raise.todo ()
+  | Vec _ -> (* FIXME: figure out right rep of vectors (tuples?) *) Raise.todo ()
 
 (** Pretty printer for concrete values *)
 let pp r = r |> to_string |> Pp.string

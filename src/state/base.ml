@@ -73,7 +73,7 @@ module Var = struct
         (** The address to which the return value should be written.
             This is used only in certain calling conventions *)
     | RetAddr  (** The return address: The address to which a "return" instruction would jump. *)
-    | NonDet of int * Ast.no Ast.ty  (** Variable representing non-determinism in the spec *)
+    | NonDet of int * Ast.Size.t  (** Variable representing non-determinism in the spec. Can only be bit-vectors for now. *)
 
   let to_string = function
     | Register (state, reg) ->
@@ -85,7 +85,10 @@ module Var = struct
     | Arg num -> Printf.sprintf "arg:%i" num
     | RetArg -> "retarg:"
     | RetAddr -> "retaddr:"
-    | NonDet (num, _) -> Printf.sprintf "nondet:%i" num
+    | NonDet (num, size) ->
+        if size = Ast.Size.B64 then Printf.sprintf "nondet:%i" num
+        else
+          Printf.sprintf "nondet:%i:%dbits" num (Ast.Size.to_bits size)
 
   let expect_register = function
     | Register (_, reg) -> reg
@@ -95,6 +98,7 @@ module Var = struct
     | ReadVar (_, rv, _) -> rv
     | v -> Raise.inv_arg "Expected read variable but got %s" (to_string v)
 
+  (** FIXME add nondet case *)
   let of_string s : t =
     match String.split_on_char ':' s with
     | ["reg"; state; reg] ->
@@ -110,6 +114,13 @@ module Var = struct
         let num = int_of_string num in
         let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
         ReadVar (state, num, size)
+    | ["nondet"; num] ->
+        let num = int_of_string num in
+        NonDet (num, Ast.Size.B64)
+    | ["nondet"; num; size] ->
+        let num = int_of_string num in
+        let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
+        NonDet (num, size)
     | ["arg"; num] -> Arg (int_of_string num)
     | ["retarg"; ""] -> RetArg
     | ["retaddr"; ""] -> RetAddr
@@ -125,6 +136,7 @@ module Var = struct
     | (Arg num, Arg num') -> num = num'
     | (RetArg, RetArg) -> true
     | (RetAddr, RetAddr) -> true
+    | (NonDet (num, size), NonDet (num', size')) -> num = num' && size = size'
     | _ -> false
 
   let hash = Hashtbl.hash
@@ -139,7 +151,7 @@ module Var = struct
     | Arg _ -> Ast.Ty_BitVec 64
     | RetArg -> Ast.Ty_BitVec 64
     | RetAddr -> Ast.Ty_BitVec 64
-    | NonDet (_, ty) -> ty
+    | NonDet (_, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
 end
 
 type var = Var.t
