@@ -1,0 +1,7 @@
+(library
+ (public_name read-dwarf.aarch64)
+ (name sig_aarch64)
+ (flags
+  (:standard -open Utils))
+ (implements sig)
+ (libraries utils config state))

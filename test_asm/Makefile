@@ -3,7 +3,9 @@ BINS=test
 
 TOOLCHAIN=aarch64-linux-gnu-
 
-RD=../read-dwarf run-bb -c ../config.toml -s
+CONFIG := ../src/config/config.toml
+
+RD=../read-dwarf run-bb --config $(CONFIG) -s
 
 all: $(foreach BIN,$(BINS), build/$(BIN))
 .PHONY: all

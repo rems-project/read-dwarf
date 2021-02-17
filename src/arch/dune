@@ -1,0 +1,16 @@
+(library
+ (name arch)
+ (public_name read-dwarf.arch)
+ (flags
+  (:standard -open Utils))
+ (modules arch)
+ (libraries sig state))
+
+(library
+ (name sig)
+ (public_name read-dwarf.sig)
+ (flags
+  (:standard -open Utils))
+ (modules sig)
+ (virtual_modules sig)
+ (libraries state))

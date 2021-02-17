@@ -1,0 +1,12 @@
+(library
+ (name z3)
+ (public_name read-dwarf.z3)
+ (flags
+  (:standard -open Utils))
+ (libraries utils config ast exp))
+
+(rule
+ (target smtIntro.ml)
+ (deps intro.smt2)
+ (action
+  (write-file smtIntro.ml "let intro = \"%{read:intro.smt2}\"\n")))

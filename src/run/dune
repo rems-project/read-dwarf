@@ -1,0 +1,22 @@
+(library
+ (name run)
+ (public_name read-dwarf.run)
+ (flags
+  (:standard -open Utils))
+ (inline_tests
+  (backend read-dwarf.qtest.run)
+  (libraries sig_aarch64))
+ (libraries utils config analyse state trace))
+
+; (libraries isla-lang cmdliner pprint res ocamlgraph toml
+;            utils ast analyse exp config arch state dw isla trace))
+
+(library
+ (name qtest_run)
+ (public_name read-dwarf.qtest.run)
+ (modules)
+ (inline_tests.backend
+  (generate_runner
+   (run qtest extract --preamble "open Utils;; open Run;;" --quiet
+     %{impl-files} %{intf-files}))
+  (runner_libraries qcheck ounit2 bytes)))

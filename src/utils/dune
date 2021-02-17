@@ -1,0 +1,16 @@
+(library
+ (name utils)
+ (public_name read-dwarf.utils)
+ (inline_tests
+  (backend read-dwarf.qtest))
+ (libraries cmdliner linksem pprint res zarith))
+
+(library
+ (name qtest_utils)
+ (public_name read-dwarf.qtest)
+ (modules)
+ (inline_tests.backend
+  (generate_runner
+   (run qtest extract --preamble "open Utils;;" --quiet %{impl-files}
+     %{intf-files}))
+  (runner_libraries qcheck ounit2 bytes)))

@@ -1,0 +1,12 @@
+(test
+ (name main)
+ (libraries run ounit2 qcheck utils ast exp state config sig_aarch64)
+ (flags
+  (:standard -open Utils))
+ (deps (universe) ../config/config.toml ../config/isla_aarch64.toml
+   ../../aarch64.ir))
+
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A))))

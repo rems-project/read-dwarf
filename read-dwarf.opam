@@ -9,7 +9,7 @@ authors: ["Peter Sewell" "Thibaut Pérami"]
 homepage: "https://github.com/rems-project/read-dwarf"
 bug-reports: "https://github.com/rems-project/read-dwarf/issues"
 depends: [
-  "dune" {>= "2.4"}
+  "dune" {>= "2.6"}
   "ocaml" {>= "4.08.0"}
   "pprint" {>= "20171003"}
   "menhir" {build}

@@ -1,0 +1,11 @@
+; TODO - what is this directory for?
+; A trans-closure of the arch stuff
+; Rename this module and files within it
+; Stop opening the module in src
+
+(library
+ (name state)
+ (public_name read-dwarf.state)
+ (flags
+  (:standard -open Utils))
+ (libraries pprint config utils ast exp elf z3 ctype))

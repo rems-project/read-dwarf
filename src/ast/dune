@@ -1,0 +1,5 @@
+(library
+ (name ast)
+ (public_name read-dwarf.ast)
+ (flags :standard -open Utils)
+ (libraries isla-lang utils astGen))

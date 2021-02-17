@@ -1,4 +1,4 @@
-(lang dune 2.4)
+(lang dune 2.6)
 (name "read-dwarf")
 (authors "Peter Sewell" "Thibaut Pérami")
 (maintainers "Peter Sewell <peter.sewell@cl.cam.ac.uk>"
@@ -27,5 +27,4 @@
   (ounit :with-test)
   (odoc :with-doc)
  )
-
 )

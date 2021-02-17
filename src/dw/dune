@@ -1,0 +1,6 @@
+(library
+ (name dw)
+ (public_name read-dwarf.dw)
+ (flags
+  (:standard -open Utils))
+ (libraries linksem utils elf state arch))

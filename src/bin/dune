@@ -1,0 +1,6 @@
+(executable
+ (name main)
+ (public_name read-dwarf)
+ (flags
+  (:standard -open Utils))
+ (libraries run utils state sig_aarch64 config))

@@ -1,0 +1,6 @@
+(library
+ (name elf)
+ (public_name read-dwarf.elf)
+ (flags
+  (:standard -open Utils))
+ (libraries utils config))

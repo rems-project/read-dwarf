@@ -6,12 +6,12 @@
 
 ## Internal infrastructure
 
+ - Fix up documentation links after major refactor
+ - Move tests_asm and tiny_tests into OUnit infrastructure
  - Figure out how to add extra documentation pages and add an overview and a pipeline page.
  - Try to have read-dwarf automatically create/cache the objdump instead
    of asking it as a command line parameter.
  - Add prefix to external output or error coming from servers like isla or z3 with sed
- - Scrap Tests.ml completely and do an actual OUnit test suit that
-   checks more that just "read-dwarf do not crash" on some inputs.
  - Think about removing PPrint and using StdLib.Format (and Fmt) instead
    - Need to test performance,
    - Need to swap ott pp generation to StdLib.Format, which is good for portability
@@ -131,3 +131,5 @@
    if state is impossible to reach (dead code))
  - Overhaul memory representation to add restricted block (like the stack) and memory trace caches.
  - Resolve memory read to obviously non-aliasing addresses directly
+ - Scrap Tests.ml completely and do an actual OUnit test suit that
+   checks more that just "read-dwarf do not crash" on some inputs.

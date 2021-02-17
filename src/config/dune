@@ -1,0 +1,6 @@
+(library
+ (name config)
+ (public_name read-dwarf.config)
+ (flags
+  (:standard -open Utils))
+ (libraries toml utils))

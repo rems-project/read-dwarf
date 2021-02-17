@@ -1,0 +1,20 @@
+(library
+ (name isla)
+ (public_name read-dwarf.isla)
+ (flags
+  (:standard -open Utils))
+ (inline_tests
+  (backend read-dwarf.qtest.isla)
+  (deps ../config/config.toml ../config/isla_aarch64.toml ../../aarch64.ir)
+  (libraries sig_aarch64))
+ (libraries isla-lang utils ast config state exp arch z3))
+
+(library
+ (name qtest_isla)
+ (public_name read-dwarf.qtest.isla)
+ (modules)
+ (inline_tests.backend
+  (generate_runner
+   (run qtest extract --preamble "open Utils;; open Isla;;" --quiet
+     %{impl-files} %{intf-files}))
+  (runner_libraries qcheck ounit2 bytes)))
