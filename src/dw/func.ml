@@ -7,7 +7,7 @@ end)
 
 (** Type of a dwarf function that may or may not be inlined
 
-    If this type stand on it's own, then it is inlined. If it is inside a {!t}
+    If this type stand on its own, then it is inlined. If it is inside a {!t}
     then it's a top level function. There is no separate type for inline functions
     because they do not have any special data that a top level function may not have *)
 type func = { name : string; scope : scope; ret : Ctype.t option }
@@ -28,7 +28,7 @@ type linksem_scope = Dwarf.sdt_lexical_block
 let rec func_of_linksem (elf : Elf.File.t) (env : Ctype.env) (lfun : linksem_func) =
   let name = Option.value ~default:"" lfun.ss_name in
   let scope_of_linksem_func (lfun : linksem_func) =
-    let vars = List.rev_map (Var.of_linksem elf env) lfun.ss_vars in
+    let vars = List.map (Var.of_linksem elf env) lfun.ss_vars in
     let funcs = List.rev_map (func_of_linksem elf env) lfun.ss_subroutines in
     let scopes = List.rev_map (scope_of_linksem elf env) lfun.ss_lexical_blocks in
     { vars; funcs; scopes }
@@ -39,7 +39,7 @@ let rec func_of_linksem (elf : Elf.File.t) (env : Ctype.env) (lfun : linksem_fun
 
 (** Create and Dwarf scope from its linksem counterpart *)
 and scope_of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lsc : linksem_scope) =
-  let vars = List.rev_map (Var.of_linksem elf tenv) lsc.slb_vars in
+  let vars = List.map (Var.of_linksem elf tenv) lsc.slb_vars in
   let funcs = List.rev_map (func_of_linksem elf tenv) lsc.slb_subroutines in
   let scopes = List.rev_map (scope_of_linksem elf tenv) lsc.slb_lexical_blocks in
   { vars; funcs; scopes }

@@ -581,16 +581,16 @@ let wrap_body m (chunk_name, chunk_title, chunk_body) =
   match m with
   | Ascii ->
       ( if chunk_name = "instructions" then
-        match read_file_lines "emacs-highlighting" with
-        | Error _ -> "Error: no emacs-highlighting file\n"
+        match read_file_lines "src/analyse/emacs-highlighting" with
+        | Error _ -> "Error: src/analyse/no emacs-highlighting file\n"
         | Ok lines -> String.concat "\n" (Array.to_list lines)
       else ""
       )
       ^ "* ************* " ^ chunk_title ^ " **********\n" ^ chunk_body
   | Html -> (
       ( if chunk_name = "instructions" then
-        match read_file_lines "html-preamble-insts.html" with
-        | Error _ -> "Error: no html-preamble-insts.html file\n"
+        match read_file_lines "src/analyse/html-preamble-insts.html" with
+        | Error _ -> "Error: src/analyse/no html-preamble-insts.html file\n"
         | Ok lines -> String.concat "\n" (Array.to_list lines)
       else
         match read_file_lines "src/analyse/html-preamble.html" with
