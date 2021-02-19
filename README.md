@@ -23,13 +23,13 @@ with `opam install .` or just install other dependencies with
 You need a more or less recent version `z3`, if don't have it on your system
 package manager, you can use `opam install z3`.
 
-You also need to install `isla` from `cargo` with `cargo install isla --version
-0.1.0`. The current target version is `0.1.0`. Any other version is untested and
-given that `isla` is still in development, is not expected to work. Warning for
-non-Rust users: You need to add `~/.cargo/bin` to your PATH or specify the
+You also need to install `isla`.  Warning for
+non-Rust users: you need to add `~/.cargo/bin` to your PATH or specify the
 position of `isla-client` in `ISLA_CLIENT_PATH` for `read-dwarf` to find it.
 
 ## Configuration
+
+TODO: this has changed a bit, but configuration shouldn't be needed for simple use.
 
 There is no configure script. To edit the compile time configuration,
 copy `default_config.ml` into `config.ml` and edit the variables you wish
