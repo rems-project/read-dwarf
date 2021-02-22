@@ -92,7 +92,7 @@ module Var = struct
   type t =
     | Register of Reg.t  (** The value of the register at the beginning of the trace *)
     | Read of int * Ast.Size.t  (** The result of that memory reading operation *)
-    | NonDet of int * Ast.Size.t (** Variable representing non-determinism in the spec *)
+    | NonDet of int * Ast.Size.t  (** Variable representing non-determinism in the spec *)
 
   (** Convert the variable to the string encoding. For parsing infractructure reason,
       the encoding must always contain at least one [:]. *)
@@ -158,11 +158,13 @@ type t = event list
 
 let iter_var f =
   List.iter (fun event ->
-      let exps = match event with
+      let exps =
+        match event with
         | WriteReg { value; reg = _ } -> [value]
         | ReadMem { addr; value = _; size = _ } -> [addr]
-        | WriteMem { addr; value; size = _ } -> [addr;value]
-        | Assert exp -> [exp] in
+        | WriteMem { addr; value; size = _ } -> [addr; value]
+        | Assert exp -> [exp]
+      in
       List.iter (Ast.Manip.exp_iter_var f) exps)
 
 (*****************************************************************************)
@@ -249,11 +251,20 @@ let write_to_valu vc valu exp =
 let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
     Isla.revent -> event option = function
   | Smt (DeclareConst (i, ty), _) ->
-    (try (match ty with
-         | Ty_BitVec size -> HashVector.set vc i (Exp.of_var (Var.NonDet (i, Ast.Size.of_bits size)))
-         | _ -> raise OfIslaError ) with OfIslaError -> warn "not setting v%d" i); None
+      ( try
+          match ty with
+          | Ty_BitVec ((8 | 16 | 32 | 64) as size) ->
+              HashVector.set vc i (Exp.of_var (Var.NonDet (i, Ast.Size.of_bits size)))
+          | Ty_BitVec _ | Ty_Bool | Ty_Enum _ | Ty_Array (_, _) ->
+              debug "Unimplemented: ignoring non-det variable %i of type %t" i
+                (Pp.top Isla.pp_ty ty)
+        with OfIslaError -> warn "not setting nondet:%d" i
+      );
+      None
   | Smt (DefineConst (i, e), _) ->
-      (try HashVector.set vc i (exp_conv_subst vc e) with OfIslaError -> warn "not setting v%d" i);
+      ( try HashVector.set vc i (exp_conv_subst vc e)
+        with OfIslaError -> warn "not setting v%d" i
+      );
       None
   | Smt (Assert e, _) -> Some (Assert (exp_conv_subst vc e))
   | Smt (DefineEnum _, _) -> None
@@ -315,19 +326,19 @@ module SimpContext = Z3.ContextCounter (struct
 end)
 
 module Z3Tr = Z3.Make (Var)
-
 module VarTbl = Hashtbl.Make (Var)
 
 let declare_non_det serv events =
   let declared = VarTbl.create 10 in
-  iter_var (function
-    | Register _ | Read _ -> ()
-    | NonDet _ as var ->
-    if not @@ VarTbl.mem declared @@ var then begin
-      Z3Tr.declare_var_always serv var;
-      VarTbl.add declared var ()
-    end) events
-
+  iter_var
+    (function
+      | Register _ | Read _ -> ()
+      | NonDet _ as var ->
+          if not @@ VarTbl.mem declared @@ var then begin
+            Z3Tr.declare_var_always serv var;
+            VarTbl.add declared var ()
+          end)
+    events
 
 (** Simplify a trace by using Z3. Perform both local expression simplification and
     global assertion removal (when an assertion is always true) *)

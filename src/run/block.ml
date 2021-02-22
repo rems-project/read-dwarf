@@ -61,7 +61,7 @@ end)
  *   Arg.(value & flag & info ["d"; "dump"] ~doc) *)
 
 let no_run =
-  let doc = "Prevents the block from being run (To get the traces or reg type" in
+  let doc = "Prevents the block from being run (to get the traces or reg type)" in
   Arg.(value & flag & info ["n"; "no-run"] ~doc)
 
 let reg_types =
@@ -77,6 +77,10 @@ let breakpoints =
     "Stop condition: Stop as soon as the pc reach the position (symbol + offset or raw)"
   in
   Arg.(value & opt_all string [] & info ["b"; "break"] ~docv:"POSITION" ~doc)
+
+let ensure_linear =
+  let doc = "Ensure block has only one valid execution path" in
+  Arg.(value & flag & info ["linear"] ~docv:"LINEAR" ~doc)
 
 let elf =
   let doc = "ELF file from which to pull the code" in
@@ -114,16 +118,33 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTable.sym_offset)) len br
 
 let elfblock_term = Term.(const gen_block $ elf_term $ len $ breakpoints)
 
-let run_block (elf, block) no_run reg_types =
+let rec prune_paths p (tree : _ State.Tree.t) =
+  match tree.rest with
+  | [] -> if p tree.state then None else Some tree
+  | _ :: _ -> (
+      match List.filter_map (prune_paths p) tree.rest with
+      | [] -> None
+      | _ :: _ as rest -> Some { tree with rest }
+    )
+
+let has_assert_false (state : State.t) =
+  match state.asserts with [Bool (false, _)] -> true | _ -> false
+
+let run_block (elf, block) no_run reg_types ensure_linear =
   if reg_types then base "Register types:\n%t\n" (Pp.topi State.Reg.pp_index ());
   if not no_run then begin
     let init_state = Init.state () |> State.copy ~elf in
     State.lock init_state;
     let tree = Block_lib.run block init_state in
-    Pp.println @@ State.Tree.pp_all Block_lib.pp_label tree
+    let print tree = Pp.println @@ State.Tree.pp_all Block_lib.pp_label tree in
+    if ensure_linear then
+      match prune_paths has_assert_false tree with
+      | None -> fail "Block execution is not linear"
+      | Some tree -> print tree
+    else print tree
   end
 
-let term = Term.(const run_block $ elfblock_term $ no_run $ reg_types)
+let term = Term.(const run_block $ elfblock_term $ no_run $ reg_types $ ensure_linear)
 
 let info =
   let doc =

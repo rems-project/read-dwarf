@@ -73,7 +73,9 @@ module Var = struct
         (** The address to which the return value should be written.
             This is used only in certain calling conventions *)
     | RetAddr  (** The return address: The address to which a "return" instruction would jump. *)
-    | NonDet of int * Ast.Size.t  (** Variable representing non-determinism in the spec. Can only be bit-vectors for now. *)
+    | NonDet of int * Ast.Size.t
+        (** Variable representing non-determinism in the spec.
+            Can only be bit-vectors of size {8, 16, 32, 64} for now. *)
 
   let to_string = function
     | Register (state, reg) ->
@@ -87,8 +89,7 @@ module Var = struct
     | RetAddr -> "retaddr:"
     | NonDet (num, size) ->
         if size = Ast.Size.B64 then Printf.sprintf "nondet:%i" num
-        else
-          Printf.sprintf "nondet:%i:%dbits" num (Ast.Size.to_bits size)
+        else Printf.sprintf "nondet:%i:%dbits" num (Ast.Size.to_bits size)
 
   let expect_register = function
     | Register (_, reg) -> reg
