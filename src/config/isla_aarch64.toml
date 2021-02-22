@@ -90,7 +90,20 @@ ignore = [
   "__v82_implemented",
   "__v83_implemented",
   "__v84_implemented",
-  "__v85_implemented"
+  "__v85_implemented",
+  "_GTEExtObsAccess",
+  "_GTEExtObsActive",
+  "_GTEExtObsAddress",
+  "_GTEExtObsCount",
+  "_GTEExtObsData",
+  "_GTEExtObsIndex",
+  "_GTEExtObsResult",
+  "_GTEExtObsResultIndex",
+  "_GTEExtObsResultIsAddress",
+  "_GTE_PPU_Access",
+  "_GTE_PPU_Address",
+  "_GTE_PPU_SizeEn",
+  "_V"
 ]
 
 # These registers are set before any symbolic execution occurs
