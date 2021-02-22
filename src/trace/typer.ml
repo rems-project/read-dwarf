@@ -218,8 +218,6 @@ let rec expr ~ctxt (exp : Base.exp) : Ctype.t option =
         binop ~ctxt b te te'
     | Manyop (m, el, _) -> List.map (expr_tval ~ctxt) el |> manyop ~ctxt m
     | Ite _ -> None
-    (* | Call _ -> Raise.todo() *)
-    (* | Exists _ -> .          *)
     | Bound _ -> .
     | Let _ -> .
   in

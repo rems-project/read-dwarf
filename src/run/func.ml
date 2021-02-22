@@ -52,8 +52,9 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let no_run_prep ~elf:elfname ~name ~entry =
+let run_func elfname name dump no_run entry len breakpoints loop =
   base "Running %s in %s" name elfname;
+  base "Loading %s" elfname;
   let dwarf = Dw.of_file elfname in
   let elf = dwarf.elf in
   let func =
@@ -68,46 +69,35 @@ let no_run_prep ~elf:elfname ~name ~entry =
   base "Computing entry state";
   let start = Init.state () |> State.copy ~elf |> abi.init in
   if entry then base "Entry state:\n%t" (Pp.topi State.pp start);
-  (dwarf, elf, func, start)
-
-let get_state_tree ~elf:elfname ~name ?(dump = false) ?(entry = false) ?len ?(breakpoints = [])
-    ?loop ?tree_to_file () =
-  let (dwarf, elf, func, start) = no_run_prep ~elf:elfname ~name ~entry in
-  match func.sym with
-  | None -> fail "Function %s exists in DWARF data but does not have any code" name
-  | Some sym ->
-      let brks =
-        List.map
-          (Elf.SymTable.of_position_string elf.symbols %> Elf.SymTable.to_addr_offset)
-          breakpoints
-      in
-      let (min, max) =
-        let open Option in
-        unlift_pair
-        @@ let+ l = len in
-           (sym.addr, sym.addr + l)
-      in
-      let endpred = Block_lib.gen_endpred ?min ?max ?loop ~brks () in
-      let runner = Runner.of_dwarf dwarf in
-      let block = Block_lib.make ~runner ~start:sym.addr ~endpred in
-      if dump then begin
-        base "Preloading Instructions for dump";
-        Runner.load_sym runner sym;
-        base "Instructions:\n%t\n" (Pp.topi Runner.pp_instr runner)
-      end;
-      base "Start running";
-      let tree = Block_lib.run block start in
-      tree_to_file
-      |> Option.iter (fun x ->
-             Files.write_string x @@ Pp.tos (State.Tree.pp_all Block_lib.pp_label) tree ());
-      Isla.Cache.stop ();
-      tree
-
-let cmd_func elfname name dump no_run entry len breakpoints loop tree_to_file =
-  if no_run then ignore @@ no_run_prep ~elf:elfname ~name ~entry
-  else
-    ignore
-    @@ get_state_tree ~elf:elfname ~name ~dump ~entry ?len ~breakpoints ?loop ?tree_to_file ()
+  begin
+    if (not no_run) || dump then
+      match func.sym with
+      | None -> fail "Function %s exists in DWARF data but does not have any code" name
+      | Some sym ->
+          let brks =
+            List.map
+              (Elf.SymTable.of_position_string elf.symbols %> Elf.SymTable.to_addr_offset)
+              breakpoints
+          in
+          let (min, max) =
+            let open Option in
+            unlift_pair
+            @@ let+ l = len in
+               (sym.addr, sym.addr + l)
+          in
+          let endpred = Block_lib.gen_endpred ?min ?max ?loop ~brks () in
+          let runner = Runner.of_dwarf dwarf in
+          let block = Block_lib.make ~runner ~start:sym.addr ~endpred in
+          if dump then begin
+            base "Preloading Instructions for dump";
+            Runner.load_sym runner sym;
+            base "Instructions:\n%t\n" (Pp.topi Runner.pp_instr runner)
+          end;
+          if not no_run then base "Start running";
+          let tree = Block_lib.run block start in
+          base "Run tree:\n%t" (Pp.top (State.Tree.pp_all Block_lib.pp_label) tree)
+  end;
+  Isla.Cache.stop ()
 
 let elf =
   let doc = "ELF file from which to pull the code" in
@@ -143,14 +133,10 @@ let breakpoints =
   in
   Arg.(value & opt_all string [] & info ["b"; "break"] ~docv:"POSITION" ~doc)
 
-let tree_to_file =
-  let doc = "Write execution state-trees to this file" in
-  Arg.(value & opt (some string) None & info ["dump-exec-tree"] ~docv:"TREE_OUTPUT" ~doc)
-
 let term =
   Term.(
-    CmdlinerHelper.func_options comopts cmd_func
-    $ elf $ func $ dump $ no_run $ entry $ len $ breakpoints $ loop $ tree_to_file)
+    CmdlinerHelper.func_options comopts run_func
+    $ elf $ func $ dump $ no_run $ entry $ len $ breakpoints $ loop)
 
 let info =
   let doc =

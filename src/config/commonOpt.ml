@@ -137,7 +137,3 @@ let z3 =
 
 (** The list of common options. Almost all sub-commands should use this. *)
 let comopts = [isla_client; z3; Logs.term; config]
-
-let quick_exe ~name:str ~doc main =
-  let command = Term.(CmdlinerHelper.func_options comopts main $ pure (), info str ~doc ~exits) in
-  Term.exit @@ Term.eval command

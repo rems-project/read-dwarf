@@ -162,11 +162,6 @@ let ite ~cond e e' : ('v, 'm) t =
   assert (typ = get_type e');
   Ite (cond, e, e', typ)
 
-(* let pred b ty b_tys e : ('v, 'm) t = *)
-(*   let typ = get_type e in *)
-(*   assert (typ |> is_bool); *)
-(*   Exists (b, ty, b_tys, e, typ) *)
-
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -236,8 +231,6 @@ let rec add_type : type a v m. ty_of_var:(a -> v -> m ty) -> (a, v, no, m) exp -
       let el = List.map at el in
       Vec (el, Ty_Array (vec_idx_type, get_type @@ List.hd el))
   | Ite (cond, e, e', _) -> ite ~cond:(at cond) (at e) (at e')
-  (*| Exists (b, ty, b_tys, e, _) -> pred b ty b_tys (at e) *)
-  (*| Call _ -> Raise.todo() *)
   | Let _ -> .
 
 (** Check if an expression is well typed *)
