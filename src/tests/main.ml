@@ -6,10 +6,7 @@ let tests = List.concat Tests.[BytesSeqT.tests; ConcreteEvalT.tests; SimplifyChe
 
 let config = Config.CommonOpt.config
 
-let () =
-  match Cmdliner.Term.eval_peek_opts ~argv:[|""; "--config"; "../config/config.toml"|] config with
-  | (Some _, _) -> ()
-  | (None, _) -> failwith "Option '--config' has changed: please update test runner"
+let () = Config.File.ensure_loaded "../config/config.toml"
 
 let () = Printexc.record_backtrace Config.enable_backtrace
 

@@ -1,8 +1,5 @@
-(** This module is just an alias for {!Config.Arch}: The architecture module.
-
-    It also add some code that is related to the Architecture specific modules but
-    is in it itself architecture independent.
-*)
+(** This module adds some code that is related to the Architecture specific
+    modules but is in itself architecture independent. *)
 
 include Sig
 

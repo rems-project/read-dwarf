@@ -27,7 +27,10 @@ let exits =
 *)
 
 (** Passing [--config=FILE] on the CLI will setup the {!Config.File} module to
-    load that file as the configuration file.*)
+    load that file as the configuration file.
+
+    For test executables, you will have to call {!File.ensure_loaded} directly. *)
+
 let config =
   let doc =
     Printf.sprintf "Overrides the default location of the configuration file (%s)"

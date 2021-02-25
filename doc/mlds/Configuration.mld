@@ -2,14 +2,13 @@
 
 {1 Compile time configuration}
 
-From a module point of view, compile time configuration is provided from the
-{!Config} module. In pratice it is pulled from a [config.ml] at the root, and
-from [default_config.ml] as a fallback.
+Currently, read-dwarf only supports compile-time (not run-time) selection of
+architecture, through {{:https://dune.readthedocs.io/en/stable/variants.html}
+Dune's virtual modules}. See {!Architecture} for more details.
 
-Furthermore, since {!Config} define the {!Config.Arch} module that is used by
-the {!Arch} module, any module before {!Arch} in the dependency chain cannot use
-{!Config}. To solve that problem, there is also {!Config} that is exactly the
-same as {!Config} but without the {!Config.Arch} module.
+Other compile-time configuration options can be edited in the file
+[src/confing/default.ml], and accessed in the rest of the code through the
+{!Config} module.
 
 {1 Runtime configuration}
 

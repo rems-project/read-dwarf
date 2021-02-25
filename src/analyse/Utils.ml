@@ -15,7 +15,6 @@ let pp_addr (a : natural) = Ml_bindings.hex_string_of_big_int_pad8 a
 (** index into instruction-indexed arrays *)
 type index = int
 
-(** TODO move that to {!Config}? *)
 let measure_time = false
 
 (** Print the time this function call took. The string is just for the printed message *)

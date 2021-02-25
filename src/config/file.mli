@@ -82,7 +82,7 @@ type archs_type = (Arch.t, ArchConf.t) Hashtbl.t
 type t = {
   arch : Arch.t option;
       (** The default architecture to be choosen when no ELF file is specified on the CLI.
-          This is optional, but if supplied, it will override {!Config.default_arch} *)
+          This is optional, but if supplied, it will override {!Config.arch} *)
   archs : archs_type;  (** All the architecture specific configurations *)
   z3 : Z3.t;  (** The Z3 configuration *)
 }

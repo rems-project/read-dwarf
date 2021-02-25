@@ -8,40 +8,36 @@ architectures in the enumeration have the full support, but an architecture must
 be in the enumeration to be supported. Feel free to add others. This
 enumeration is used everywhere to refer to various architectures.
 
-{1 Selection and discovery of the architecture}
+{1 Architecture as a Virtual Module}
 
-{2 Architecture module selection}
+read-dwarf uses {{:https://dune.readthedocs.io/en/stable/variants.html} Dune's
+virtual modules} to parameterise on the architecture, though currently there is
+only one supported: [aarch64]. Any executable (including inline test
+executables) must therefore be given valid implementation of the virtual
+module.
 
-{!Sig} defines the signature that an architecture module (such as
-[src/arch/aarch64/sig.ml]) must provide .The {!Config} module then must provide
-at compile time the architecture module to be linked in {!Config.Arch}. This
-module may provide one or more architecture.  It is not yet decided if in the
-end we will want to support multiple architecture in a single binary, or just
-require a different compilation of read-dwarf which may lead to have things
-like [aarch64-linux-gnu-read-dwarf] or [aarch64-none-eabi-read-dwarf]. The
-current system support both, but the case of multiple architecture in a single
-module hasn't been tested because only {!AArch64} has been implemented.
-
-The architecture directories/virtual modules are in [src/arch]. For now
-there is only [aarch64].
+The signature for the architecture is in {!Sig}, the only module in a Dune
+library called [sig]; an implementation is in [src/arch/aarch64/sig.ml], as
+part of a library called [sig_aarch64]. Because {!Arch} relies on {!Sig}, it
+too becomes virtual, and so does every module that uses {!Arch}. See
+[src/isla/dune] to see how to integrate this for running inline tests,
+otherwise simply add [sig_aarch64] (or any other implementation module) to the
+[libraries] Dune stanza when defining an executable (see [src/bin/dune] and
+[src/tests/dune] for examples).
 
 {1 Architectural features}
 
-The main interface to all architecture specific component is {!Arch}. This
-module is a wrapper around the compile-time selected Architecture module
-{!Config.Arch} with some extra features. All code that depend on architectural
-details should just use {!Arch} directly.
-
-A lot of architecture specific things, like the function call ABI,
-the physical memory size and some other things are in the {!Arch} module.
-However some things are not. For example the list of registers and their
-SMT types ({!Ast.ty}) are managed by the {!State.Reg} module. This is because the
-register list is not statically hard-coded. It is deduced at run-time from isla, which
-means that we do not need to maintain a list of system register anywhere. Obviously
-the {!Arch} module need to know about some register to manage the ABI, so those
-registers will be introduced by {!Arch}, but all the other register are only introduced
-if an instruction touching them is used. This means that if a system register
-is never used, it's exactly the same as if doesn't exist for read-dwarf.
+A lot of architecture specific things, like the function call ABI, the physical
+memory size and some other things are in the {!Arch} module.  However some
+things are not. For example the list of registers and their SMT types
+({!Ast.ty}) are managed by the {!State.Reg} module. This is because the
+register list is not statically hard-coded. It is deduced at run-time from
+isla, which means that we do not need to maintain a list of system register
+anywhere. Obviously the {!Arch} module need to know about some register to
+manage the ABI, so those registers will be introduced by {!Arch}, but all the
+other register are only introduced if an instruction touching them is used.
+This means that if a system register is never used, it's exactly the same as if
+doesn't exist for read-dwarf.
 
 {1 Representation of the architectural state}
 

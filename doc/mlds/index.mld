@@ -48,16 +48,16 @@ provide a CLI to run a single function symbolically.
 
 Here is a list of top-level pages that each explains a subgroup of functionality:
 
- - {!Utilities}: List of modules that provide generic functionality
- - {!Printing}: Generic information about printing and logging
- - {!Configuration}: Configuration organisation
- - {!SymbolicExpressions}: All modules related to symbolic expression manipulation
  - {!Architecture}: All modules related to achitecture representation
- - {!InstructionPipeline}: All modules related to instruction semantics processing.
  - {!BinaryAnalysis}: All modules about reading ELF and DWARF information
- - {!TypeInference}: All modules about the C type system and type inference.
- - {!SymbolicExecution}: All modules related to top-level symbolic execution.
  - {!CLI}: All modules defining the command line interfaces.
+ - {!Configuration}: Configuration organisation
+ - {!InstructionPipeline}: All modules related to instruction semantics processing.
+ - {!Printing}: Generic information about printing and logging
+ - {!SymbolicExecution}: All modules related to top-level symbolic execution.
+ - {!SymbolicExpressions}: All modules related to symbolic expression manipulation
+ - {!TypeInference}: All modules about the C type system and type inference.
+ - {!Utilities}: List of modules that provide generic functionality
 
 {1 Dependencies}
 
@@ -78,7 +78,7 @@ and links to their documentation (for those that have some).
 - {{:http://ocamlgraph.lri.fr/doc/}[ocamlgraph]}: Graph library.
   Only used in {!Analyse} for now; may be used elsewhere later.
 - {{:http://ocaml-toml.github.io/To.ml/} [toml]} Toml Parsing library. Only used
-  in {!Config} to parse the config file. It should not be used elsewhere.
+  in {!Config.File} to parse the config file. It should not be used elsewhere.
 - {{:https://erratique.ch/software/uutf/doc/Uutf} [uutf]} : Unicode library. 
   Only used to do UTF-8 character folding in {!Analyse}. Those utility function
   should probably move to {!Utils.String} to be accessible elsewhere.
