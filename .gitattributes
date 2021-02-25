@@ -1,4 +1,1 @@
-*.ir binary
 *.trace binary
-hafnium-O0-bis/kokoro* binary
-hafnium-O2-bis/kokoro* binary
