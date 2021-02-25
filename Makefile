@@ -1,10 +1,6 @@
 ####################################################################################
 #  BSD 2-Clause License                                                            #
 #                                                                                  #
-#  Read-dwarf, located in the src/ and test_asm/ directories, is subject to this   #
-#  BSD 2-Clause License. This license does not apply to files outside these        #
-#  directories.                                                                    #
-#                                                                                  #
 #  Copyright (c) 2020-2021 Thibaut Pérami                                          #
 #  Copyright (c) 2020-2021 Dhruv Makwana                                           #
 #  Copyright (c) 2019-2021 Peter Sewell                                            #
@@ -79,7 +75,6 @@ clean:
 	@echo "Cleaning repository"
 	@$(DUNE) clean
 	@rm -rf $(OUT)
-	@rm -rf doc.html
 	@rm -rf .rdcache
 	@rm -rf test_asm/.rdcache
 
@@ -125,17 +120,15 @@ test: default
 
 .PHONY: test
 
-apply-header:
-	headache -c etc/headache_config -h LICENCE Makefile
-	headache -c etc/headache_config -h LICENCE test_asm/Makefile
-	headache -c etc/headache_config -h LICENCE test_asm/test.asm
-	headache -c etc/headache_config -h LICENCE `find src -name '*.ml*'`
-	headache -c etc/headache_config -h LICENCE `find src -name '*.ott'`
-	headache -c etc/headache_config -h LICENCE `find src -name '*.toml'`
-	headache -c etc/headache_config -h LICENCE `find src -name '*.awk'`
-	headache -c etc/headache_config -h LICENCE `find src -name '*.html'`
-	headache -c etc/headache_config -h LICENCE `find src -name '*.smt2'`
+clear-header:
+	headache -c etc/headache_config -r Makefile test_asm/Makefile test_asm/test.asm \
+	    `find src -name '*.ml*'` `find src -name '*.ott'` `find src -name '*.toml'` \
+	    `find src -name '*.awk'` `find src -name '*.html'` `find src -name '*.smt2'`
 
+apply-header:
+	headache -c etc/headache_config -h LICENCE Makefile test_asm/Makefile test_asm/test.asm \
+	    `find src -name '*.ml*'` `find src -name '*.ott'` `find src -name '*.toml'` \
+	    `find src -name '*.awk'` `find src -name '*.html'` `find src -name '*.smt2'`
 %.objdumps:
 	$(MAKE) $*.objdump-d $*.objdump-g $*.objdump-DS $*.objdump-x $*.objdump-t $*.objdump-dwarf-ait $*.objdump-rodata $*.hexdump-C $*.dwarfdump-a
 
