@@ -1,17 +1,11 @@
 # read-dwarf
 
-read-dwarf is a tool for exploring, symbolically executing and validating ELF
-binaries generated from C, using DWARF debugging information. It will be used
-to perform translation validation between O0 and O2 binaries. It is written in
-OCaml and relies on many other tools. Its current set of features allows a user
-to explore binaries with the source code inlined, and for simple cases,
-symbolically evaluate a function, check two versions of the same function
-(compiled at O0 and O2 optimisation levels) evaluate to the same machine state
-(given a simulation relation) and compute branch tables for indirect jumps. We
-intend to build upon this foundation of features to handle all more functions,
-by incorporating information from higher-levels, inferring types and
-pointer-provenance, inferring simulation relations automatically, and supporting
-concurrency models for Arm v8.
+read-dwarf is a tool for exploring, symbolically executing, and
+validating ELF binaries generated from C, using DWARF debugging
+information.  It is work in progress, not at present ready for
+external use.
+
+
 
 ## Dependencies
 
@@ -109,7 +103,7 @@ opam install qtest ounit qcheck
 ## Folder structure
 
  - `src`: The OCaml sources. Run `make doc` for details.
-   - `analyse`: Code to make hyperlinked webpages
+   - `analyse`: Code to make hyperlinked webpages or text files of the DWARF debug information
    - `arch`: [Dune virtual](https://dune.readthedocs.io/en/stable/variants.html)
       library to select architecture.
    - `ast`: Syntax-tree utilities and manipulations.
@@ -144,3 +138,22 @@ current directory. This directory contains several caches indexed by name.
 Use `read-dwarf cache --clear name` to delete such a cache or
 `read-dwarf cache --clear --a` to clear the whole `.rdcache` directory.
 You also do `read-dwarf cache --list` to list existing caches.
+
+
+## People
+
+Thibaut Pérami, Dhruv Makwana, Neel Krishnaswami, and Peter Sewell
+
+
+## Funding
+
+This software was developed by the University of Cambridge Computer
+Laboratory as part of the Rigorous Engineering of Mainstream Systems
+(REMS) project.
+
+The project has been partly funded by EPSRC grant EP/K008528/1.
+This project has received funding from the European Research Council
+(ERC) under the European Union's Horizon 2020 research and innovation
+programme (grant agreement No 789108, ERC Advanced Grant ELVER).
+This project has been partly funded by an EPSRC Doctoral Training studentship.
+This project has been partly funded by Google.
