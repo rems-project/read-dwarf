@@ -6,9 +6,7 @@
 
 ## Internal infrastructure
 
- - Fix up documentation links after major refactor
- - Move tests_asm and tiny_tests into OUnit infrastructure
- - Figure out how to add extra documentation pages and add an overview and a pipeline page.
+ - Move test_asm and tiny_tests into OUnit infrastructure
  - Try to have read-dwarf automatically create/cache the objdump instead
    of asking it as a command line parameter.
  - Add prefix to external output or error coming from servers like isla or z3 with sed
@@ -133,3 +131,5 @@
  - Resolve memory read to obviously non-aliasing addresses directly
  - Scrap Tests.ml completely and do an actual OUnit test suit that
    checks more that just "read-dwarf do not crash" on some inputs.
+ - Fix up documentation links after major refactor
+ - Figure out how to add extra documentation pages and add an overview and a pipeline page.
