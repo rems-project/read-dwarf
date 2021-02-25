@@ -37,12 +37,16 @@ position of `isla-client` in `ISLA_CLIENT_PATH` for `read-dwarf` to find it.
 ## Configuration
 
 Currently, read-dwarf only supports compile-time (not run-time) selection of
-architecture, through {{:https://dune.readthedocs.io/en/stable/variants.html}
-Dune's virtual modules}. See {!Architecture} for more details.
+architecture, through [Dune's virtual
+modules](https://dune.readthedocs.io/en/stable/variants.html). See the
+[Architecture](https://github.com/rems-project/read-dwarf-src/blob/master/doc/mlds/Architecture.mld)
+for more details.
 
 Other compile-time configuration options can be edited in the file
-[src/confing/default.ml], and accessed in the rest of the code through the
-{!Config} module. Runtime configuration is loaded from [src/config/config.toml]
+[src/confing/default.ml](https://github.com/rems-project/read-dwarf-src/blob/master/src/config/default.ml),
+and accessed in the rest of the code through the
+`Config` module. Runtime configuration is loaded from
+[src/config/config.toml](https://github.com/rems-project/read-dwarf-src/blob/master/src/config/config.toml).
 
 ## Building
 
@@ -96,25 +100,6 @@ You can get then from opam:
 opam install qtest ounit qcheck
 ```
 
-There are three types of tests that are all called as part of the `make test`
-command:
- - Inline tests: They appear as qtest comments in the source code like `(*$=
-   test *)`. They can be built alone with `make rd-inline-tester` and called
-   alone with `make inline-test`
- - Library tests: Those are tests testing read-dwarf as a library. They live in
-   the `tests` folder. They are built as a single executable with `make
-   rd-tester` and can be run directly with `make lib-test`. However by
-   running `rd-tester`, one has more options listed with `./rd-tester --help`. 
-   This is especially useful to debug when they fail.
- - Command tests: Those are tests testing read-dwarf as a command line tool.
-   They are just specific command listed in `make test` body. You can just run
-   commands individually if required.
-   
-The first two sets of test are registered with dune and will be called by
-commands like `dune test` and `make dune-test`. A little caveat is that the
-inline test and the library tests are both randomized with different seed. The
-seeds are printed on stdout, but they should not be confused with one another.
- 
 ## Folder structure
 
  - `src`: The OCaml sources. Run `make doc` for details.
