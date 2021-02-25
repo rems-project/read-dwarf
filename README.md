@@ -5,8 +5,6 @@ validating ELF binaries generated from C, using DWARF debugging
 information.  It is work in progress, not at present ready for
 external use.
 
-
-
 ## Dependencies
 
 ### Build dependencies
@@ -18,7 +16,6 @@ version. `opam install .` should work there.
 Then you can either install the default configuration of read-dwarf with opam,
 with `opam install .` or just install other dependencies with
 `opam install --deps-only .` and then follow the rest of the README.
-
 
 ### Run-time dependencies
 
@@ -74,19 +71,14 @@ Then you can use `make format` to format your code.
 Please always format before committing.
 Ask everyone if you want to change ocamlformat options or bump the version.
 
-
 ## Documentation
 
-
 `make doc` builds the automatic documentation that is then accessible from
-[`doc/html/index.html`](https://htmlpreview.github.io/?https://github.com/rems-project/read-dwarf/blob/master/doc/html/index.html).
+[`doc/html/read-dwarf/index.html`](https://htmlpreview.github.io/?https://raw.githubusercontent.com/rems-project/read-dwarf/master/doc/html/read-dwarf/index.html).
 
 The `odoc` program (`opam install odoc`) is required.
 
 Extra documents are available in the `doc` folder.
-
-
-
 
 ## Usage
 
@@ -130,7 +122,6 @@ opam install qtest ounit qcheck
  - `doc`: Documentation sources.
  - `test_asm`: Simple assembly test to test `run-bb` subcommand.
 
-
 ## Caching
 
 Read-dwarf may create a cache in a directory named `.rdcache`. When searching
@@ -143,11 +134,9 @@ Use `read-dwarf cache --clear name` to delete such a cache or
 `read-dwarf cache --clear --a` to clear the whole `.rdcache` directory.
 You also do `read-dwarf cache --list` to list existing caches.
 
-
 ## People
 
 Thibaut Pérami, Dhruv Makwana, Neel Krishnaswami, and Peter Sewell
-
 
 ## Funding
 
