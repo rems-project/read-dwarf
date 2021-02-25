@@ -1,0 +1,7 @@
+  ".*\\.ml[i]?" -> frame  open:"(*"    line:"="  close:"*)"
+|  ".*\\.ott"   -> frame  open:"%"     line:"="  close:"%"
+|  ".*\\.toml"  -> frame  open:"#"     line:"="  close:"#"
+|  ".*\\.awk"   -> frame  open:"#"     line:"="  close:"#"
+|  ".*\\.asm"   -> frame  open:"#"     line:"="  close:"#"
+|  ".*\\.html"  -> frame  open:"<!--"  line:"="  close:"-->"
+|  ".*\\.smt2"  -> frame  open:";;"    line:"="  close:";;"
