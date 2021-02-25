@@ -39,7 +39,7 @@ and place it at the root of the directory or change the `arch-file` path in
 Currently, read-dwarf only supports compile-time (not run-time) selection of
 architecture, through [Dune's virtual
 modules](https://dune.readthedocs.io/en/stable/variants.html). See the
-[Architecture](https://github.com/rems-project/read-dwarf/blob/master/doc/mlds/Architecture.mld)
+[Architecture overview](https://github.com/rems-project/read-dwarf/blob/master/doc/mlds/Architecture.mld)
 for more details.
 
 Other compile-time configuration options can be edited in the file
