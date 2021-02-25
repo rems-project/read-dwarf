@@ -102,8 +102,7 @@ ignore = [
   "_GTEExtObsResultIsAddress",
   "_GTE_PPU_Access",
   "_GTE_PPU_Address",
-  "_GTE_PPU_SizeEn",
-  "_V"
+  "_GTE_PPU_SizeEn"
 ]
 
 # These registers are set before any symbolic execution occurs
