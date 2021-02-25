@@ -77,12 +77,17 @@ Ask everyone if you want to change ocamlformat options or bump the version.
 
 ## Documentation
 
+<https://htmlpreview.github.io/?https://github.com/rems-project/read-dwarf/blob/master/doc/html/index.html>
+
 `make doc` builds the automatic documentation that is then accessible from
 `doc.html`.
 
 The `odoc` program (`opam install odoc`) is required.
 
 Extra documents are available in the `doc` folder.
+
+
+
 
 ## Usage
 
