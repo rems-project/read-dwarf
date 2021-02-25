@@ -43,7 +43,7 @@ modules](https://dune.readthedocs.io/en/stable/variants.html). See the
 for more details.
 
 Other compile-time configuration options can be edited in the file
-[src/confing/default.ml](https://github.com/rems-project/read-dwarf/blob/master/src/config/default.ml),
+[src/config/default.ml](https://github.com/rems-project/read-dwarf/blob/master/src/config/default.ml),
 and accessed in the rest of the code through the
 `Config` module. Runtime configuration is loaded from
 [src/config/config.toml](https://github.com/rems-project/read-dwarf/blob/master/src/config/config.toml).
