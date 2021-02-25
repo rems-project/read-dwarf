@@ -1,7 +1,7 @@
 (** This module implements the [rd] subcommand. This was to original meaning of "read-dwarf",
     and the first command.
 
-    Together with {{!RunFuncRD}[run-func-rd]}, this is the main user of the {!Analyse} code. *)
+    Together with {{!Run.FuncRD}[run-func-rd]}, this is the main user of the {!Analyse} code. *)
 
 open Cmdliner
 open CmdlinerHelper

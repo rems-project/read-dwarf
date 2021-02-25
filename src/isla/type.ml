@@ -1,7 +1,7 @@
 (** This module is about type isla trace and register discovery.
 
     The actual goal is dicovering the existence and type of registers from Isla
-    traces, but this require type the trace with {!Base.ty} and thus full type
+    traces, but this require type the trace with {!ty} and thus full type
     checking of traces. We expect isla to be correct, so a type error would be
     very surprising. *)
 
@@ -99,7 +99,7 @@ let type_manyop l (m : manyop) (ltl : lty list) : ty =
 
 (** Take an Isla value and a context and give the list of field that correspond to
     that value. Those fields would need to be prefixed with the top register name
-    before being added in {!Reg} *)
+    before being added in {!State.Reg} *)
 let rec type_valu loc (cont : type_context) : valu -> (State.Reg.Path.t * State.Reg.ty) list =
   let plain ty = [([], Conv.ty ty)] in
   function

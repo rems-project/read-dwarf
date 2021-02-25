@@ -25,7 +25,7 @@ module ArchConf : sig
   module Isla : sig
     (** Isla configuration option.
         Everything in here is salient for cache coherency which means that if any option
-        if changed here, the whole {!IslaCache} is invalidated.
+        if changed here, the whole {!Isla.Cache} is invalidated.
         This is checked with {!digest}.
     *)
     type t = {
@@ -52,7 +52,7 @@ module ArchConf : sig
     }
 
     (** Produces a digest of the Isla configuration for invalidating
-        the {!IslaCache} when some configuration parameter changes *)
+        the {!Isla.Cache} when some configuration parameter changes *)
     val digest : t -> string
   end
 

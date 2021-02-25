@@ -19,22 +19,22 @@ let commands =
   [
     Run.ReadDwarf.command;
     Isla.Test.command;
-    DumpSym.command;
+    Other_cmds.DumpSym.command;
     Isla.Server.Cmd.command;
     Run.BB.command;
-    DumpDwarf.command;
+    Other_cmds.DumpDwarf.command;
     Cache.Cmd.command;
     Run.Func.command;
     Run.Instr.command;
     Run.Block.command;
     Run.FuncRD.command;
-    CopySourcesCmd.command;
+    Other_cmds.CopySourcesCmd.command;
   ]
 
 let _ = Printexc.record_backtrace Config.enable_backtrace
 
-(* Other architecture are unsupported for now. Remove this only when you are explicitly
-   working on make other architecture work with read-dwarf *)
+(* Other architectures are unsupported for now. Remove this only when you are explicitly
+   working on making other architecture work with read-dwarf *)
 let _ = assert ("aarch64" = Arch.module_name)
 
 (* TODO allow to set the seed in compile time or run time config for debugging *)

@@ -101,7 +101,7 @@ end
 (** This module provide functionality for a socket server with which one
     can communicate on a sockets.
 
-    An example of use is in {!IslaServer} *)
+    An example of use is in {!Isla.Server} *)
 module SocketServer : sig
   (** The abstract type of a socket server *)
   type t

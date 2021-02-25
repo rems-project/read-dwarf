@@ -1,4 +1,6 @@
 include Base
+
+module Base = Base
 module Collected = Collected
 module DwarfLineInfo = DwarfLineInfo
 module Elf = Elf

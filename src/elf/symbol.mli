@@ -32,7 +32,7 @@ val push_name : string -> t -> t
 (** Check if an address is in a symbol *)
 val is_in : t -> int -> bool
 
-(** For conformance with the {!RngMap.LenObject} module type *)
+(** For conformance with the {!Utils.RngMap.LenObject} module type *)
 val len : t -> int
 
 (** Convert the integer type into typ *)

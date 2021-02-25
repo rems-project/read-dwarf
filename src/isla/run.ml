@@ -4,7 +4,7 @@
 
     {!RunError} will be thrown when something goes wrong.
 
-    It is for testing purpose only, otherwise use {!TraceRun}. Typing do not work,
+    It is for testing purpose only, otherwise use {!Trace.Run}. Typing does not work,
     and some other expected behavior may not work either.
 
     This module can be considered deprecated/legacy.*)
@@ -45,11 +45,11 @@ let get_var l vc i =
     all free variable with the bound expression in the {!value_context}.
 
     If a variable is not bound, throw {!RunError} *)
-let exp_conv_subst (vc : value_context) (exp : Base.rexp) : State.exp =
+let exp_conv_subst (vc : value_context) (exp : rexp) : State.exp =
   let vconv i l = get_var l vc i in
   Conv.exp_add_type_var_subst vconv exp
 
-(** Give the {!State.exp} that represents the input {!Base.valu}.
+(** Give the {!State.exp} that represents the input {!valu}.
 
     A symbolic variable i is represented by the expression bound to it
     in the provided {!value_context}.
@@ -57,7 +57,7 @@ let exp_conv_subst (vc : value_context) (exp : Base.rexp) : State.exp =
     Newly created expression are located with the provided {!lrng}.
 
     If the value is not convertible to a state expression, throw a {!RunError} *)
-let exp_of_valu l vc : Base.valu -> State.exp = function
+let exp_of_valu l vc : valu -> State.exp = function
   | Val_Symbolic i -> get_var l vc i
   | Val_Bool b -> Exp.Typed.bool b
   | Val_Bits bv -> Exp.Typed.bits_smt bv
@@ -70,14 +70,14 @@ let exp_of_valu l vc : Base.valu -> State.exp = function
     isla guarantee that it would be the same value (Trusting Isla here) *)
 let write_to_var _ vc var exp = HashVector.set vc var exp
 
-(** This function write an expression to an {!Base.valu}.
+(** This function write an expression to an {!valu}.
 
     If the valu is a variable, it is added to the context, otherwise nothing happens. *)
 let write_to_valu l vc valu exp =
   match valu with Val_Symbolic i -> write_to_var l vc i exp | _ -> ()
 
 (** Run an event on {!State.t} and a {!value_context} by mutating both *)
-let event_mut (vc : value_context) (state : State.t) : Base.revent -> unit =
+let event_mut (vc : value_context) (state : State.t) : revent -> unit =
   let module Reg = State.Reg in
   function
   | Smt (DeclareConst (_, _), _) -> ()
@@ -140,7 +140,7 @@ let event_mut (vc : value_context) (state : State.t) : Base.revent -> unit =
     If a [vc] is provided, then it is used and mutated according to the trace.
 
     Any encountered branch are ignored and their assertion are added to the state *)
-let trc_mut ?(vc = HashVector.empty ()) (state : State.t) (trc : Base.rtrc) =
+let trc_mut ?(vc = HashVector.empty ()) (state : State.t) (trc : rtrc) =
   assert (not @@ State.is_locked state);
   let (Trace events) = trc in
   List.iter (event_mut vc state) events

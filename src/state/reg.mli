@@ -3,9 +3,9 @@
     A register is defined by a {!Path} and a type {!ty}. The path is a
     representation of dot separated list of identifiers.
 
-    Register are not part of the {!Arch} module because they are discovered
+    Registers are not part of the {!Arch} module because they are discovered
     dynamically. This module keeps a global index of all register of the current
-    architecture (in a {!IdMap}). This map also fix the types of registers.
+    architecture (in a {!Utils.IdMap}). This map also fix the types of registers.
 
     This allow to represent registers as integer everywhere.
 
@@ -125,17 +125,17 @@ val pp_index : unit -> Pp.document
     However as register is a finite type one may want to have a map where all the
     register are bound and thus access to a bound value cannot fail. This is
     complicated by the fact that new registers can be added after the creation of
-    the map. To handle all those subtleties, there is the {!Map} module.*)
+    the map. To handle all those subtleties, there is the {!Utils.Map} module.*)
 
-(** This module provide a full map over register in the same way than {!FullVec}
+(** This module provide a full map over register in the same way than {!Utils.FullVec}
     provide a map of integers. It still need a generator to generate the value
     bound to not-yet-added registers.
 
     Because the domain of registers is finite, some extra function are available
-    like {!iter} and {!iteri} that are not possible in {!FullVec}.
+    like {!iter} and {!iteri} that are not possible in {!Utils.FullVec}.
 
     If a register is added with {!add}, it is automatically and implicitly added
-    to the {!Map} and the generator must accept this new value. The generator
+    to the {!Utils.Map} and the generator must accept this new value. The generator
     will never be called on invalid register values (i.e. when the generator is
     called on a register, the former can get the latter's type and name with
     {!reg_type} and {!to_string}) *)
@@ -178,7 +178,7 @@ module Map : sig
   (** Give all the registers bindings *)
   val bindings : 'a t -> (reg * 'a) list
 
-  (** Contrary to {!FullVector.pp}, this one will print the binding of all registers,
+  (** Contrary to {!Utils.FullVector.pp}, this one will print the binding of all registers,
       and may call the generator to do that *)
   val pp : ('a -> Pp.document) -> 'a t -> Pp.document
 end

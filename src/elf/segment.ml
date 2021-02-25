@@ -2,14 +2,14 @@
     In particular, all information about file layout is intentionally lost
     I use basic ints for speed. It it fails for some reason, I'll move to int64s.
 
-    This is basically a {!BytesSeq} with metadata.
+    This is basically a {!Utils.BytesSeq} with metadata.
 *)
 
 (** The type of a segment *)
 type t = {
   data : BytesSeq.t;
   addr : int;  (** The actual start address of the BytesSeq *)
-  size : int;  (** redundant with {!BytesSeq.length} data *)
+  size : int;  (** redundant with {!Utils.BytesSeq.length} data *)
   read : bool;
   write : bool;
   execute : bool;

@@ -4,13 +4,13 @@
 
     In particular it provides generic mapping and iteration function over
     expressions as well a function allowing to convert between the various
-    {!SymbolicExpression.typopt}.
+    {!SymbolicExpressions.typopt}.
 
-    Warning: due to Ocaml type system limitations mainly
+    Warning: due to OCaml type system limitations, mainly
     {{:https://github.com/ocaml/ocaml/issues/9459} issue [#9456]},
-    this module is sometime required to use {!Obj.magic} in some specific cases.
+    this module is sometimes required to use {!Obj.magic} in some specific cases.
     No other module should ever do that.
-    If you need to use [Obj.magic] to bypass Ocaml type system limitation about
+    If you need to use [Obj.magic] to bypass OCaml type system limitation about
     {!Ast} type, add a function here instead.
 
 *)

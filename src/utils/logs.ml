@@ -152,7 +152,7 @@ open Cmdliner
 (*****************************************************************************)
 (** {1:logs Logging options }
 
-    This section provide option to control the {! output.*)
+    This section provide option to control the {!output.*)
 
 let quiet_ref = ref false
 

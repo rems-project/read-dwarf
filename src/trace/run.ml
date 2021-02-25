@@ -1,4 +1,4 @@
-(** This module is for running trace from {!Trace} like {!IslaRun} runs Isla traces.
+(** This module is for running trace from {!Trace} like {!Isla.Run} runs Isla traces.
 
     Due to the semantic of a register access being the register at the beginning of the trace,
     all register writes are not done immediately but delayed and stored in the {!context}.

@@ -1,7 +1,7 @@
 (** This module provide support for common command line option to be used across
     multiple subcomands.
 
-    It also provide some {{!utils}utilities} on the command line.*)
+    It also provide some {{!Utils}utilities} on the command line.*)
 
 open Cmdliner
 open CmdlinerHelper
@@ -23,10 +23,10 @@ let exits =
 (** {1 Config options }
 
     This section is to manage the configuration file.
-    See {!ConfigFile} to see how the configuration file works
+    See {!Config.File} to see how the configuration file works
 *)
 
-(** Passing [--config=FILE] on the CLI will setup the {!ConfigFile} module to
+(** Passing [--config=FILE] on the CLI will setup the {!Config.File} module to
     load that file as the configuration file.*)
 let config =
   let doc =

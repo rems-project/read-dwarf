@@ -8,26 +8,17 @@ corresponding type in linksem representing the same concept is named
 
 {1 Analyse }
 
-There is a lot a binary analyse code in [Analyse*] modules that should be documented: TODOa
-
-There other related module that should deleted or renamed:
- - {!Globals}
- - {!Warn}
- - {!Debug}
- - {!Type}
+TODO: There is a lot a binary analysis code in [Analyse*] modules that should be documented.
 
 {1 ELF }
 
-The [Elf*] group of modules provide the main interface to ELF information. The
-main interface is the {!Elf} module. It will parse the ELF {{!ElfFile}file} and
-extract the {{!ElfSymTable}symbol table}. In particular they provide direct
-access to ELF {{!ElfSymbol}symbols} like function and global variables.
+The {!Elf} group of modules provide the main interface to ELF information. It
+will parse the {{!Elf.File} ELF file} and extract the {{!Elf.SymTable}symbol
+table}. In particular they provide direct access to ELF {{!Elf.Symbol}symbols}
+like function and global variables.
 
 {1 DWARF}
 
-DWARF information is processed after linksem by the [Dw*] modules The main
-module is {!Dw}, but there are other module for {{!DwFunc}functions} and
-{{!DwVar}variables}.
-
-This step also does C type linking in {!Ctype} and inverting DWARF location in
-{!Loc}.
+DWARF information is processed after [linksem] by the {!Dw} modules, for
+{{!Dw.Func}functions} and {{!Dw.Var}variables}.  This step also does C type
+linking in {!Ctype} and inverting DWARF location in {!Dw.Loc}.

@@ -6,6 +6,7 @@
 
 module Var = Var
 module Func = Func
+module Loc = Loc
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -29,12 +30,12 @@ let _ =
     | DwarfError s -> Some (Printf.sprintf "DwarfError: %s" s)
     | _ -> None)
 
-(** Throw an {!DwarfError} *)
+(** Throw a {!DwarfError} *)
 let dwarferror fmt = Printf.ksprintf (fun s -> raise (DwarfError s)) fmt
 
 (** Get Dwarf information from an Elf file.
 
-    May raise an {!DwarfError} if a problem occurs.*)
+    May raise a {!DwarfError} if a problem occurs.*)
 let of_elf (elf : Elf.File.t) =
   info "Loading architecture %s for %s" (Elf.File.machine_to_string elf.machine) elf.filename;
   Arch.load_elf_arch elf;
@@ -70,7 +71,7 @@ let of_elf (elf : Elf.File.t) =
   in
   { elf; ldwarf; ldwarf_sdt; funcs; vars; tenv }
 
-(** Get Dwarf information from an Elf file by name. Use {!ElfFile.of_file} *)
+(** Get Dwarf information from an Elf file by name. Use {!Elf.File.of_file} *)
 let of_file (filename : string) = filename |> Elf.File.of_file |> of_elf
 
 (** Get a function by [name] *)

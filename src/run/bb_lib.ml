@@ -1,6 +1,6 @@
 (** This module provide code to manipulate basic block and run them.
 
-    This is only for use by {!RunBB} and debugging. I don't think this should be used
+    This is only for use by {!BB} and debugging. I don't think this should be used
     for anything else. {!Block} should generally be used instead.*)
 
 open Logs.Logger (struct

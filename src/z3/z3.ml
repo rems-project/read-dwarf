@@ -16,11 +16,11 @@
     probably be reserved to those who understand the implementation)
 
     The module keeps Z3 as a child process and communicates through pipes using
-    {!Cmd.IOServer}.
+    {!Utils.Cmd.IOServer}.
 
     {!start} sends the introduction in [intro.smt2] to Z3 so that it is available
     in any context.
-    SMT answer are parsed from the pipe with {!Files.input_sexp}. If the wrong
+    SMT answer are parsed from the pipe with {!Utils.Files.input_sexp}. If the wrong
     number of answer is expected, the system will just deadlock.
 *)
 

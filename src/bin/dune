@@ -1,6 +1,16 @@
 (executable
  (name main)
  (public_name read-dwarf)
+ (modules main)
  (flags
   (:standard -open Utils))
- (libraries run utils state sig_aarch64 config))
+   (libraries config run utils sig_aarch64 other_cmds))
+
+(library
+ (name other_cmds)
+ (public_name read-dwarf.other_cmds)
+ (flags
+  (:standard -open Utils))
+ (modules copySourcesCmd  copySources  dumpDwarf  dumpSym  readDwarf)
+ (libraries run utils config analyse state trace))
+

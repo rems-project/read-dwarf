@@ -1,10 +1,19 @@
 (test
  (name main)
- (libraries run ounit2 qcheck utils ast exp state config sig_aarch64)
+ (libraries config sig_aarch64 tests)
+ (modules main)
  (flags
   (:standard -open Utils))
  (deps (universe) ../config/config.toml ../config/isla_aarch64.toml
    ../../aarch64.ir))
+
+(library
+ (name tests)
+ (public_name read-dwarf.tests)
+ (flags
+  (:standard -open Utils))
+ (modules bytesSeqT common concreteEvalT expGen simplifyCheck)
+ (libraries run qcheck utils config analyse state trace))
 
 (env
  (dev

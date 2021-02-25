@@ -1,8 +1,7 @@
 {0 read-dwarf }
 
-read-dwarf is badly named C translation validator that happen to read and use
-DWARF information as its main source of information on the analysed binary
-files.
+read-dwarf is a C translation validator that reads and uses DWARF information
+as its main source of information on the analysed binary files.
 
 This documentation of the internal code of read-dwarf.
 
@@ -15,38 +14,41 @@ infer the C type along the way. The exact C-like type-system used is a bit more
 advanced than C.
 
 I'll attempt here to give a pipeline overview of what happens when you want to
-run a function symbolically. All of this is done by the {!RunFunc} module that
+run a function symbolically. All of this is done by the {!Run.Func} module that
 provide a CLI to run a single function symbolically.
 
  - The binary is parsed by the linksem library using the {!Elf} and {!Dw}
    modules. In this phase C-Type linking happens as described in
    {!Ctype.ctyplink}
- - The function name is found and used in the {!DwFunc} format.
+ - The function name is found and used in the {!Dw.Func} format.
  - The API and ABI of the function are computed according to the current
-   achitecture. The generic {!Architecture} interface is defined in {!ArchSig} but
-   the only implementation is in {!AArch64}. This is all centralized in {!Arch}
- - If we suppose the instruction caches are empty, the {!IslaServer} will be
-   started and used by {!Init} to fetch the machine initial {!State}. This will
-   call [isla] to get the trace of the [nop] instruction. See {!IslaPipeline}
+   achitecture. The generic {!Architecture} interface is defined in the virtual
+   module {!Sig} but the only implementation is in [src/arch/aarch64/sig.ml]
+   ({{: https://github.com/ocaml/dune/commit/1ce94b47e9640419bb7e644d6da1e0f53e9b23d9}
+   dune doesn't build docs for virtual module implementations :(}).
+ - If we suppose the instruction caches are empty, the {!Isla.Server} will be
+   started and used by {!Run.Init} to fetch the machine initial {!State}.
+   This will call [isla] to get the trace of the [nop] instruction. See
+   {!InstructionPipeline}
  - The function entry {!State} can be computed from the machine initial state
    and the ABI.
- - We load the symbolic execution engine {!Runner} with the DWARF information
+ - We load the symbolic execution engine {!Run.Runner} with the DWARF information
    and initialize it.
- - We create a {!Block} which is a piece of code that can run a delimited block
+ - We create a {!Run.Block} which is a piece of code that can run a delimited block
    of code. We give to it the end conditions provided by the command line like
    potential breakpoints. Then we run it.
- - The {!Block} calls the {!Runner} on each instruction as needed to move forward
-   and build the tree ({!StateTree}) of possible states. For each instruction,
-   the whole {!InstructionPipeline} is run to generate a set of {!Trace}s and
-   this set of traces is run on a {!State} to get the next state. 
+ - The {!Run.Block} calls the {!Run.Runner} on each instruction as needed to move
+   forward and build the tree ({!State.Tree}) of possible states. For each
+   instruction, the whole {!InstructionPipeline} is run to generate a set of
+   {!Trace}s and this set of traces is run on a {!State} to get the next state.
    See {!SymbolicExecution}.
- - Then we pretty print the results using {!PP} and {!Logs}. See {!Printing}
+ - Then we pretty print the results using {!Utils.Pp} and {!Utils.Logs}. See {!Printing}
 
 {1 Detailed pages}
 
 Here is a list of top-level pages that each explains a subgroup of functionality:
 
- - {!Utility}: List of modules that provide generic functionality
+ - {!Utilities}: List of modules that provide generic functionality
  - {!Printing}: Generic information about printing and logging
  - {!Configuration}: Configuration organisation
  - {!SymbolicExpressions}: All modules related to symbolic expression manipulation
@@ -65,12 +67,12 @@ and links to their documentation (for those that have some).
 - [linksem] : ELF and DWARF Parser and analyzer
 - [isla-lang]: Isla traces parser
 - {{:https://erratique.ch/software/cmdliner/doc/Cmdliner}[cmdliner]}:
-  Library to parse the command line. It's open in any module in {!cli}
+  Library to parse the command line.
 - {{:http://cambium.inria.fr/~fpottier/pprint/doc/pprint/PPrint/index.html}
-   [pprint]}: Pretty-printing library. Use it via the {!PP} module.
+   [pprint]}: Pretty-printing library. Use it via the {!Utils.Pp} module.
 - {{:https://antoinemine.github.io/Zarith/doc/latest/index.html}[zarith]}:
   Big integer library. Used by [linksem] and all [linksem] interacting modules, and by
-  {!BitVec}.
+  {!Utils.BitVec}.
 - {{:http://mmottl.github.io/res/api/res/}[res]}: Resizable array.
   Use it via the {!Vec} module
 - {{:http://ocamlgraph.lri.fr/doc/}[ocamlgraph]}: Graph library.
@@ -79,127 +81,29 @@ and links to their documentation (for those that have some).
   in {!Config} to parse the config file. It should not be used elsewhere.
 - {{:https://erratique.ch/software/uutf/doc/Uutf} [uutf]} : Unicode library. 
   Only used to do UTF-8 character folding in {!Analyse}. Those utility function
-  should probably move to {!String} to be accessible elsewhere.
+  should probably move to {!Utils.String} to be accessible elsewhere.
 
 {1 Alphabetical index}
 
-Here is an alphabetical list of all modules. Use [make list] to regenerate.
+Here is an alphabetical list of all modules, except [src/arch/aarch64/sig.ml].
 
 {!modules:
-AArch64
 Analyse
-AnalyseCallGraph
-AnalyseCollected
-AnalyseCollectedType
-AnalyseComeFrom
-AnalyseControlFlow
-AnalyseControlFlowPpDot
-AnalyseControlFlowPpText
-AnalyseControlFlowTypes
-AnalyseDwarfFrameInfo
-AnalyseDwarfInliningInfo
-AnalyseDwarfLineInfo
-AnalyseDwarfVarInfo
-AnalyseElf
-AnalyseElfSymbols
-AnalyseElfTypes
-AnalysePp
-AnalyseQemuLog
-AnalyseRangedVarType
-AnalyseSdtUtils
-AnalyseUtils
 Arch
-ArchSig
-ArchType
-Array
 Ast
-AstDef
-AstManip
-AstOtt
-BB
-Bits
-BitVec
-Block
-BytesSeq
-Cache
-Cmd
-CommonOpt
-ConcreteEval
 Config
-ConfigFile
-ConfigPre
-Counter
 Ctype
-Debug
-DumpDwarf
-DumpSym
 Dw
-DwFunc
-DwVar
 Elf
-ElfFile
-ElfSymbol
-ElfSymTable
 Exp
-ExpTyped
-Files
-Fragment
-FullVec
-Fun
-Globals
-HashVector
-IdMap
-Init
-Instr
-IntBits
+AstGen
 Isla
-IslaCache
-IslaConv
-IslaManip
-IslaPreprocess
-IslaRun
-IslaServer
-IslaTest
-IslaType
-List
-Loc
-Logs
-Main
-Opt
-Pair
-PP
-PPExp
-Protect
-Raise
-ReadDwarf
-Reg
-RngMap
-RunBB
-RunBlock
-RunFunc
-RunFuncRD
-RunInstr
-Runner
-Segment
-Seq
+Other_cmds
+Run
+Simrel
 State
-StateSimplify
-StateTree
-String
-Sums
-SymbolicBytes
-SymbolicFragment
 Tests
 Trace
-TraceCache
-TraceContext
-TraceCtype
-TraceRun
-Types
-Value
-Vec
-Warn
-WeakMap
-WeakPtr
+Utils
 Z3
 }

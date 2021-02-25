@@ -51,7 +51,7 @@ let _ =
 (** Throw an {!ElfError} *)
 let elferror fmt = Printf.ksprintf (fun s -> raise (ElfError s)) fmt
 
-(** Parse an ELF file to create an {!ElfFile.t} using Linksem.
+(** Parse an ELF file to create an {!Elf.File.t} using Linksem.
 
     May raise an {!ElfError}
 *)

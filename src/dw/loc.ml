@@ -94,7 +94,6 @@ let to_string = function
 
 (** Compare two location. Loc.t is not compatible with polymorphic compare *)
 let compare l1 l2 =
-  (* I love writing those functions *)
   match (l1, l2) with
   | (Register r1, Register r2) -> compare r1 r2
   | (Register _, _) -> -1

@@ -2,5 +2,5 @@
 
 The type inference engine is a somewhat basic system right now. The types
 themselves are defined in {!Ctype}, but the type inference engine is in
-{!TraceCtype}. This because the type inference is done instruction by
+{!Trace.Typer}. This because the type inference is done instruction by
 instruction over trace expressions, and not directly on state expression.

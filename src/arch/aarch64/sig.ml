@@ -1,4 +1,4 @@
-(** This module provides the {!Sig.Arch} interface for the AArch64 architecture
+(** This module provides the {!Sig} interface for the AArch64 architecture
 
     All the ABI related function are derived from the official
     "Procedure Call Standard for the ARM 64-bit Architecture" (ref: AAPCS64)
@@ -222,7 +222,7 @@ let get_abi_repr api : abi_repr =
 (*****************************************************************************)
 (** {1 SigAPI }
 
-    The implementation of the {!Sig.S} API. Go there for documentation *)
+    The implementation of the {!Sig} API. Go there for documentation *)
 
 module Type = Config.Arch
 

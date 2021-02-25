@@ -10,7 +10,7 @@
 
 (* Possible options
 
-   - Use {!Trace or not}
+   - Use {!Trace} or not
    - -no-run (just dump trace)
    - final State simplification
    - [Trace] simplification

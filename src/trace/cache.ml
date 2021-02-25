@@ -1,7 +1,7 @@
 (** This module provides a caching system for fully processed traces
 
     The top level function to get traces from an opcode is {!get_traces}.
-    This is the function called by the {!Runner}.*)
+    This is the function called by the {!Run.Runner}.*)
 
 open Logs.Logger (struct
   let str = __MODULE__
@@ -110,7 +110,7 @@ let stop () =
 let get_cache () =
   match !cache with Some cache -> cache | None -> failwith "Trace cache was not started"
 
-(** Get the traces of the opcode given. Use {!IslaServer} if the value is not in the cache *)
+(** Get the traces of the opcode given. Use {!Isla.Server} if the value is not in the cache *)
 let get_traces (opcode : BytesSeq.t) : Base.t list =
   let cache = get_cache () in
   match TC.get_opt cache (Some opcode) with

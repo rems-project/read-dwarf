@@ -1,7 +1,7 @@
 (** This module provides the internal C-like type system. This type system is
     slightly different than the normal C type system. This module only provides
     the Ocaml datastructure to represent those types. The typing rules are
-    implemented in {!TraceCtype}, where they are applied directly on traces.
+    implemented in {!Trace.Typer}, where they are applied dire
 
 
     These types follow the normal C type structure except for pointers that are

@@ -6,19 +6,10 @@
     For now it also do not support memory expression, but it will soon.
 *)
 
-(** @canonical Exp.ConcreteEval *)
 module ConcreteEval = ConcreteEval
-
-(** @canonical Exp.PpExp *)
 module PpExp = PpExp
-
-(** @canonical Exp.Sums *)
 module Sums = Sums
-
-(** @canonical Exp.Typed *)
 module Typed = Typed
-
-(** @canonical Exp.Value *)
 module Value = Value
 
 (** The type of memory-less expressions *)

@@ -30,14 +30,14 @@ are defined in {!Isla}.
 
 {2 Calling isla}
 
-First to call isla itself. All of this is done in {!IslaServer}. The Isla tool
+First to call isla itself. All of this is done in {!Isla.Server}. The Isla tool
 suite expect [*.ir] file that is some sort of preprocessed sail source.
 
 This processing is done by [isla-sail], but they can be found in
 {{:https://github.com/rems-project/isla-snapshots}[isla-snapshots]}.
 For now we also keep a working snapshot [aarch64.ir] in the root directory.
 
-To call isla, {!IslaServer} use the [isla-client] program. This program will
+To call isla, {!Isla.Server} use the [isla-client] program. This program will
 take an hexadecimal opcode and call the [isla_client] sail function in the
 [*.ir] file. This function take the opcode, decode it and run it, all of which
 is done symbolically by isla. [isla-client] then send back a symbolic recording
@@ -49,25 +49,25 @@ functionality.
 
 As the raw trace contained by isla are big and contain a lot of useless
 information, I first preprocess them to remove a maximum of useless part in
-{!IslaPreprocess}
+{!Isla.Preprocess}
 
 {2 Isla traces caching}
 
-Isla trace are {{!Cache}cached} by {!IslaCache} by opcode. This organisation
+Isla trace are {{!Utils.Cache}cached} by {!Isla.Cache} by opcode. This organisation
 assumes that there is no configuration to send to isla before symbolically
 running an instruction and thus each opcode correspond to a single trace
 representation.
 
 {2 Typing and register learning}
 
-Then {!IslaType} can be used to type the isla traces and at the same time
+Then {!Isla.Type} can be used to type the isla traces and at the same time
 discover all register used by the trace and thus potentially add them to the
-{!Reg} module.
+{!State.Reg} module.
 
 {2 Running Isla traces directly}
 
 There are two way of used those isla traces, running them directly on states
-with {!IslaRun} which is kind of deprecated, or going trough the internal
+with {!Isla.Run} which is kind of deprecated, or going trough the internal
 {!Trace} format.
 
 {1 Trace and Instr}
@@ -77,9 +77,9 @@ meaningful event that in the usual setting are not like reading a register. They
 also contain a lot a possible event about processor sleeping and concurency that
 read-dwarf do not support. Therefore a new trace format has been created in
 {!Trace} that only contains the part of behavior that read-dwarf actually use
-and understand. The trace are also cached in {!TraceCache}.
+and understand. The trace are also cached in {!Trace.Cache}.
 
-Full instruction are represented by {!Instr.t} that contain all the traces but
+Full instruction are represented by {!Run.Instr.t} that contain all the traces but
 also additional metadata that can be useful.
 
 See {!SymbolicExecution} to see how to run those traces.

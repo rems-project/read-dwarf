@@ -3,12 +3,12 @@
 This page decribe the general method for symbolically running code in [read-dwarf].
 
 To run instructions on a state, you must first get the instruction semantics trough
-the {{!IslaPipeline}Isla pipeline}. Then you can run trace individually using {!TraceRun}
-module or do it all automatically using the {!Runner}.
+the {{!Isla.Pipeline}Isla pipeline}. Then you can run trace individually using {!Trace.Run}
+module or do it all automatically using the {!Run.Runner}.
 
-To run entire block of instruction there is the legacy {!BB} to run a branchless
-and jumpless basic block and {!Block} to run a complete block of code with
-control-flow. {!Block} will output a tree of the possibilities, but is still
+To run entire block of instruction there is the legacy {!Run.BB} to run a branchless
+and jumpless basic block and {!Run.Block} to run a complete block of code with
+control-flow. {!Run.Block} will output a tree of the possibilities, but is still
 quite basic. There is no need for fancier generic way of running block of
 instruction as the actual order of running thing will be choosen by the
 simulation finding code that is not yet written.

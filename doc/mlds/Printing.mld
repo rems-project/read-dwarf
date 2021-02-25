@@ -3,10 +3,10 @@
 {1 Pretty printing}
 
 Pretty printing is mostly done with the [pprint] library.
-This library is exposed by the {!PP} module with extra combinators.
-It should always be used by this {!PP} module.
+This library is exposed by the {!Utils.Pp} module with extra combinators.
+It should always be used by this {!Utils.Pp} module.
 
 {1 Logging system}
 
-The logging system is defined in the module {!Logs} and is the main way of
+The logging system is defined in the module {!Utils.Logs} and is the main way of
 signaling information like warnings to the user.

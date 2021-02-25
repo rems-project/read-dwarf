@@ -220,7 +220,7 @@ end
    still constraining the child state.
 
     This also implies a restriction on state dependent variables like
-   {!Var.Reg}. The id of such variables can only be the id of the current state
+   {!Var.Register}. The id of such variables can only be the id of the current state
    or one of it's ancestor. Further more if a variable of type {!Var.ReadVar}
    exists with and id and a number, then the {!read_vars} array of the state
    with that [id] must contain that number and the sizes must match.

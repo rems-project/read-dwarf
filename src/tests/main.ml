@@ -2,7 +2,7 @@
 
 open Cmdliner
 
-let tests = List.concat [BytesSeqT.tests; ConcreteEvalT.tests; SimplifyCheck.tests]
+let tests = List.concat Tests.[BytesSeqT.tests; ConcreteEvalT.tests; SimplifyCheck.tests]
 
 let config = Config.CommonOpt.config
 

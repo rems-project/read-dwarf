@@ -8,9 +8,6 @@
   (libraries sig_aarch64))
  (libraries utils config analyse state trace))
 
-; (libraries isla-lang cmdliner pprint res ocamlgraph toml
-;            utils ast analyse exp config arch state dw isla trace))
-
 (library
  (name qtest_run)
  (public_name read-dwarf.qtest.run)

@@ -8,12 +8,12 @@ from [default_config.ml] as a fallback.
 
 Furthermore, since {!Config} define the {!Config.Arch} module that is used by
 the {!Arch} module, any module before {!Arch} in the dependency chain cannot use
-{!Config}. To solve that problem, there is also {!ConfigPre} that is exactly the
+{!Config}. To solve that problem, there is also {!Config} that is exactly the
 same as {!Config} but without the {!Config.Arch} module.
 
 {1 Runtime configuration}
 
 Runtime configuration is loaded from toml file at runtime and handled by the
-{!ConfigFile} module. The location of the file (and the side effect of loading)
-is determined by the {!CommonOpt.config} option. The various fields can then be
-accessed by {!ConfigFile.acc}.
+{!Config.File} module. The location of the file (and the side effect of loading)
+is determined by the {!Config.CommonOpt.config} option. The various fields can then be
+accessed by {!Config.File.acc}.

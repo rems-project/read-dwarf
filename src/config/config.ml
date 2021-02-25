@@ -3,10 +3,7 @@ module type S = sig
       It is pulled from the root [config.ml] file or will fallback to the [default_config.ml] file
   
       All compile-time configuration options are specified here. For runtime configuration,
-      look at {!ConfigFile}.
-  
-      Since all the module depending on {!Arch} depend on this,
-      There is also a {!ConfigPre} module which is the same but without the [module Arch] definition.
+      look at {!Config.File}.
   *)
 
   (* Please ensure the documentation of this file matches the documentation in default_config.ml *)

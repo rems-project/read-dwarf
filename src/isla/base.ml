@@ -9,7 +9,7 @@
     syntax and are represented as a plain [int] in Ocaml. The structure of the
     traces is a mix of SMT declaration about those variable and actual processor
     events. SMT declaration use SMT expressions of type {!exp} which entirely
-    distinct from {!Ast.exp} (Use {!IslaConv} to convert). On the contrary
+    distinct from {!Ast.exp} (Use {!Isla.Conv} to convert). On the contrary
     processor event do not contain direct SMT expressions but Sail values of type
     {!valu}. A {!valu} can be either a single symbolic variable, a concrete
     bitvector/boolean/enumeration value or a more complex sail structure with
@@ -19,7 +19,7 @@
     will provide the whole structure as a valu to be read or written. However,
     Those events may contain a accessor list that implies that only specific
     field of the struct are written or read. This useful, because of the flat
-    representation of registers in {!Reg}: each field is considered to be a
+    representation of registers in {!State.Reg}: each field is considered to be a
     separate register.
 
     The isla types are polymorphic over the annotation because that comes from

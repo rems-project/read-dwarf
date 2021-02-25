@@ -1,8 +1,8 @@
-{0 Utility}
+{0 Utilities}
 
 {1 Standard library extensions}
 
-- {!Opt}: extension of
+- {!Option}: extension of
     {{:https://caml.inria.fr/pub/docs/manual-ocaml/libref/Option.html}
     [Stdlib.Option]}.
 - {!Array}: extension of
