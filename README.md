@@ -9,8 +9,8 @@ symbolically evaluate a function, check two versions of the same function
 (compiled at O0 and O2 optimisation levels) evaluate to the same machine state
 (given a simulation relation) and compute branch tables for indirect jumps. We
 intend to build upon this foundation of features to handle all more functions,
-by incorporating information from higher-levels, inferring types and pointer-
-provenance, inferring simulation relations automatically, and supporting
+by incorporating information from higher-levels, inferring types and
+pointer-provenance, inferring simulation relations automatically, and supporting
 concurrency models for Arm v8.
 
 ## Dependencies
