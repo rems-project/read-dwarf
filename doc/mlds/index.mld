@@ -1,9 +1,19 @@
 {0 read-dwarf }
 
-read-dwarf is a C translation validator that reads and uses DWARF information
-as its main source of information on the analysed binary files.
+read-dwarf is a tool for exploring, symbolically executing and validating ELF
+binaries generated from C, using DWARF debugging information. It will be used
+to perform translation validation between O0 and O2 binaries. It is written in
+OCaml and relies on many other tools. Its current set of features allows a user
+to explore binaries with the source code inlined, and for simple cases,
+symbolically evaluate a function, check two versions of the same function
+(compiled at O0 and O2 optimisation levels) evaluate to the same machine state
+(given a simulation relation) and compute branch tables for indirect jumps. We
+intend to build upon this foundation of features to handle all more functions,
+by incorporating information from higher-levels, inferring types and
+pointer-provenance, inferring simulation relations automatically, and supporting
+concurrency models for Arm v8.
 
-This documentation of the internal code of read-dwarf.
+This documentation is for the internal code of read-dwarf.
 
 {1 Overview }
 
