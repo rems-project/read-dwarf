@@ -16,16 +16,17 @@ concurrency models for Arm v8.
 ## Dependencies
 
 ### Build dependencies
+
 There is one dependency that is not on opam: `isla-lang`. Go to [the `isla-lang`
 repository](https://github.com/rems-project/isla-lang) and install the latest
 version. `opam install .` should work there.
 
 Then you can either install the default configuration of read-dwarf with opam,
 with `opam install .` or just install other dependencies with
-`opam install --deps-only .` and then follow the rest of the README
+`opam install --deps-only .` and then follow the rest of the README.
 
 
-### Run time dependencies
+### Run-time dependencies
 
 You need a more or less recent version `z3`, if don't have it on your system
 package manager, you can use `opam install z3`.
@@ -33,6 +34,11 @@ package manager, you can use `opam install z3`.
 You also need to install `isla`.  Warning for
 non-Rust users: you need to add `~/.cargo/bin` to your PATH or specify the
 position of `isla-client` in `ISLA_CLIENT_PATH` for `read-dwarf` to find it.
+
+You will also need to build `aarch64.ir` from the [`symbolic_rebased` branch
+of sail-arm](https://github.com/rems-project/sail-arm/tree/symbolic_rebased)
+and place it at the root of the directory or change the `arch-file` path in
+[src/config/config.toml](https://github.com/rems-project/read-dwarf-src/blob/master/src/config/config.toml).
 
 ## Configuration
 

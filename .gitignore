@@ -1,5 +1,6 @@
 _build/*
 /read-dwarf
+/aarch64.ir
 doc.html
 **/.merlin
 test_asm/build
