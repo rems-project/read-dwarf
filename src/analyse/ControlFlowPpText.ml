@@ -59,21 +59,6 @@ open ControlFlowTypes
 (*open ComeFrom*)
 (*open CollectedType   *)
 
-type weight = L | B
-
-type glyph =
-  | Glr of weight
-  | Gud of weight
-  | Gru of weight
-  | Grd of weight
-  | Grud of weight
-  | Glrud of weight * weight
-  | Ggt
-  | Glt
-  | GX
-  | Gnone
-  | Gquery
-
 type arrow = {
   source : index;
   targets : index list;
@@ -85,7 +70,7 @@ type arrow = {
 }
 
 let render_ascii_control_flow max_branch_distance max_width instructions :
-    string array * string array (*inbetweens*) * int (* actual_width *) =
+    glyph array array * glyph array array (*inbetweens*) * int (* actual_width *) =
   (* pull the arrows out of instructions *)
   let arrow_from (k : index) i : arrow option =
     (*(addr, i, m, args, c, targets1)*)
@@ -252,7 +237,63 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
   in
   List.iter paint_arrow arrows;
 
-  (* convert glyph matrix into string array *)
+  (* actual width used *)
+  let width = max_width - !leftmost_column_used in
+
+  (* construct inter-line array of glphys of vertical arrows for filler *)
+  let inbetweens =
+    Array.init (Array.length buf) (function k ->
+        if k = 0 then Array.make width Gnone
+        else
+          Array.map2
+            (fun g1 g2 ->
+              if
+                List.mem g1 [Gud L; Grd L; Grud L; Glrud (L, L); Glrud (B, L)]
+                && List.mem g2 [Gud L; Gru L; Grud L; Glrud (L, L); Glrud (B, L)]
+              then Gud L
+              else if
+                List.mem g1 [Gud B; Grd B; Grud B; Glrud (L, B); Glrud (B, B)]
+                && List.mem g2 [Gud B; Gru B; Grud B; Glrud (L, B); Glrud (B, B)]
+              then Gud B
+              else Gnone)
+            (Array.sub buf.(k - 1) !leftmost_column_used width)
+            (Array.sub buf.(k) !leftmost_column_used width))
+  in
+
+  ( Array.map
+      (function
+        | row -> Array.sub row !leftmost_column_used width)
+      buf,
+    inbetweens,
+    width )
+
+
+(* return index of first position where they differ *)
+let common_prefix_end (gas: glyph array list) : int =
+  let rec f ga0 gas i =
+    match gas with
+    | [] -> i
+    | ga::gas' ->
+       let rec g i' =
+         if i' >= i then
+           i
+         else if i' >=Array.length ga0 then
+           i' 
+         else if ga.(i')=ga0.(i') then
+           g (i'+1)
+         else i'
+       in
+       let i' = g 0 in
+       f ga0 gas' i' 
+  in
+  match gas with
+  | [] -> 0
+  | ga0::gas' -> f ga0 gas' (Array.length ga0)
+               
+  
+    
+let pp_glyphs rendered_control_flow_common_prefix_end (ga: glyph array) = 
+                                   (* convert glyph matrix into string array *)
   let pp_glyph = function
     | Glr L -> "\u{2500}" (*   *)
     | Gud L -> "\u{2502}" (*   *)
@@ -276,35 +317,11 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
     (*   *)
   in
 
-  (* actual width used *)
-  let width = max_width - !leftmost_column_used in
-
-  (* construct inter-line list of glphys  of vertical arrows for filler *)
-  let inbetweens =
-    Array.init (Array.length buf) (function k ->
-        if k = 0 then String.make width ' '
-        else
-          String.concat ""
-            (List.map2
-               (fun g1 g2 ->
-                 if
-                   List.mem g1 [Gud L; Grd L; Grud L; Glrud (L, L); Glrud (B, L)]
-                   && List.mem g2 [Gud L; Gru L; Grud L; Glrud (L, L); Glrud (B, L)]
-                 then pp_glyph (Gud L)
-                 else if
-                   List.mem g1 [Gud B; Grd B; Grud B; Glrud (L, B); Glrud (B, B)]
-                   && List.mem g2 [Gud B; Gru B; Grud B; Glrud (L, B); Glrud (B, B)]
-                 then pp_glyph (Gud B)
-                 else pp_glyph Gnone)
-               (Array.to_list (Array.sub buf.(k - 1) !leftmost_column_used width))
-               (Array.to_list (Array.sub buf.(k) !leftmost_column_used width))))
-  in
-
-  ( Array.map
-      (function
-        | row ->
-            String.concat ""
-              (List.map pp_glyph (Array.to_list (Array.sub row !leftmost_column_used width))))
-      buf,
-    inbetweens,
-    width )
+  let ga' =
+    if rendered_control_flow_common_prefix_end < Array.length ga then
+      Array.to_list (Array.sub ga rendered_control_flow_common_prefix_end (Array.length ga - rendered_control_flow_common_prefix_end))
+    else
+      [] in
+  String.concat ""
+    (List.map pp_glyph ga')
+    

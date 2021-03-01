@@ -75,7 +75,7 @@ type analysis = {
     )
     array;
   pp_inlining_label_prefix : string -> string;
-  rendered_control_flow : string array;
-  rendered_control_flow_inbetweens : string array;
+  rendered_control_flow : glyph array array;
+  rendered_control_flow_inbetweens : glyph array array;
   rendered_control_flow_width : int;
 }

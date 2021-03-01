@@ -92,3 +92,19 @@ type come_from = {
   cf_control_flow : control_flow_insn;
   cf_desc : string;
 }
+
+
+type weight = L | B
+
+type glyph =
+  | Glr of weight
+  | Gud of weight
+  | Gru of weight
+  | Grd of weight
+  | Grud of weight
+  | Glrud of weight * weight
+  | Ggt
+  | Glt
+  | GX
+  | Gnone
+  | Gquery
