@@ -152,6 +152,7 @@ exp :: '' ::=                           {{ aux _ annot }}
   | ( unop exp )                        :: :: Unop
   | ( binop exp1 exp2 )                 :: :: Binop
   | ( manyop exp1 .. expj )             :: :: Manyop
+  | ( exp1 .. expj )                    :: :: Vec
   | ( ite exp1 exp2 exp3 )              :: :: Ite
   | ( let ( bind bind1 .. bindj ) exp2 ) :: :: Let
 

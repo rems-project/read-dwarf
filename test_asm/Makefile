@@ -48,7 +48,7 @@ TOOLCHAIN=aarch64-linux-gnu-
 
 CONFIG := ../src/config/config.toml
 
-RD=../read-dwarf run-bb --config $(CONFIG) -s
+RD=../read-dwarf run-block --config $(CONFIG) --len=24 --linear
 
 all: $(foreach BIN,$(BINS), build/$(BIN))
 .PHONY: all
@@ -74,7 +74,7 @@ clean:
 
 define rd_rule
 test_rd_$(1): build/$(1)
-	$(RD) build/$(1) > /dev/null
+	$(RD) build/$(1) "_start" > /dev/null
 .PHONY: test_rd_$(1)
 endef
 $(foreach BIN,$(BINS),\

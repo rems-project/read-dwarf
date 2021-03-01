@@ -111,6 +111,8 @@ module Var : sig
         (** The address to which the return value should be written.
             This is used only in certain calling conventions *)
     | RetAddr  (** The return address: The address to which a "return" instruction would jump. *)
+    | NonDet of int * Ast.Size.t
+        (** Variable representing non-determinism in the spec. Can only be bit-vectors for now. *)
 
   (** Convert the variable to the string encoding. For parsing infrastructure reason,
       the encoding must always contain at least one [:]. *)
@@ -229,6 +231,11 @@ module Mem : sig
 
   (** Add a new fragment with the specified base *)
   val new_frag : t -> exp -> Ctype.provenance
+
+  module Fragment : SymbolicFragment.S with type var = Var.t
+
+  (** Get the main fragment of memory *)
+  val get_main : t -> Fragment.t
 end
 
 (** {1 State type } *)

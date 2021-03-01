@@ -42,15 +42,20 @@
 #                                                                                  #
 #==================================================================================#
 
-.global test
-.type test, @function
-test:
+.global _start
+.type _start, @function
+_start:
   sub sp, sp, #16
   add x0, x0, #8
   add x0, x0, #8
+# In case of problems, ensure x1, x2 are aligned
+# Either with concrete addresses
+# Or with SMT constraints - but how?
+# (do we need to add the ability to send isla SMT constraints?)
+# Or left-shifting the registers
   str x0, [x1]
   ldr x3, [x2]
   mul x5, x4, x3
   add sp, sp, #16
 
-.size test, .-test
+.size _start, .-_start

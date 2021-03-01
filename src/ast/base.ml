@@ -189,8 +189,7 @@ let simplify_smt ?(flags = []) e = Simplify (e, flags)
 (*****************************************************************************)
 (** {1 Comparisons } *)
 
-(** Equality for expression. Polymorphic equality will fail.
-    I love boilerplate code and love Ocaml! *)
+(** Equality for expressions; default polymorphic equality will fail. *)
 let rec equal_exp ?(annot = fun _ _ -> true) ~var ?(bnd = fun _ _ -> true) e e' =
   let eqe = equal_exp ~annot ~var ~bnd in
   match (e, e') with

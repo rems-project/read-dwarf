@@ -75,7 +75,10 @@ let from_binary (code : BytesSeq.t) : t =
       | [trc] ->
           Isla.Type.type_trc trc |> ignore;
           Trace.of_isla trc
-      | _ -> failwith "BB.from_binary: Multiple path i.e. branching instruction"
+      | _ ->
+          failwith
+            "BB.from_binary: Multiple path instruction.\n\
+             If this is not a branching instruction, try `run-block --linear'."
     in
     code |> Isla.Cache.get_traces |> get_normal
   in

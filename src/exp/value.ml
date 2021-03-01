@@ -48,7 +48,7 @@
     be able to fully support concrete evaluation without external tool*)
 
 (** The type of concrete values *)
-type t = Bool of bool | Enum of Ast.enum | Bv of BitVec.t
+type t = Bool of bool | Enum of Ast.enum | Bv of BitVec.t | Vec of t list
 
 (** String representation of concrete values *)
 let to_string = function
@@ -56,6 +56,7 @@ let to_string = function
   | Bool false -> "false"
   | Enum (a, n) -> Printf.sprintf "enum%d/%d" a n
   | Bv bv -> BitVec.to_smt bv
+  | Vec _ -> (* FIXME: figure out right rep of vectors (tuples?) *) Raise.todo ()
 
 (** Pretty printer for concrete values *)
 let pp r = r |> to_string |> Pp.string
@@ -68,6 +69,9 @@ let enum enum = Enum enum
 
 (** {!Bv} constructor *)
 let bv bv = Bv bv
+
+(** {!Vec} constructor *)
+let vec vs = Vec vs
 
 (** Extract a boolean or fail *)
 let expect_bool = function
@@ -88,7 +92,8 @@ let expect_bv ?size r =
   | (None, _) -> Raise.fail "Expected bit vector but got %s" (to_string r)
 
 (** Convert to a constant expression *)
-let to_exp : t -> ('v, 'm) Typed.t = function
+let rec to_exp : t -> ('v, 'm) Typed.t = function
   | Bool b -> Typed.bool b
   | Enum enum -> Typed.enum enum
   | Bv bv -> Typed.bits bv
+  | Vec vs -> Typed.vec @@ List.map to_exp vs

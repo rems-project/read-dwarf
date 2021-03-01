@@ -97,8 +97,8 @@ type prec =
   | EXTRACT
   | PARENS
 
-(** Tell a expression of precedence [inner] in an
-    expression of precedence [outer] need parenthesis *)
+(** Figure out if an expression of precedence [inner] in an
+    expression of precedence [outer] needs parentheses *)
 let compat ~outer ~inner =
   let arith o = o = ADD || o = MUL in
   let bits o = o = BITS || o = SHIFTS in
@@ -215,7 +215,7 @@ let pp_manyop (m : Ast.manyop) docs =
 let pp_if cond doc doc' =
   prefix 2 1 !^"if" cond ^/^ prefix 2 1 !^"then" doc ^/^ prefix 2 1 !^"else" doc' |> group
 
-(** Pretty print an expression and also returns it's precedence *)
+(** Pretty print an expression and return its precedence *)
 let rec pp_exp_prec ppv : ('a, 'v, Ast.no, Ast.no) Ast.exp -> document * prec =
   let parens_if ~outer (doc, inner) = if compat ~outer ~inner then doc else parens doc in
   function
@@ -237,6 +237,9 @@ let rec pp_exp_prec ppv : ('a, 'v, Ast.no, Ast.no) Ast.exp -> document * prec =
       let outer = prec_manyop m in
       let docs = List.map (fun e -> parens_if ~outer @@ pp_exp_prec ppv e) el in
       (pp_manyop m docs, outer)
+  | Vec (el, _) ->
+      let docs = List.map (fun e -> fst @@ pp_exp_prec ppv e) el in
+      (brackets @@ separate comma docs, PARENS)
   | Ite (c, e, e', _) ->
       let outer = IF in
       let docc = parens_if ~outer @@ pp_exp_prec ppv c in
