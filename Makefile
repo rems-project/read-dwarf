@@ -10,7 +10,7 @@
 #  Laboratory as part of the Rigorous Engineering of Mainstream Systems            #
 #  (REMS) project.                                                                 #
 #                                                                                  #
-#  The project has been partly funded by EPSRC grant EP/K008528/1.                 #
+#  This project has been partly funded by EPSRC grant EP/K008528/1.                #
 #  This project has received funding from the European Research Council            #
 #  (ERC) under the European Union's Horizon 2020 research and innovation           #
 #  programme (grant agreement No 789108, ERC Advanced Grant ELVER).                #
@@ -120,15 +120,30 @@ test: default
 
 .PHONY: test
 
+private-test:
+ifneq (,$(wildcard ./Makefile.private))
+	make -f Makefile.private test
+endif
+
+.PHONY: private_test
+
 clear-header:
 	headache -c etc/headache_config -r Makefile test_asm/Makefile test_asm/test.asm \
 	    `find src -name '*.ml*'` `find src -name '*.ott'` `find src -name '*.toml'` \
 	    `find src -name '*.awk'` `find src -name '*.html'` `find src -name '*.smt2'`
 
+.PHONY: clear-header
+
 apply-header:
-	headache -c etc/headache_config -h LICENCE Makefile test_asm/Makefile test_asm/test.asm \
+	head -n 2 LICENCE > header
+	tail -n +5 LICENCE >> header
+	headache -c etc/headache_config -h header Makefile test_asm/Makefile test_asm/test.asm \
 	    `find src -name '*.ml*'` `find src -name '*.ott'` `find src -name '*.toml'` \
 	    `find src -name '*.awk'` `find src -name '*.html'` `find src -name '*.smt2'`
+	rm header
+
+.PHONY: apply-header
+
 %.objdumps:
 	$(MAKE) $*.objdump-d $*.objdump-g $*.objdump-DS $*.objdump-x $*.objdump-t $*.objdump-dwarf-ait $*.objdump-rodata $*.hexdump-C $*.dwarfdump-a
 

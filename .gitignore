@@ -1,7 +1,7 @@
 _build/*
 /read-dwarf
 /aarch64.ir
-doc.html
+/Makefile.private
 **/.merlin
 test_asm/build
 .rdcache
