@@ -291,7 +291,6 @@ let remove_init : 'a trc -> 'a trc = function
 
 (** Remove all the events related to ignored registers *)
 let remove_ignored ignored_regs : 'a trc -> 'a trc = function
-  (* TODO Add some debug printing here! *)
   | Trace l ->
       Trace
         (List.filter
