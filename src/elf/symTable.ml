@@ -44,6 +44,10 @@
 
 (* The documentation is in the mli file *)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 open Symbol
 
 type sym = Symbol.t
@@ -79,7 +83,8 @@ let add t sym =
     if !updated then { by_name; by_addr }
     else Raise.fail "Coudln't insert symbol %s, it didn't fit in" sym.name
 
-let of_name t name = SMap.find name t.by_name
+let of_name t name =
+  try SMap.find name t.by_name with Not_found -> fail "not found symbol %s" name
 
 let of_name_opt t name = SMap.find_opt name t.by_name
 
