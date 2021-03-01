@@ -260,40 +260,27 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
             (Array.sub buf.(k) !leftmost_column_used width))
   in
 
-  ( Array.map
-      (function
-        | row -> Array.sub row !leftmost_column_used width)
-      buf,
-    inbetweens,
-    width )
-
+  (Array.map (function row -> Array.sub row !leftmost_column_used width) buf, inbetweens, width)
 
 (* return index of first position where they differ *)
-let common_prefix_end (gas: glyph array list) : int =
+let common_prefix_end (gas : glyph array list) : int =
   let rec f ga0 gas i =
     match gas with
     | [] -> i
-    | ga::gas' ->
-       let rec g i' =
-         if i' >= i then
-           i
-         else if i' >=Array.length ga0 then
-           i' 
-         else if ga.(i')=ga0.(i') then
-           g (i'+1)
-         else i'
-       in
-       let i' = g 0 in
-       f ga0 gas' i' 
+    | ga :: gas' ->
+        let rec g i' =
+          if i' >= i then i
+          else if i' >= Array.length ga0 then i'
+          else if ga.(i') = ga0.(i') then g (i' + 1)
+          else i'
+        in
+        let i' = g 0 in
+        f ga0 gas' i'
   in
-  match gas with
-  | [] -> 0
-  | ga0::gas' -> f ga0 gas' (Array.length ga0)
-               
-  
-    
-let pp_glyphs rendered_control_flow_common_prefix_end (ga: glyph array) = 
-                                   (* convert glyph matrix into string array *)
+  match gas with [] -> 0 | ga0 :: gas' -> f ga0 gas' (Array.length ga0)
+
+let pp_glyphs rendered_control_flow_common_prefix_end (ga : glyph array) =
+  (* convert glyph matrix into string array *)
   let pp_glyph = function
     | Glr L -> "\u{2500}" (*   *)
     | Gud L -> "\u{2502}" (*   *)
@@ -319,9 +306,9 @@ let pp_glyphs rendered_control_flow_common_prefix_end (ga: glyph array) =
 
   let ga' =
     if rendered_control_flow_common_prefix_end < Array.length ga then
-      Array.to_list (Array.sub ga rendered_control_flow_common_prefix_end (Array.length ga - rendered_control_flow_common_prefix_end))
-    else
-      [] in
-  String.concat ""
-    (List.map pp_glyph ga')
-    
+      Array.to_list
+        (Array.sub ga rendered_control_flow_common_prefix_end
+           (Array.length ga - rendered_control_flow_common_prefix_end))
+    else []
+  in
+  String.concat "" (List.map pp_glyph ga')

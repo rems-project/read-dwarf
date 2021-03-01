@@ -168,7 +168,9 @@ let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
   (* is this the start of a basic block? *)
   ( if come_froms' <> [] || elf_symbols <> [] then
     an.pp_inlining_label_prefix ""
-    ^ css m Render_ctrlflow (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end an.rendered_control_flow_inbetweens.(k))
+    ^ css m Render_ctrlflow
+        (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end
+           an.rendered_control_flow_inbetweens.(k))
     ^ "\n"
   else ""
   )
@@ -181,7 +183,11 @@ let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
   ^ String.concat ""
       (let pp_symb (rk : render_kind) (addstar : bool) (s : string) =
          let sym = (if addstar then "**" else "  ") ^ pp_addr addr ^ " <" ^ s ^ ">:" in
-         let ctrl = an.pp_inlining_label_prefix "" ^ (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end an.rendered_control_flow_inbetweens.(k)) in
+         let ctrl =
+           an.pp_inlining_label_prefix ""
+           ^ ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end
+               an.rendered_control_flow_inbetweens.(k)
+         in
          let (_, non_overlapped_ctrl) =
            (* ctrl here can contain interesting UTF8 unicode, while sym is a plain string; hence the following UTF8-aware code *)
            let utf8_drop (n : int) (s : string) =
@@ -255,7 +261,9 @@ let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
   ^ begin
       let pp_line multiple elifi =
         css m Render_inlining (an.pp_inlining_label_prefix ppd_labels)
-        ^ css m Render_ctrlflow (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end an.rendered_control_flow_inbetweens.(k))
+        ^ css m Render_ctrlflow
+            (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end
+               an.rendered_control_flow_inbetweens.(k))
         ^ ""
         ^ css m Render_source
             (pp_dwarf_source_file_lines' m test.dwarf_static !Globals.show_source multiple elifi)
@@ -280,7 +288,9 @@ let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
           last_frame_info := frame_info;
           (* the inlining label prefix *)
           css m Render_inlining (an.pp_inlining_label_prefix ppd_labels)
-          ^ css m Render_ctrlflow (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end an.rendered_control_flow_inbetweens.(k))
+          ^ css m Render_ctrlflow
+              (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end
+                 an.rendered_control_flow_inbetweens.(k))
           ^ css m Render_frame frame_info
         )
       else ""
@@ -313,7 +323,9 @@ let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
       String.sub s 1 (String.length s - 1)
       )
   (* the rendered control flow *)
-  ^ css m Render_ctrlflow (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end an.rendered_control_flow.(k))
+  ^ css m Render_ctrlflow
+      (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end
+         an.rendered_control_flow.(k))
   (* the address and (hex) instruction *)
   ^ css m Render_instruction
       (pp_addr addr ^ ":  "
@@ -554,16 +566,26 @@ let pp_instructions_ranged m test an (low, high) =
   in
   let rendered_control_flow_common_prefix_end =
     ControlFlowPpText.common_prefix_end
-      ((subarray_map_to_list (function k -> function _i -> an.rendered_control_flow.(k)) an.instructions (an.index_of_address low) (an.index_of_address high))
-       @
-         (subarray_map_to_list (function k -> function _i -> an.rendered_control_flow_inbetweens.(k)) an.instructions (an.index_of_address low) (an.index_of_address high))
+      (subarray_map_to_list
+         (function
+           | k -> (
+               function _i -> an.rendered_control_flow.(k)
+             ))
+         an.instructions (an.index_of_address low) (an.index_of_address high)
+      @ subarray_map_to_list
+          (function
+            | k -> (
+                function _i -> an.rendered_control_flow_inbetweens.(k)
+              ))
+          an.instructions (an.index_of_address low) (an.index_of_address high)
       )
-  in 
-  
+  in
+
   pp_instruction_init ();
   String.concat ""
-    (subarray_map_to_list (pp_instruction m test an rendered_control_flow_common_prefix_end) an.instructions (an.index_of_address low)
-       (an.index_of_address high))
+    (subarray_map_to_list
+       (pp_instruction m test an rendered_control_flow_common_prefix_end)
+       an.instructions (an.index_of_address low) (an.index_of_address high))
 
 let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   let open Dwarf in
@@ -782,7 +804,8 @@ let pp_test_analysis m test an =
       *)
       ^ "\n* ************* instructions *****************\n"
       ^ ( pp_instruction_init ();
-          String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions))
+          String.concat ""
+            (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions))
         )
       ^ "* ************* struct/union/enum type definitions *****************\n"
       ^ (let d = test.dwarf_static.ds_dwarf in
