@@ -6,9 +6,9 @@ end)
 
 open Simrel.Base
 
-let o0_elf = "vm-stuff/pkvm-O0/el2.elf"
+let o0_elf = "src/simrel/O0.elf"
 
-let o2_elf = "vm-stuff/pkvm-O2/el2.elf"
+let o2_elf = "src/simrel/O2.elf"
 
 let tree_pair name : tree pair =
   {

@@ -38,6 +38,7 @@ module Test2 = struct
           Matched ({ o0 = st1; o2 = st2 }, Same);
           Matched
             ( { o0 = end1; o2 = end2 },
+              (* Not quite _sep_ logic - doesn't say anything about O0/R8 and O2/R10 *)
               Star (Eq [{ o0 = Reg r9; o2 = Reg r8 }; { o0 = Reg r10; o2 = Reg r9 }], Same) );
         ]
 end
@@ -51,9 +52,13 @@ module Test3 = struct
     let to_list = State.Tree.map_to_list (fun _ st -> st) in
     let[@ocaml.warning "-8"] [o0_1; _; o0_3; _; o0_5; o0_6] = to_list state_tree.o0 in
     let[@ocaml.warning "-8"] [o2_1; _; o2_3; o2_4] = to_list state_tree.o2 in
+    let (r0, r8) = Reg.(of_string "R0", of_string "R8") in
     [
       Matched ({ o0 = o0_1; o2 = o2_1 }, Same) (* first *);
-      Matched ({ o0 = o0_3; o2 = o2_3 }, Same) (* -1 *);
+      Matched
+        ( { o0 = o0_3; o2 = o2_3 },
+          Star (Eq [{ o0 = Reg r0; o2 = Reg r0 }; { o0 = Reg r8; o2 = Reg r0 }], Same) )
+      (* -1 *);
       Matched ({ o0 = o0_5; o2 = o2_4 }, Same) (* p->refcount *);
       NoMatch o0_6 (* the impossible case *);
     ]
@@ -153,9 +158,10 @@ let rel_to_exp st rel =
            ( = #x00000000ffffffff |arg:0| )
            ( = ( = |arg:0| #x0000000000000000 ) ( = |arg:0| #x0000000000000000 ) )
            So include the assertion itself, not just an equality check. *)
-        let assn_eq, assn =
-          let assn_o0 = assn_to_exp st.o0  in
-          ExTy.(assn_o0 = assn_to_exp st.o2), assn_o0 in
+        let (assn_eq, assn) =
+          let assn_o0 = assn_to_exp st.o0 in
+          (ExTy.(assn_o0 = assn_to_exp st.o2), assn_o0)
+        in
         let regs = RegRel.eq ~except st.o0 st.o2 in
         regs :: assn :: assn_eq :: mem
     | Star (sep, rel) ->
@@ -170,5 +176,24 @@ let check_rel rel =
     | Matched (st, rel) -> rel_to_exp st rel
     | NoMatch st -> [ExTy.(not @@ manyop Ast.And st.asserts)]
   in
-  let whole = ExTy.manyop Ast.And (List.concat_map matched_or_not rel) in
-  match Z3St.check_sat_full [whole] with None -> Raise.todo () | Some x -> x
+
+  (* NOTE: Hacky hack. One needs to check by comparing paths (from root/first
+     state to leaves/last state), and not everything at once.
+
+     Example: f(p) = p ? ( !p ? -2 : p->refcount++ ) : -1
+     Excluding the unreachable `-2`, the assertions on `p`
+     at `p->refcount++` and `-1` are not-null and null respectively,
+     which is unsatisfiable in SMT. *)
+  match List.map matched_or_not rel with
+  | [] -> Raise.unreachable ()
+  | first :: rest ->
+      (* Construct expression per path. *)
+      let paths = List.map (fun y -> ExTy.manyop Ast.And (first @ y)) rest in
+      (* Check each path *)
+      let paths_res =
+        List.map
+          (fun exp -> match Z3St.check_sat_full [exp] with None -> Raise.todo () | Some x -> x)
+          paths
+      in
+      (* Check all paths good *)
+      List.for_all Fun.id paths_res
