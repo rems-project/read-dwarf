@@ -51,18 +51,22 @@ endif
 
 # The root repository of the linksem source
 LINKSEM ?= ../linksem
+PRIVATE ?= ../read-dwarf-private
+ARCH_IR ?= $(PRIVATE)/aarch64.ir
 
 # Output symlink name
 OUT := read-dwarf
-CONFIG := src/config/config.toml
 
-default:
+$(OUT): $(notdir $(ARCH_IR))
 	@$(DUNE) build src/bin/main.exe
 	@$(DUNE) build @install
 	@ln -sf _build/default/src/bin/main.exe $(OUT)
 
-.PHONY: default
-.DEFAULT_GOAL: default
+$(notdir $(ARCH_IR)): $(ARCH_IR)
+	ln -sf $< $@
+
+.PHONY: $(OUT)
+.DEFAULT_GOAL: $(OUT)
 
 # This for easy use of the merlin fly-checker in IDEs
 # It will just compute all cmi interfaces for type-checking but it will fail less
@@ -93,17 +97,18 @@ doc:
 
 .PHONY: doc
 
-dune-test: default
+test: $(OUT) dune-test isla-test asm-test private-test
+
+.PHONY: test
+
+dune-test: $(OUT)
 	@echo "Running dune tests"
 	@dune test -j 1 --no-buffer
+	@echo ""
 
 .PHONY: dune-test
 
-test: default
-	@echo ""
-	@echo "Checking dune tests"
-	@dune test -j 1 --no-buffer
-	@echo ""
+isla-test: $(OUT)
 	@echo "Checking Arithmetic test"
 	./$(OUT) isla-test -s "add x0, x0, #8" > /dev/null
 	./$(OUT) isla-test -s "mul x0, x1, x2" > /dev/null
@@ -114,18 +119,21 @@ test: default
 	./$(OUT) isla-test -s "str x0, [x1]" > /dev/null
 	@echo "Memory tests have passed"
 	@echo ""
+
+asm-test: $(OUT)
 	@echo "Checking assembly tests (twice for cache testing)"
 	make -C test_asm test_rd
 	@echo "Assembly tests have passed"
+	@echo ""
 
-.PHONY: test
+.PHONY: isla-test
 
 private-test:
-ifneq (,$(wildcard ./Makefile.private))
-	make -f Makefile.private test
+ifeq (,$(wildcard .$(PRIVATE)/Makefile.test))
+	make -C $(PRIVATE) -f Makefile.test test
 endif
 
-.PHONY: private_test
+.PHONY: private-test
 
 clear-header:
 	headache -c etc/headache_config -r Makefile test_asm/Makefile test_asm/test.asm \

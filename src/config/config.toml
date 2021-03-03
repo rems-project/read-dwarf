@@ -61,7 +61,7 @@ toolchain = "aarch64-linux-gnu"
                     "__v83_implemented",
                     "__v84_implemented",
                     "__v85_implemented"]
-    arch-file = "../../../read-dwarf-private/aarch64.ir" # relative to the toml file
+    arch-file = "../../aarch64.ir" # relative to the toml file
     arch-toml = "isla_aarch64.toml" # relative to the toml file
     linearize = ["ConditionHolds", "integer_conditional_select", "InterruptPending"]
     other-opts = []
