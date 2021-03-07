@@ -1,0 +1,16 @@
+(executable
+ (name test)
+ (public_name read-dwarf.simrel.test)
+ (modules test)
+ (flags
+  (:standard -open Utils))
+ (libraries utils simrel sig_aarch64))
+
+(library
+ (name simrel)
+ (public_name read-dwarf.simrel)
+ (modules
+  (:standard \ test))
+ (flags
+  (:standard -open Utils))
+ (libraries utils ast state run z3))

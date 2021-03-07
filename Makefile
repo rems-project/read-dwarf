@@ -56,17 +56,26 @@ ARCH_IR ?= $(PRIVATE)/aarch64.ir
 
 # Output symlink name
 OUT := read-dwarf
+SIMREL_OUT := _build/default/src/simrel/test.exe
+
+all: $(OUT) $(SIMREL_OUT)
+
+.DEFAULT_GOAL: all
+
+$(SIMREL_OUT): $(notdir $(ARCH_IR))
+	@$(DUNE) build src/simrel/test.exe
+
+.PHONY: $(SIMREL_OUT)
 
 $(OUT): $(notdir $(ARCH_IR))
 	@$(DUNE) build src/bin/main.exe
 	@$(DUNE) build @install
 	@ln -sf _build/default/src/bin/main.exe $(OUT)
 
+.PHONY: $(OUT)
+
 $(notdir $(ARCH_IR)): $(ARCH_IR)
 	ln -sf $< $@
-
-.PHONY: $(OUT)
-.DEFAULT_GOAL: $(OUT)
 
 # This for easy use of the merlin fly-checker in IDEs
 # It will just compute all cmi interfaces for type-checking but it will fail less
