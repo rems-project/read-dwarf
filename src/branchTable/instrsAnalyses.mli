@@ -42,48 +42,37 @@
 (*                                                                                  *)
 (*==================================================================================*)
 
-open Cmdliner
-open Config.CommonOpt
+type 'a branch = Simple of int * 'a | Reg of State.Reg.t list
 
-module Default = struct
-  (** Default action to run when no command is set *)
-  let action _arch = print_endline "Error: read-dwarf, no command specified. Use --help for help"
+(** An instruction looks like a branch if it is not a return and writes to the PC *)
+val looks_like_a_branch : Trace.Instr.t -> int -> bool branch option
 
-  (** Global documentation string and name *)
-  let info =
-    let doc = "Parse dwarf information and use isla to run assembly" in
-    Term.(info "read-dwarf" ~doc ~exits)
+type instructions = (int, Run.Runner.slot) Hashtbl.t
 
-  (** Default command *)
-  let command = (Term.(CmdlinerHelper.func_options comopts action $ arch), info)
-end
+(** Triples of address of the branch, whether it is conditional (i.e. does it
+    fall-through to the next instruction) and the target address *)
+type simple_branches = private (int * bool * int) list
 
-(** List of all non-default commands *)
-let commands =
-  [
-    Run.ReadDwarf.command;
-    Isla.Test.command;
-    Other_cmds.DumpSym.command;
-    Isla.Server.Cmd.command;
-    Run.BB.command;
-    Other_cmds.DumpDwarf.command;
-    Cache.Cmd.command;
-    Run.Func.command;
-    Run.Instr.command;
-    Run.Block.command;
-    Run.FuncRD.command;
-    Other_cmds.CopySourcesCmd.command;
-    BranchTable.command;
-  ]
+(** Pairs of the address of the branch and the register whose computed values is branched on. *)
+type reg_branches = private (int * State.Reg.t list) list
 
-let _ = Printexc.record_backtrace Config.enable_backtrace
+(** Find and split simple branches from register branches.
+    If it is simple, we record whether a branch is conditional (and so can
+    fall-through to the next instruction) or unconditional and its target
+    address to help construct the (simple) comes-before relation later. *)
+val find_branches : instructions -> simple_branches * reg_branches
 
-(* Other architectures are unsupported for now. Remove this only when you are explicitly
-   working on making other architecture work with read-dwarf *)
-let _ = assert ("aarch64" = Arch.module_name)
+(** Compute (the one b to many as) comes-before relation.
+    Address a comes-before address b iff a falls-through and/or branches to b.
+    NOTE: The graph of this relation can be be cyclic.
+    NOTE: It ignores the fact that BLR instructions effectively fall-through. *)
+val compute_comes_before : instructions -> simple_branches -> (int, int * int list) Hashtbl.t
 
-(* TODO allow to set the seed in compile time or run time config for debugging *)
-let _ = Random.self_init ()
-
-(** Main entry point *)
-let _ = Term.exit @@ Term.eval_choice Default.command commands
+(** Track register spilling and reloading. Returns a map [(int, int) Hashtbl.t]
+    where the key is the address of instructions that load from a stack-offset
+    that was spilled-to earlier and the value is the address of that earlier spill.
+    NOTE: This is an over-approximation: it will track all register spills but may
+    also include standard stack/local variable manipulation.
+    NOTE: Does NOT do/use any sort of pointer-aliasing analysis, just syntactic
+    pattern-matching. *)
+val track_spills : instructions -> simple_branches -> (int, int) Hashtbl.t

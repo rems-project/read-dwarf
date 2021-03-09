@@ -1,0 +1,6 @@
+(library
+ (name branchTable)
+ (public_name read-dwarf.branchTable)
+ (flags
+  (:standard -open Utils))
+ (libraries utils ast state run))

@@ -4,7 +4,7 @@
  (modules main)
  (flags
   (:standard -open Utils))
- (libraries config run utils sig_aarch64 other_cmds))
+ (libraries config run utils sig_aarch64 other_cmds branchTable))
 
 (library
  (name other_cmds)
