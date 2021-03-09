@@ -78,10 +78,12 @@ let pp_machine mach = mach |> machine_to_string |> Pp.string
 type t = {
   filename : string;  (** The name on the file system. Useful for error messages *)
   symbols : SymTbl.t;  (** The symbol table *)
-  segments : Segment.t list;  (** The list of Segment loaded in RAM *)
-  entry : int;  (** The address of the entry point *)
-  machine : machine;  (** The target architecture of the file *)
-  linksem : Elf_file.elf_file;  (** The original linksem structure for the file *)
+  entry : int;  (** The address of the entry point; only used in [dumpSym.ml] *)
+  machine : machine;
+      (** The target architecture of the file; only used in [arch.ml, dumpSym.ml, dw.ml] *)
+  linksem : Elf_file.elf_file;
+      (** The original linksem structure for the file; only used in  [dw.ml] *)
+  rodata : Segment.t;  (** The read-only data section *)
 }
 
 (** Error on Elf parsing *)
@@ -131,7 +133,32 @@ let of_file (filename : string) =
   let machine = machine_of_linksem machine in
   debug "Loading ELF segments of %s" filename;
   let segments = List.map Segment.of_linksem segments in
+  debug "Loaded ELF segments %t"
+  @@ Pp.top (Pp.list Pp.hex)
+  @@ List.map (fun x -> x.Segment.addr) segments;
   debug "Loading ELF symbols of %s" filename;
   let symbols = SymTbl.of_linksem segments symbol_map in
+  debug "Adding .rodata section of %s" filename;
+  (* We add the .rodata section seperately from the symbols because
+     - it can contain non-symbol information such as string literals and
+       constants used in branch-register target calculations
+     - the range of the section is guaranteed to overlap with any symbols
+       within it, and so not suitable to be stored in the [RngMap] *)
+  let rodata =
+    let (_, addr, data) =
+      Dwarf.extract_section_body elf_file ".rodata" false
+      (* `false' argument is for returning an empty byte-sequence if
+         section is not found, instead of throwing an exception *)
+    in
+    Segment.
+      {
+        data;
+        addr = Nat_big_num.to_int addr;
+        size = BytesSeq.length data;
+        read = true;
+        write = false;
+        execute = false;
+      }
+  in
   info "ELF file %s has been loaded" filename;
-  { filename; symbols; segments; entry; machine; linksem = elf_file }
+  { filename; symbols; entry; machine; linksem = elf_file; rodata }

@@ -114,3 +114,9 @@ val of_linksem : Segment.t list -> linksem_t -> t
 
 (** Pretty print the table as a raw ocaml value *)
 val pp_raw : t -> Pp.document
+
+(** Iterate through all the symbols in the table. *)
+val iter : t -> (sym -> unit) -> unit
+
+(** Fold over all the symbols in the table. *)
+val fold : t -> 'a -> (sym -> 'a -> 'a) -> 'a

@@ -296,6 +296,6 @@ let remove_ignored ignored_regs : 'a trc -> 'a trc = function
         (List.filter
            (function
              | ReadReg (name, _, _, _) | WriteReg (name, _, _, _) ->
-                 not @@ List.mem name ignored_regs
+                 not @@ List.mem String.equal name ignored_regs
              | _ -> true)
            l)

@@ -110,3 +110,17 @@ val assemble_to_elf : string -> string
 
 (**  Split a byte-sequence into a list of instructions. *)
 val split_into_instrs : BytesSeq.t -> BytesSeq.t list
+
+(** Tell if an instruction is a return instruction. *)
+val is_ret : BytesSeq.t -> bool
+
+(** Tell if an instruction is a compare instruction.
+    Returns [Some (reg,bv)] where the contents of [reg] are compared against the
+    value [bv] if it is and [None] if not. *)
+val is_cmp : BytesSeq.t -> (State.Reg.t * BitVec.t) option
+
+(** Tell if an instruction is an (unconditional) branch on immediate with
+    link instructions.  Returns [Some bv] where [bv] is the offset (from the
+    address of this instruction, in the range +/-128MB) that is branched to
+    if it is and [None] if not. *)
+val is_bl : BytesSeq.t -> BitVec.t option

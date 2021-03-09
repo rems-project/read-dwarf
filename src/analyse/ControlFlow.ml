@@ -306,13 +306,13 @@ let parse_drop_one s =
 let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
   (*   Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic (String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic))) s';flush stdout;*)
   let c =
-    if List.mem mnemonic [".word"] then C_no_instruction
-    else if List.mem mnemonic ["ret"] then C_ret
-    else if List.mem mnemonic ["eret"] then C_eret
-    else if List.mem mnemonic ["br"] then C_branch_register mnemonic
+    if List.mem String.equal mnemonic [".word"] then C_no_instruction
+    else if List.mem String.equal mnemonic ["ret"] then C_ret
+    else if List.mem String.equal mnemonic ["eret"] then C_eret
+    else if List.mem String.equal mnemonic ["br"] then C_branch_register mnemonic
     else if
       (String.length mnemonic >= 2 && String.sub mnemonic 0 2 = "b.")
-      || List.mem mnemonic ["b"; "bl"]
+      || List.mem String.equal mnemonic ["b"; "bl"]
     then
       match parse_target s' with
       | None -> raise (Failure ("b./b/bl parse error for: \"" ^ s ^ "\"\n"))
@@ -320,7 +320,7 @@ let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
           if mnemonic = "b" then C_branch (a, s)
           else if mnemonic = "bl" then C_branch_and_link (a, s)
           else C_branch_cond (mnemonic, a, s)
-    else if List.mem mnemonic ["cbz"; "cbnz"] then
+    else if List.mem String.equal mnemonic ["cbz"; "cbnz"] then
       match parse_drop_one s' with
       | None -> raise (Failure ("cbz/cbnz 1 parse error for: " ^ s ^ "\n"))
       | Some s' -> (
@@ -328,7 +328,7 @@ let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
           | None -> raise (Failure ("cbz/cbnz 2 parse error for: " ^ s ^ "\n"))
           | Some (a, s) -> C_branch_cond (mnemonic, a, s)
         )
-    else if List.mem mnemonic ["tbz"; "tbnz"] then
+    else if List.mem String.equal mnemonic ["tbz"; "tbnz"] then
       match parse_drop_one s' with
       | None -> raise (Failure ("tbz/tbnz 1 parse error for: " ^ s ^ "\n"))
       | Some s'' -> (
@@ -342,7 +342,7 @@ let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
                   C_branch_cond (mnemonic, a, s'''')
             )
         )
-    else if List.mem mnemonic ["smc"; "hvc"] then C_smc_hvc s'
+    else if List.mem String.equal mnemonic ["smc"; "hvc"] then C_smc_hvc s'
     else C_plain
   in
   (*Printf.printf "%s\n" (pp_control_flow_instruction c);*)
@@ -366,7 +366,7 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
     | C_branch_and_link (a, s) ->
         (* special-case non-return functions to have no successor target of calls *)
         (* TODO: pull this from the DWARF attributes *)
-        if List.mem s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then
+        if List.mem String.equal s ["<abort>"; "<panic>"; "<__stack_chk_fail>"] then
           [(T_branch_and_link_call_noreturn, a, s)]
         else
           [(T_branch_and_link_call, a, s); (T_branch_and_link_successor, succ_addr, "<return>")]

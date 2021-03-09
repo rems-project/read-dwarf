@@ -155,7 +155,8 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
     match todo with
     | [] -> (acc_reachable, acc_bl_targets)
     | k :: todo' ->
-        if List.mem k acc_reachable then stupid_reachability acc_reachable acc_bl_targets todo'
+        if List.mem Int.equal k acc_reachable then
+          stupid_reachability acc_reachable acc_bl_targets todo'
         else if not (k < Array.length instructions) then
           stupid_reachability acc_reachable acc_bl_targets todo'
         else

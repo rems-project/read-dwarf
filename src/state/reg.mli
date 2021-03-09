@@ -98,6 +98,9 @@ type t = private int
     Use {!IslaConv.ty} to convert *)
 type ty = Ast.no Ast.ty
 
+(** Convert an integer into the corresponding register. *)
+val of_int : int -> t option
+
 (** Check if register is declared with that path *)
 val mem_path : Path.t -> bool
 
@@ -149,7 +152,13 @@ val iter : (Path.t -> t -> ty -> unit) -> unit
 val seq_all : unit -> t Seq.t
 
 (** Equality predicate *)
-val equal : t -> t -> bool
+val ( = ) : t -> t -> bool
+
+(** Inequality predicate *)
+val ( <> ) : t -> t -> bool
+
+(** Compare according to an implementation-defined total order. *)
+val compare : t -> t -> int
 
 (** Pretty prints a register (Just use {!to_string}) *)
 val pp : t -> Pp.document

@@ -414,7 +414,8 @@ let colours_dot_complains =
     "fuchsia";
   ]
 
-let colours = List.filter (function c -> not (List.mem c colours_dot_complains)) colours_svg
+let colours =
+  List.filter (function c -> not (List.mem String.equal c colours_dot_complains)) colours_svg
 
 let include_tooltips = true
 
@@ -560,7 +561,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
     | C_branch _ -> (
         match i.i_targets with
         | [(_, addr', k', _)] ->
-            if List.mem k' visited then (node_name nesting addr', k')
+            if List.mem Int.equal k' visited then (node_name nesting addr', k')
               (* TODO: something more useful *)
             else next_non_start_node_name nesting (k' :: visited) k'
         | _ -> fatal "non-unique branch targets at %s" (pp_addr i.i_addr)
@@ -802,7 +803,8 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
                 &&
                 match ss'.ss_call_site with
                 | None -> false
-                | Some (ufe, line, _subprogram_name) -> List.mem (ufe, line) source_lines
+                | Some (ufe, line, _subprogram_name) ->
+                    List.mem Stdlib.( = ) (ufe, line) source_lines
               in
 
               match
@@ -817,7 +819,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
         let inline = (*inline_all*) new_ss_O2_ambient_option <> None in
 
         let node = mk_node nesting k CFG_node_branch_and_link s in
-        if (not inline) || List.mem k nesting.n_indices then
+        if (not inline) || List.mem Int.equal k nesting.n_indices then
           (* not inline: construct a new node for the bl. If not noreturn, add an edge to its successor and return that in the new worklist, otherwise stop at this node.  In either case, if recurse_flat, add the bl target to the bl_target_indices *)
           let nesting_call = nesting in
 
@@ -895,7 +897,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
     match work_list with
     | [] -> g_acc
     | (k, nesting) :: work_list' -> (
-        if List.mem k visited then mk_graph' return_target g_acc visited work_list'
+        if List.mem Int.equal k visited then mk_graph' return_target g_acc visited work_list'
         else
           (* Printf.printf "mk_graph' working on %d %s %s\n" k
                (pp_addr an.instructions.(k).i_addr)
@@ -1045,7 +1047,8 @@ let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg 
     match todo with
     | [] -> acc_reachable
     | nn :: todo' ->
-        if List.mem nn acc_reachable then stupid_reachability through_bl acc_reachable todo'
+        if List.mem String.equal nn acc_reachable then
+          stupid_reachability through_bl acc_reachable todo'
         else
           let new_nodes = List.assoc nn edges_all in
           (*          let new_nodes_bl = if through_bl && *)
@@ -1054,21 +1057,29 @@ let reachable_subgraph (g : graph_cfg) (labels_start : string list) : graph_cfg 
   in
   let start_node_names =
     List.filter_map
-      (function node -> if List.mem node.nc_label labels_start then Some node.nc_name else None)
+      (function
+        | node ->
+            if List.mem String.equal node.nc_label labels_start then Some node.nc_name else None)
       nodes_all
   in
   let node_names_reachable = stupid_reachability false [] start_node_names in
   let edges_reachable =
     List.filter
       (function
-        | (nn, nn', _cek) -> List.mem nn node_names_reachable && List.mem nn' node_names_reachable)
+        | (nn, nn', _cek) ->
+            List.mem String.equal nn node_names_reachable
+            && List.mem String.equal nn' node_names_reachable)
       g.gc_edges
   in
   let nodes_reachable_start =
-    List.filter (function node -> List.mem node.nc_name node_names_reachable) g.gc_start_nodes
+    List.filter
+      (function node -> List.mem String.equal node.nc_name node_names_reachable)
+      g.gc_start_nodes
   in
   let nodes_reachable_rest =
-    List.filter (function node -> List.mem node.nc_name node_names_reachable) g.gc_nodes
+    List.filter
+      (function node -> List.mem String.equal node.nc_name node_names_reachable)
+      g.gc_nodes
   in
   {
     gc_start_nodes = nodes_reachable_start;
@@ -1102,7 +1113,7 @@ let correlate_source_line g1 g2 : graph_cfg =
   let nodes_branch_cond1 = List.filter is_branch_cond (graph_nodes g1) in
   let nodes_branch_cond2 = List.filter is_branch_cond (graph_nodes g2) in
 
-  let intersects xs ys = List.exists (function x -> List.mem x ys) xs in
+  let intersects xs ys = List.exists (function x -> List.mem Stdlib.( = ) x ys) xs in
   let edges =
     List.concat
       (List.map

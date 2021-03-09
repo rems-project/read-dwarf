@@ -361,3 +361,59 @@ let assemble_to_elf instr =
   elf_file
 
 let split_into_instrs = BytesSeq.to_listbs ~len:4
+
+(** https://developer.arm.com/docs/ddi0596/h/base-instructions-alphabetic-order/ret-return-from-subroutine
+    TODO Add tests *)
+let is_ret code =
+  assert (BytesSeq.length code = 4);
+  let (( = ), ( land )) = Int32.(( = ), logand) in
+  let code = BytesSeq.get32be code 0 in
+  (* 0xc0035fd6 *)
+  let zero_out_reg_operand_mask = 0x01fcffffl in
+  let ret_with_reg_zero = 0x00005fd6l in
+  zero_out_reg_operand_mask land code = ret_with_reg_zero
+
+(** https://developer.arm.com/docs/ddi0596/h/base-instructions-alphabetic-order/cmp-immediate-compare-immediate-an-alias-of-subs-immediate
+    TODO Add tests *)
+let is_cmp code_bs =
+  assert (BytesSeq.length code_bs = 4);
+  let (( = ), ( land )) = Int32.(( = ), logand) in
+  let code = BytesSeq.get32be code_bs 0 in
+  let zero_out_operands_mask = 0x1f00087fl in
+  let cmp_with_zero_operands = 0x1f000071l in
+  if zero_out_operands_mask land code = cmp_with_zero_operands then
+    let open BitVec in
+    let size = 32 in
+    (* get the register *)
+    let bv5 = of_int ~size 5 in
+    let code_bv = BytesSeq.getbvle ~size code_bs 0 lsr bv5 in
+    let bottom5 = of_int ~size 0x0000001f in
+    let reg = to_int @@ (code_bv land bottom5) in
+    (* get the value *)
+    let code_bv = code_bv lsr bv5 in
+    let bottom12 = of_int ~size 0x00000fff in
+    (* values are 64 bits, spec says imm12 is unsigned *)
+    let value = BitVec.zero_extend size @@ (code_bv land bottom12) in
+    (* fixup types *)
+    match Reg.of_int reg with Some reg -> Some (reg, value) | None -> Raise.unreachable ()
+  else None
+
+(** https://developer.arm.com/docs/ddi0596/h/base-instructions-alphabetic-order/bl-branch-with-link
+    TODO Add tests *)
+let is_bl code_bs =
+  assert (BytesSeq.length code_bs = 4);
+  let (( = ), ( land )) = Int32.(( = ), logand) in
+  let code = BytesSeq.get32be code_bs 0 in
+  let zero_out_operands_mask = 0x000000fcl in
+  let bl_with_zero_operands = 0x00000094l in
+  if zero_out_operands_mask land code = bl_with_zero_operands then
+    let open BitVec in
+    let size = 32 in
+    let code_bv = BytesSeq.getbvle ~size code_bs 0 in
+    (* get the imm26 *)
+    let bottom26 = of_int ~size 0x03ffffff in
+    let two = of_int ~size 2 in
+    (* values are 64 bits, spec says imm26 is multiplied by 4
+       (shifted left by 2) and sign extended *)
+    Some (BitVec.sign_extend size @@ ((code_bv land bottom26) lsl two))
+  else None

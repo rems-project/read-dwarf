@@ -111,7 +111,7 @@ module RegRel = struct
     map |> Reg.Map.iteri (fun reg tval -> ref := f !ref reg tval);
     !ref
 
-  let present except reg = match except with None -> false | Some x -> List.mem reg x
+  let present except reg = match except with None -> false | Some x -> List.mem Reg.( = ) reg x
 
   (** This is not symmetric (does it need to be?). 
     NOTE: If there is a reg in st2 that is not in st1, it will not be checked.

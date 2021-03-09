@@ -95,7 +95,7 @@ let mk_inlining test sdt instructions =
             if List.length labels_in_use >= 26 then fatal "%s" "inlining depth > 26";
             let rec fresh_label l =
               let l = (l + 1) mod 26 in
-              if not (List.mem l labels_in_use) then l else fresh_label l
+              if not (List.mem Int.equal l labels_in_use) then l else fresh_label l
             in
             let l = fresh_label label_last in
             enlabel (l :: labels_in_use) l ((l, issr) :: acc) issr_new'

@@ -118,3 +118,7 @@ let of_linksem segments linksem_map =
   List.fold_left add_linksem_sym_to_map empty linksem_map
 
 let pp_raw st = RMap.bindings st.by_addr |> List.map (Pair.map Pp.ptr pp_raw) |> Pp.mapping "syms"
+
+let iter t f = SMap.iter (fun _ value -> f value) t.by_name
+
+let fold t e f = SMap.fold (fun _ value -> f value) t.by_name e
