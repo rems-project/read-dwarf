@@ -211,6 +211,8 @@ exception DeadEnd
 
 exception MultipleStarts
 
+exception IrrelevantEarlyRange of cmp_case
+
 (** A standard backwards-dataflow analysis with following modifications:
     - comparisons with constants are treated as writes
     - irrelevant instructions (those which do not write to any live registers) are ignored
@@ -235,10 +237,8 @@ let rec update_live ctxt addr =
       if relevant_spill then Hashtbl.replace ctxt.relevant_spills addr true;
       if not (relevant_regs <> [] || relevant_spill) then (
         ( match is_cmp_we_care_about with
-        | Some (RangeFrom0, _) ->
-            if ctxt.cmp_operands = None then fail "IRRELEVANT EARLY RANGE %#x" addr
-        | Some (Eq_Neq, _) ->
-            if ctxt.cmp_operands = None then fail "IRRELEVANT EARLY EQ_NEQ %#x" addr
+        | Some (cmp_case, _) ->
+            if ctxt.cmp_operands = None then raise (IrrelevantEarlyRange cmp_case)
         | None -> ()
         );
         (ctxt.cmp_operands, ctxt.live)
@@ -448,6 +448,7 @@ let process_sym names (dwarf : Dw.t) start =
           |> List.map (make_block runner)
           |> List.map (Pair.map Fun.id (symeval_range_for_trees elf start))
           |> List.map (Pair.map Fun.id (extract_branch_targets @@ Arch.pc ()))
+          |> List.map (fun (addr, target) -> (addr, sym.name, target))
           |> Fun.flip ( @ ) acc
         with exn ->
           let brs = List.map fst (reg :> (int * Reg.t list) list) in
@@ -456,8 +457,8 @@ let process_sym names (dwarf : Dw.t) start =
               warn "Not implemented: MultipleStarts for %t in %s" (pp_ptrs brs) sym.name
           | _ -> warn "Error processing %s, skipping branches %t" sym.name (pp_ptrs brs)
           );
-          if List.mem String.equal sym.name names then raise exn
-          else List.map (fun reg -> (reg, Conc [])) brs @ acc
+          if names <> [] && List.mem String.equal sym.name names then raise exn
+          else List.map (fun addr -> (addr, sym.name, Conc [])) brs @ acc
       ))
 
 let get_branches log names elfname =
@@ -478,7 +479,7 @@ let get_branches log names elfname =
 
 let symeval_branch_table elfname names =
   List.iter
-    (fun (br, target) -> base "%#x can jump to %t" br (Pp.top pp_target target))
+    (fun (br, name, target) -> base "%#x in %s can jump to %t" br name (Pp.top pp_target target))
     (get_branches true names elfname)
 
 let elf =
