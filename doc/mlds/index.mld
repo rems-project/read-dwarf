@@ -101,6 +101,7 @@ Here is an alphabetical list of all modules, except [src/arch/aarch64/sig.ml].
 Analyse
 Arch
 Ast
+BranchTable
 Config
 Ctype
 Dw
