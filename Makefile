@@ -102,7 +102,7 @@ format:
 doc:
 	@echo "Generating documentation"
 	@dune build @doc
-	@cp -r _build/default/_doc/_html doc/html
+	@cp -r _build/default/_doc/_html -T doc/html
 
 .PHONY: doc
 
