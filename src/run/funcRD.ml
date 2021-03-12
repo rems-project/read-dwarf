@@ -130,7 +130,7 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
               let last_pc = st.last_pc in
               let last_instr = Runner.expect_normal runner last_pc in
               Hashtbl.add instr_data (st.last_pc + 4)
-                (Printf.sprintf "End because: %s" s, st, last_instr.footprint))
+                (Printf.sprintf "End because: %s" s, st, Trace.Instr.footprint last_instr))
         tree;
       Vec.iter
         (fun funcaddr ->

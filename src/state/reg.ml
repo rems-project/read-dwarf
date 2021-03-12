@@ -78,6 +78,8 @@ let index : (Path.t, ty) IdMap.t = IdMap.make ()
 
 let pp_index () = IdMap.pp ~keys:Path.pp ~vals:pp_ty index
 
+let of_int x = if IdMap.mem_id index x then Some x else None
+
 let mem_path = IdMap.mem index
 
 let mem_string = Path.of_string %> mem_path
@@ -121,7 +123,11 @@ let iter f = IdMap.iter f index
 
 let seq_all () = Seq.iota (num ())
 
-let equal = ( = )
+let ( = ) = Int.equal
+
+let ( <> ) x y = not (x = y)
+
+let compare = Int.compare
 
 let pp reg = reg |> to_string |> Pp.string
 

@@ -138,7 +138,7 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
 
     let try_at_column dry_run c =
       let try_for_row k =
-        let is_target = List.mem k a.targets in
+        let is_target = List.mem Int.equal k a.targets in
         let is_source = k = a.source in
         let is_self_target = is_target && is_source in
 
@@ -248,12 +248,12 @@ let render_ascii_control_flow max_branch_distance max_width instructions :
           Array.map2
             (fun g1 g2 ->
               if
-                List.mem g1 [Gud L; Grd L; Grud L; Glrud (L, L); Glrud (B, L)]
-                && List.mem g2 [Gud L; Gru L; Grud L; Glrud (L, L); Glrud (B, L)]
+                List.mem Stdlib.( = ) g1 [Gud L; Grd L; Grud L; Glrud (L, L); Glrud (B, L)]
+                && List.mem Stdlib.( = ) g2 [Gud L; Gru L; Grud L; Glrud (L, L); Glrud (B, L)]
               then Gud L
               else if
-                List.mem g1 [Gud B; Grd B; Grud B; Glrud (L, B); Glrud (B, B)]
-                && List.mem g2 [Gud B; Gru B; Grud B; Glrud (L, B); Glrud (B, B)]
+                List.mem Stdlib.( = ) g1 [Gud B; Grd B; Grud B; Glrud (L, B); Glrud (B, B)]
+                && List.mem Stdlib.( = ) g2 [Gud B; Gru B; Grud B; Glrud (L, B); Glrud (B, B)]
               then Gud B
               else Gnone)
             (Array.sub buf.(k - 1) !leftmost_column_used width)

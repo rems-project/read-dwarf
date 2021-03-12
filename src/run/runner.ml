@@ -66,11 +66,11 @@ module Reg = State.Reg
 (** Give the instruction descriptor at a given address *)
 type slot =
   | Normal of Trace.Instr.t  (** The traces and the size of the instruction *)
-  | Special  (** Special instructions. Will be used to represent external events *)
+  | Special of int  (** Special instructions. Will be used to represent external events *)
   | Nocode
       (** The is no code at this address. Running it is UB.
           Also used if an address is in between instructions *)
-  | IslaFail  (** This means Isla pipeline failed on that instruction *)
+  | IslaFail of int  (** This means Isla pipeline failed on that instruction *)
 
 type t = {
   elf : Elf.File.t;
@@ -94,15 +94,20 @@ let of_dwarf dwarf = of_elf ~dwarf dwarf.elf
 let load_sym runner (sym : Elf.Symbol.t) =
   info "Loading symbol %s in %s" sym.name runner.elf.filename;
   Vec.add_one runner.funcs sym.addr;
-  let opcode_list = BytesSeq.to_listbs ~len:4 sym.data in
-  List.iteri
-    (fun index code ->
-      let addr = sym.addr + (4 * index) in
+  let opcode_list = Arch.split_into_instrs sym.data in
+  let addr = ref sym.addr in
+  List.iter
+    (fun code ->
+      let (addr, instr_len) =
+        let result = !addr and len = BytesSeq.length code in
+        addr := !addr + len;
+        (result, len)
+      in
       try
         let instr = Trace.Cache.get_instr code in
         if instr.traces = [] then begin
           debug "Instruction at 0x%x in %s is loaded as special" addr sym.name;
-          Hashtbl.add runner.instrs addr Special
+          Hashtbl.add runner.instrs addr (Special instr_len)
         end
         else begin
           debug "Instruction at 0x%x in %s is loaded as normal. Traces are:\n%t" addr sym.name
@@ -112,7 +117,7 @@ let load_sym runner (sym : Elf.Symbol.t) =
       with exn ->
         warn "Could not convert isla trace of instruction at 0x%x in %s to Trace.t: %s" addr
           runner.elf.filename (Printexc.to_string exn);
-        Hashtbl.add runner.instrs addr IslaFail)
+        Hashtbl.add runner.instrs addr (IslaFail instr_len))
     opcode_list
 
 (** Fetch an instruction, and return corresponding slot. *)
@@ -179,6 +184,24 @@ let execute_normal ?(prelock = ignore) ~pc runner (instr : Trace.Instr.t) state 
   end
   else run_pure ()
 
+let skip runner state : State.t list =
+  let pc_exp = State.get_reg_exp state runner.pc in
+  try
+    let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
+    match fetch runner pc with
+    | Normal { traces = _; read = _; written = _; length; opcode = _ }
+     |Special length
+     |IslaFail length ->
+        let state = State.copy_if_locked state in
+        State.bump_pc ~pc:runner.pc state length;
+        [state]
+    | Nocode -> Raise.fail "Trying to skip 0x%x in %s: no code there" pc runner.elf.filename
+  with exn ->
+    err "Trying to skip instruction at %t in %s: Unexpected error"
+      Pp.(top State.Exp.pp pc_exp)
+      runner.elf.filename;
+    Raise.again exn
+
 (** Do the whole fetch and execute cycle.
     Take the PC from the state, and fetch it's {{!Instr}instruction} and then run it.
     It return the list of possible behavior of that instruction.
@@ -199,10 +222,10 @@ let run ?prelock runner state : State.t list =
     let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
     match fetch runner pc with
     | Normal instr -> execute_normal ?prelock ~pc runner instr state
-    | Special ->
+    | Special _ ->
         Raise.fail "Special instruction at 0x%x in %s. unsupported for now" pc runner.elf.filename
     | Nocode -> Raise.fail "Trying to run 0x%x in %s: no code there" pc runner.elf.filename
-    | IslaFail ->
+    | IslaFail _ ->
         Raise.fail "Trying to run 0x%x in %s: Isla pipeline failed on that instruction" pc
           runner.elf.filename
   with exn ->
@@ -227,9 +250,9 @@ let pp_slot =
   function
   | Normal instr ->
       prefix 4 1 (dprintf "Normal instruction of size %d:" instr.length) (Trace.Instr.pp instr)
-  | Special -> !^"Special instruction"
+  | Special _ -> !^"Special instruction"
   | Nocode -> !^"Not an instruction"
-  | IslaFail -> !^"Isla failed at that PC: investigate"
+  | IslaFail _ -> !^"Isla failed at that PC: investigate"
 
 (** Dump instruction table *)
 let pp_instr (runner : t) =

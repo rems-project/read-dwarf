@@ -131,7 +131,7 @@ module Var = struct
 
   let equal v v' =
     match (v, v') with
-    | (Register (st, reg), Register (st', reg')) -> Id.equal st st' && Reg.equal reg reg'
+    | (Register (st, reg), Register (st', reg')) -> Id.equal st st' && Reg.(reg = reg')
     | (ReadVar (st, num, size), ReadVar (st', num', size')) ->
         Id.equal st st' && num = num' && size = size'
     | (Arg num, Arg num') -> num = num'
@@ -424,20 +424,30 @@ let set_read (s : t) (read_num : int) (exp : Exp.t) =
 
 let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option =
   match s.elf with
-  | Some elf when ConcreteEval.is_concrete addr -> (
-      let int_addr = ConcreteEval.eval addr |> Value.expect_bv |> BitVec.to_int in
-      let size = size |> Ast.Size.to_bits in
-      try
-        let (sym, offset) = Elf.SymTable.of_addr_with_offset elf.symbols int_addr in
-        if sym.writable then None
-        else
-          (* Assume little endian here *)
-          Some (Typed.bits (BytesSeq.getbvle ~size sym.data offset))
-      with Not_found ->
-        warn "Reading global at 0x%x which is not in a global symbol" int_addr;
-        None
+  | None -> None
+  | Some elf -> (
+      if not @@ ConcreteEval.is_concrete addr then None
+      else
+        let int_addr = ConcreteEval.eval addr |> Value.expect_bv |> BitVec.to_int in
+        let size = size |> Ast.Size.to_bits in
+        try
+          let (sym, offset) = Elf.SymTable.of_addr_with_offset elf.symbols int_addr in
+          if sym.writable then None
+          else
+            (* Assume little endian here *)
+            let bv = BytesSeq.getbvle ~size sym.data offset in
+            Some (Typed.bits bv)
+        with Not_found ->
+          let rodata = elf.rodata in
+          if rodata.addr <= int_addr && int_addr + size < rodata.addr + rodata.size then
+            let bv = BytesSeq.getbvle ~size rodata.data (int_addr - rodata.addr) in
+            (* Assume little endian here *)
+            Some (Typed.bits bv)
+          else (
+            warn "Failed to find symbol or rodata at 0x%x" int_addr;
+            None
+          )
     )
-  | _ -> None
 
 let read ~provenance ?ctyp (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t =
   assert (not @@ is_locked s);

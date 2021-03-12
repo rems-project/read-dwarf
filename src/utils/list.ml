@@ -239,6 +239,8 @@ let rec equal eq l1 l2 =
   | (a1 :: t1, a2 :: t2) when eq a1 a2 -> equal eq t1 t2
   | _ -> false
 
+let rec mem eq x = function [] -> false | y :: ys -> eq x y || mem eq x ys
+
 (** If the list have the same length this a lexicographic compare.
     If one list is shorter, then the missing value a considered smaller than any actual values.
 

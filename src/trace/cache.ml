@@ -168,4 +168,4 @@ let get_traces (opcode : BytesSeq.t) : Base.t list =
 
 (** Get a full blown {!Instr} from the opcode, going through the whole Isla pipeline
     if necessary.*)
-let get_instr (opcode : BytesSeq.t) : Instr.t = Instr.of_traces @@ get_traces opcode
+let get_instr (opcode : BytesSeq.t) : Instr.t = Instr.of_traces opcode @@ get_traces opcode

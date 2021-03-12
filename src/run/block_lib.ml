@@ -88,7 +88,7 @@ let pp_label label = label |> label_to_string |> Pp.string
     The output is a tree because state merging is not implemented so if we are
     going twice on the same PC, the whole thing will be run twice separately in
     two separate tree branches. *)
-let run ?(every_instruction = false) (b : t) (start : State.t) : label State.Tree.t =
+let run ?(every_instruction = false) ?relevant (b : t) (start : State.t) : label State.Tree.t =
   let pcreg = Arch.pc () in
   assert (State.is_locked start);
   let rec run_from state =
@@ -101,13 +101,22 @@ let run ?(every_instruction = false) (b : t) (start : State.t) : label State.Tre
           State.lock state;
           State.Tree.{ state; data = End endmsg; rest = [] }
       | None -> (
-          info "Running pc %t" (Pp.top State.Exp.pp pc_exp);
           let prelock state = State.Simplify.ctxfull state in
           if every_instruction then begin
             prelock state;
             State.lock state
           end;
-          let states = Runner.run ~prelock b.runner state in
+          let states =
+            let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
+            if Option.fold ~none:true ~some:(Fun.flip Hashtbl.mem pc) relevant then (
+              info "Running pc %t" (Pp.top State.Exp.pp pc_exp);
+              Runner.run ~prelock b.runner state
+            )
+            else (
+              info "Skipping pc %t" (Pp.top State.Exp.pp pc_exp);
+              Runner.skip b.runner state
+            )
+          in
           debug "After locking";
           match states with
           | [] -> Raise.fail "Reached a exceptional instruction"

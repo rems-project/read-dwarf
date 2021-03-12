@@ -42,85 +42,37 @@
 (*                                                                                  *)
 (*==================================================================================*)
 
-(** This module define all architecture-dependent configuration
+type 'a branch = Simple of int * 'a | Reg of State.Reg.t list
 
-    It should be used instead of {!Arch} inside the architecture dependent modules.
+(** An instruction looks like a branch if it is not a return and writes to the PC *)
+val looks_like_a_branch : Trace.Instr.t -> int -> bool branch option
 
-    Everything inside this module is copied into {!Arch}, so module that can depend on
-    {!Arch} may do so.
-*)
+type instructions = (int, Run.Runner.slot) Hashtbl.t
 
-(** Describe the C API of a function *)
-type func_api = { args : Ctype.t list; ret : Ctype.t option }
+(** Triples of address of the branch, whether it is conditional (i.e. does it
+    fall-through to the next instruction) and the target address *)
+type simple_branches = private (int * bool * int) list
 
-(** Describe the ABI of a function
+(** Pairs of the address of the branch and the register whose computed values is branched on. *)
+type reg_branches = private (int * State.Reg.t list) list
 
-    This is a record because I expect to add many other fields later.
-*)
-type func_abi = {
-  init : State.t -> State.t;
-      (** Gives the initial state for verifying the function, from a given global
-          register state. Only global registers are kept. *)
-}
+(** Find and split simple branches from register branches.
+    If it is simple, we record whether a branch is conditional (and so can
+    fall-through to the next instruction) or unconditional and its target
+    address to help construct the (simple) comes-before relation later. *)
+val find_branches : instructions -> simple_branches * reg_branches
 
-(** The map of dwarf register: Which register number map to which ISA register *)
-type dwarf_reg_map = State.Reg.t array
+(** Compute (the one b to many as) comes-before relation.
+    Address a comes-before address b iff a falls-through and/or branches to b.
+    NOTE: The graph of this relation can be be cyclic.
+    NOTE: It ignores the fact that BLR instructions effectively fall-through. *)
+val compute_comes_before : instructions -> simple_branches -> (int, int * int list) Hashtbl.t
 
-(** Tells if this Arch module supports this architecture *)
-val supports : Config.Arch.t -> bool
-
-(** If this arch module {!supports} the architecture, then initialize read-dwarf
-  state using this architecture *)
-val init : Config.Arch.t -> unit
-
-(** Return [Some(arch)] is the loaded arch is [arch] and [None] if nothing is loaded yet. *)
-val initialized : unit -> Config.Arch.t option
-
-(** The name of the arch module. Must be the name of the module i.e. [Config.arch_module] *)
-val module_name : string
-
-(** For dynamic arch module, the name of the dynamically loaded module.
-  Otherwise {!module_name} *)
-val loaded_name : string
-
-(** The true size of addresses for memory operation *)
-val address_size : int
-
-(** Get the register map of the architecture *)
-val dwarf_reg_map : unit -> dwarf_reg_map
-
-(** Tell if a register is local for the ABI *)
-val is_local : State.Reg.t -> bool
-
-(** Give the opcode of the nop instruction (For Sail/Isla initialisation *)
-val nop : unit -> BytesSeq.t
-
-(** Give the ABI of a function from it's C API *)
-val get_abi : func_api -> func_abi
-
-(** Give the register index for the program counter *)
-val pc : unit -> State.Reg.t
-
-(** Give the register index for the stack pointer *)
-val sp : unit -> State.Reg.t
-
-(** Take an instruction string and give the name of an temporary ELF file created
-  that contains the instruction at symbol instr.*)
-val assemble_to_elf : string -> string
-
-(**  Split a byte-sequence into a list of instructions. *)
-val split_into_instrs : BytesSeq.t -> BytesSeq.t list
-
-(** Tell if an instruction is a return instruction. *)
-val is_ret : BytesSeq.t -> bool
-
-(** Tell if an instruction is a compare instruction.
-    Returns [Some (reg,bv)] where the contents of [reg] are compared against the
-    value [bv] if it is and [None] if not. *)
-val is_cmp : BytesSeq.t -> (State.Reg.t * BitVec.t) option
-
-(** Tell if an instruction is an (unconditional) branch on immediate with
-    link instructions.  Returns [Some bv] where [bv] is the offset (from the
-    address of this instruction, in the range +/-128MB) that is branched to
-    if it is and [None] if not. *)
-val is_bl : BytesSeq.t -> BitVec.t option
+(** Track register spilling and reloading. Returns a map [(int, int) Hashtbl.t]
+    where the key is the address of instructions that load from a stack-offset
+    that was spilled-to earlier and the value is the address of that earlier spill.
+    NOTE: This is an over-approximation: it will track all register spills but may
+    also include standard stack/local variable manipulation.
+    NOTE: Does NOT do/use any sort of pointer-aliasing analysis, just syntactic
+    pattern-matching. *)
+val track_spills : instructions -> simple_branches -> (int, int) Hashtbl.t

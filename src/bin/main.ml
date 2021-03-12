@@ -73,6 +73,7 @@ let commands =
     Run.Block.command;
     Run.FuncRD.command;
     Other_cmds.CopySourcesCmd.command;
+    BranchTable.command;
   ]
 
 let _ = Printexc.record_backtrace Config.enable_backtrace

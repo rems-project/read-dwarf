@@ -296,7 +296,7 @@ val shift_right_logic_bv : t -> t -> t
 (** Concatenates the bitvectors *)
 val concat : t -> t -> t
 
-(** [extract bv a b] extract bits [a] to [b] included from [bv]. Indexs starts at 0 *)
+(** [extract bv a b] extract bits [a] to [b] included from [bv]. Indices start at 0 *)
 val extract : int -> int -> t -> t
 
 (** Add the second argument of zeroes to the left *)
