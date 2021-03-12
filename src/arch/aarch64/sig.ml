@@ -362,8 +362,7 @@ let assemble_to_elf instr =
 
 let split_into_instrs = BytesSeq.to_listbs ~len:4
 
-(** https://developer.arm.com/docs/ddi0596/h/base-instructions-alphabetic-order/ret-return-from-subroutine
-    TODO Add tests *)
+(** https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/RET--Return-from-subroutine- *)
 let is_ret code =
   assert (BytesSeq.length code = 4);
   let (( = ), ( land )) = Int32.(( = ), logand) in
@@ -373,13 +372,33 @@ let is_ret code =
   let ret_with_reg_zero = 0x00005fd6l in
   zero_out_reg_operand_mask land code = ret_with_reg_zero
 
-(** https://developer.arm.com/docs/ddi0596/h/base-instructions-alphabetic-order/cmp-immediate-compare-immediate-an-alias-of-subs-immediate
-    TODO Add tests *)
-let is_cmp code_bs =
+(*$inject
+let to_be_bytes_seq int32 =
+  let result = Bytes.create 4 in
+  Bytes.set_int32_le result 0 int32;
+  BytesSeq.of_bytes result
+*)
+
+(*$T is_ret
+     (0xd65f0000l |> to_be_bytes_seq |> is_ret)
+     (0xd65f01e0l |> to_be_bytes_seq |> is_ret)
+     (0xd65f02c0l |> to_be_bytes_seq |> is_ret)
+     (0xd65f03a0l |> to_be_bytes_seq |> is_ret)
+     (0xd65f0490l |> to_be_bytes_seq |> is_ret |> not)
+     (0xd65f0770l |> to_be_bytes_seq |> is_ret |> not)
+     (0xd65f0b50l |> to_be_bytes_seq |> is_ret |> not)
+     (0xd65f0f30l |> to_be_bytes_seq |> is_ret |> not)
+     (0x9100001fl |> to_be_bytes_seq |> is_ret |> not)
+*)
+
+(*${*)
+
+(** https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/CMP--immediate---Compare--immediate---an-alias-of-SUBS--immediate-- *)
+let is_cmp' code_bs =
   assert (BytesSeq.length code_bs = 4);
   let (( = ), ( land )) = Int32.(( = ), logand) in
   let code = BytesSeq.get32be code_bs 0 in
-  let zero_out_operands_mask = 0x1f00087fl in
+  let zero_out_operands_mask = 0x1f00807fl in
   let cmp_with_zero_operands = 0x1f000071l in
   if zero_out_operands_mask land code = cmp_with_zero_operands then
     let open BitVec in
@@ -394,12 +413,38 @@ let is_cmp code_bs =
     let bottom12 = of_int ~size 0x00000fff in
     (* values are 64 bits, spec says imm12 is unsigned *)
     let value = BitVec.zero_extend size @@ (code_bv land bottom12) in
-    (* fixup types *)
-    match Reg.of_int reg with Some reg -> Some (reg, value) | None -> Raise.unreachable ()
+    Some (reg, value)
   else None
 
-(** https://developer.arm.com/docs/ddi0596/h/base-instructions-alphabetic-order/bl-branch-with-link
-    TODO Add tests *)
+(*$}*)
+
+(*$inject
+let check_cmp (reg, value) = function
+  | Some (reg', value') -> reg = reg' && value = BitVec.to_int value'
+  | None -> false
+*)
+
+(*$T is_cmp'
+     (0x7100001fl |> to_be_bytes_seq |> is_cmp' |> check_cmp (0, 0))
+     (0xf100009fl |> to_be_bytes_seq |> is_cmp' |> check_cmp (4, 0))
+     (0x7100745fl |> to_be_bytes_seq |> is_cmp' |> check_cmp (2, 0x1d))
+     (0x7172695fl |> to_be_bytes_seq |> is_cmp' |> check_cmp (10, 0xc9a))
+     (0xf118171fl |> to_be_bytes_seq |> is_cmp' |> check_cmp (24, 0x605))
+     (0xf100313fl |> to_be_bytes_seq |> is_cmp'	|> check_cmp (9, 0xc))
+     (0x6100313fl |> to_be_bytes_seq |> is_cmp'	|> Option.is_none)
+     (0xf600313fl |> to_be_bytes_seq |> is_cmp'	|> Option.is_none)
+     (0xf1a0313fl |> to_be_bytes_seq |> is_cmp'	|> Option.is_none)
+     (0xf10031cfl |> to_be_bytes_seq |> is_cmp'	|> Option.is_none)
+     (0xf100313el |> to_be_bytes_seq |> is_cmp'	|> Option.is_none)
+*)
+
+let is_cmp code_bs =
+  Option.(
+    let* (reg, value) = is_cmp' code_bs in
+    (* fixup types *)
+    match Reg.of_int reg with Some reg -> Some (reg, value) | None -> Raise.unreachable ())
+
+(** https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/BL--Branch-with-Link- *)
 let is_bl code_bs =
   assert (BytesSeq.length code_bs = 4);
   let (( = ), ( land )) = Int32.(( = ), logand) in
@@ -415,5 +460,17 @@ let is_bl code_bs =
     let two = of_int ~size 2 in
     (* values are 64 bits, spec says imm26 is multiplied by 4
        (shifted left by 2) and sign extended *)
-    Some (BitVec.sign_extend size @@ ((code_bv land bottom26) lsl two))
+    Some (BitVec.sign_extend 64 @@ BitVec.extract 0 27 ((code_bv land bottom26) lsl two))
   else None
+
+(*$inject
+let check_bl y = function None -> false | Some x -> x |> BitVec.to_z |> Z.equal (Z.of_int64 y)
+*)
+
+(*$T is_bl
+     (0x96030000l |> to_be_bytes_seq |> is_bl |> check_bl 0xfffffffff80c0000L)
+     (0x95000009l |> to_be_bytes_seq |> is_bl |> check_bl 0x4000024L)
+     (0x35000009l |> to_be_bytes_seq |> is_bl |> Option.is_none)
+     (0x93000009l |> to_be_bytes_seq |> is_bl |> Option.is_none)
+     (0x9b000009l |> to_be_bytes_seq |> is_bl |> Option.is_none)
+*)
