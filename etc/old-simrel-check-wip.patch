@@ -1,0 +1,210 @@
+diff --git a/src/archSig.ml b/src/archSig.ml
+index bf615df..555b3fc 100644
+--- a/src/archSig.ml
++++ b/src/archSig.ml
+@@ -16,9 +16,11 @@ type func_api = { args : Ctype.t list; ret : Ctype.t option }
+     This is a record because I expect to add many other fields later.
+ *)
+ type func_abi = {
+-  init : State.t -> State.t;
++  init : ?bis:bool -> State.t -> State.t;
+       (** Gives the initial state for verifying the function, from a given global
+-          register state. Only global registers are kept. *)
++          register state. Only global registers are kept.
++          If the [bis] argument is set, then arguments of pointer type are flagged as "bis"
++          to be different from unflagged arguments.*)
+ }
+ 
+ (** The map of dwarf register: Which register number map to which ISA register *)
+diff --git a/src/archs/AArch64.ml b/src/archs/AArch64.ml
+index 05aa6aa..d219de8 100644
+--- a/src/archs/AArch64.ml
++++ b/src/archs/AArch64.ml
+@@ -236,7 +236,7 @@ let get_abi api =
+   let sp = data.reg_map.(31) in
+   let r30 = data.reg_map.(30) in
+   let ret_pointer_reg = data.reg_map.(8) in
+-  let init (state : State.t) =
++  let init ?(bis = false) (state : State.t) =
+     let state = State.copy_if_locked state in
+     debug "Map:\n%t" (PP.topi (Reg.Map.pp PP.bool) data.local_regs);
+     Reg.Map.iteri
+@@ -247,7 +247,9 @@ let get_abi api =
+         end)
+       data.local_regs;
+     for i = 0 to repr.reg_num - 1 do
+-      let tval = State.Tval.of_var ~ctyp:repr.reg_types.(i) (Arg i) in
++      let ctyp = repr.reg_types.(i) in
++      let var : State.Var.t = if Ctype.is_ptr ctyp then Arg (i, bis) else Arg (i, false) in
++      let tval = State.Tval.of_var ~ctyp var in
+       State.set_reg state data.reg_map.(i) tval
+     done;
+     ( match repr.ret_pointer with
+diff --git a/src/simulationStepCheck.ml b/src/simulationStepCheck.ml
+new file mode 100644
+index 0000000..a7dd7de
+--- /dev/null
++++ b/src/simulationStepCheck.ml
+@@ -0,0 +1,25 @@
++(** The goal of this module is to call a SMT solver to check if a simulation step holds.
++
++    It's goal is not to have a smart strategy but to be the base oracle that can check
++    a single step against a SMT solver in a deterministic way.
++
++    The encoding of the problem of checking a simulation step into a SMT
++    problem is done only by this module
++*)
++
++open Logs.Logger (struct
++  let str = __MODULE__
++end)
++
++let check_step (start : StateRelation.t) (endr : StateRelation.t) : bool =
++  let server = Z3.ensure_started_get () in
++  let s =
++    Printf.sprintf "Checking step %d~%d --> %d~%d" start.state1.id start.state2.id endr.state1.id
++      endr.state2.id
++  in
++  info "%s" s;
++  Z3.open_context server s;
++  let module Z3Exp = Z3.Make(State.Var) in
++  let declared = Z3Exp.Htbl.create 50 in
++
++  Raise.todo ()
+diff --git a/src/state.ml b/src/state.ml
+index 0bd1c7b..b3e0f9e 100644
+--- a/src/state.ml
++++ b/src/state.ml
+@@ -72,7 +72,7 @@ module Var = struct
+         (** The result of a certain read in a certain state.
+             The size part is not semantically important:
+             Two [ReadVar] with same [id] and same number may no have different sizes *)
+-    | Arg of int  (** A function argument *)
++    | Arg of int * bool  (** On pointer argument this is a different variable in both states *)
+     | RetArg
+         (** The address to which the return value should be written.
+             This is used only in certain calling conventions *)
+@@ -87,7 +87,8 @@ module Var = struct
+         if size = Ast.Size.B64 then Printf.sprintf "read:%s:%i" (state |> Id.to_string) num
+         else
+           Printf.sprintf "read:%s:%i:%dbits" (state |> Id.to_string) num (Ast.Size.to_bits size)
+-    | Arg num -> Printf.sprintf "arg:%i" num
++    | Arg (num, true) -> Printf.sprintf "arg:%i:bis" num
++    | Arg (num, false) -> Printf.sprintf "arg:%i" num
+     | RetArg -> "retarg:"
+     | RetAddr -> "retaddr:"
+ 
+@@ -117,7 +118,8 @@ module Var = struct
+         let num = int_of_string num in
+         let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
+         ReadVar (state, num, size)
+-    | ["arg"; num] -> Arg (int_of_string num)
++    | ["arg"; num] -> Arg (int_of_string num, false)
++    | ["arg"; num; "bis"] -> Arg (int_of_string num, true)
+     | ["retarg"; ""] -> RetArg
+     | ["retaddr"; ""] -> RetAddr
+     | _ -> Raise.inv_arg "Invalid state variable: %s" s
+@@ -130,7 +132,7 @@ module Var = struct
+     | (Register (st, reg), Register (st', reg')) -> Id.equal st st' && Reg.equal reg reg'
+     | (ReadVar (st, num, size), ReadVar (st', num', size')) ->
+         Id.equal st st' && num = num' && size = size'
+-    | (Arg num, Arg num') -> num = num'
++    | (Arg (num, bis), Arg (num', bis')) -> num = num' && bis = bis'
+     | (RetArg, RetArg) -> true
+     | (RetAddr, RetAddr) -> true
+     | _ -> false
+@@ -387,7 +389,10 @@ end
+     more practical Ocaml Gc consideration, see {!stateid}.*)
+ type t = {
+   id : Id.t;
+-  base_state : t option;  (** The immediate dominator state in the control flow graph *)
++  base_state : t option;
++      (** The immediate dominator state in the control flow graph.
++          This base state has a lower id in integer order and this fact is used in some place.
++          Do not destroy this property without knowing what you do *)
+   mutable locked : bool;  (** Tells if the state is locked *)
+   mutable regs : Tval.t Reg.Map.t;  (** The values and types of registers *)
+   read_vars : Tval.t Vec.t;  (** The results of reads made since base state *)
+diff --git a/src/stateRelation.ml b/src/stateRelation.ml
+new file mode 100644
+index 0000000..49ef526
+--- /dev/null
++++ b/src/stateRelation.ml
+@@ -0,0 +1,77 @@
++(** This module is for defining the concept of state relation.
++
++    The symbolic relation in this module contain two symbolic states. It is a
++    relation relating elements of the concrete set of state of each symbolic
++    states.
++
++    It is to be noted that if two symbolic state share symbolic variable, the
++    relation defined between them is already partially constrained by that i.e
++    the relation defined by that pair without any further restriction is already
++    a strict subset of the Cartesian product of the sets of concrete states
++    represented by each symbolic state.
++
++    The goal of this module is to had further restrictions to the relation
++    between those state. For register this can be done by simply adding more
++    assertions that relate variable from both states. See {!t.asserts}. However
++    memory is too big and too complex for us to represent a memory relation that
++    way.
++
++    The memory relation is thus defined in a more complex way that involve C
++    type ABIs. Let's call those memories [m] and [m']. Instead of defining a
++    relation on the whole memories we require a "deep" equality on a set of pair
++    of top-level pointers [(p1,p1'), ..., (pn, pn')] each with a type [T1, ...,
++    Tn]. The idea being that [*p1] in [m] should be the same as [*p1'] in [m'].
++    The memory relation assert that there exits a relation [R] such that for all
++    i, [pi R pi'] and that recursively that DATA pointed to by each pi is equal
++    in the C type sense in both memory This means that for all the structs we
++    compare each field recursively (and we deliberately ignore padding). If a
++    field is plain non-pointer type, then we require byte-wise equality. If a
++    field is a pointer, then we require that both pointers in each memory are
++    related by [R] and that recursively their pointed-to values are equivalent
++    according to the same rules.
++
++    In practice the representation is a bit more complex. Because the type {!t}
++    Support having multiple memory relation. So what we mean is that
++    there is a single relation on pointer [R] such that all the {!t.mem_asserts}
++    and {!t.globals_asserts}
++*)
++
++(** Read the module documentation before reading this.
++
++    This assertion assert that given the common [R] relation, each of the global
++    variables that appear in both {!file1} and {!file2} and not in
++    {!excluded_globals}, are related by [R] and are matching on values on the
++    memories of respectively states {!id1} and {!id2} *)
++type globals_assert = {
++  id1 : State.Id.t;
++  id2 : State.Id.t;
++  file1 : Dw.t;
++  file2 : Dw.t;
++  excluded_globals : string list;
++}
++
++(** Read the module documentation before reading this.
++
++    This assertion assert that given the common [R] relation, each of pair of
++    pointers listed with the C type match in [R] and there values dereferenced in
++    respectively {!id1} and {!id2} are semantically matching recursively *)
++type mem_assert = {
++  id1 : State.Id.t;
++  id2 : State.Id.t;
++  pointers : (State.Exp.t * State.Exp.t * Ctype.t) list;
++}
++
++(** The type of a state relation.
++
++    All [id1]s of memory relations must be in the ancestor chain via
++    {!State.t.base_state} of {!state1}. The same for 2.
++
++    This type implies the existence of a global [R] relation on pointers that
++    make all the memory assertion true.*)
++type t = {
++  state1 : State.t;
++  state2 : State.t;
++  globals_asserts : globals_assert list;
++  mem_asserts : mem_assert list;
++  asserts : State.Exp.t list;
++}

@@ -1,0 +1,127 @@
+diff --git a/src/archSig.ml b/src/archSig.ml
+index bf615df..2f3284b 100644
+--- a/src/archSig.ml
++++ b/src/archSig.ml
+@@ -24,6 +24,9 @@ type func_abi = {
+ (** The map of dwarf register: Which register number map to which ISA register *)
+ type dwarf_reg_map = Reg.t array
+ 
++(** Text representation of an instruction after disassembly *)
++type instr_text = { mnemonic : string; operands : string array }
++
+ module type S = sig
+   (** Tells if this Arch module supports this architecture *)
+   val supports : Type.t -> bool
+@@ -54,6 +57,13 @@ module type S = sig
+   (** Give the opcode of the nop instruction (For Sail/Isla initialisation *)
+   val nop : unit -> BytesSeq.t
+ 
++  (** Parse the text of an instruction in it's components:
++      [add x0, x8 -> {mnemonic "add"; operands : \["x0", "x8"\]}] *)
++  val parse_text_instr : string -> instr_text
++
++  (** Take ELF file name and objdump filename, and write the objdump to the target filename *)
++  val objdump : string -> string -> unit
++
+   (** Give the ABI of a function from it's C API *)
+   val get_abi : func_api -> func_abi
+ 
+diff --git a/src/archs/AArch64.ml b/src/archs/AArch64.ml
+index 05aa6aa..313d4fe 100644
+--- a/src/archs/AArch64.ml
++++ b/src/archs/AArch64.ml
+@@ -288,3 +288,13 @@ let assemble_to_elf instr =
+   Cmd.call [|linker; obj_file; "--entry=instr"; "-o"; elf_file|];
+   Sys.remove obj_file;
+   elf_file
++
++let parse_text_instr str =
++  (* TODO actually do it *)
++  { mnemonic = str; operands = [||] }
++
++let objdump elf objdump_file =
++  let data = get_data () in
++  let toolchain = data.config.toolchain in
++  let objdump = toolchain ^ "-objdump" in
++  Cmd.call_to_file [|objdump; "-d"; elf|] objdump_file
+diff --git a/src/cmd.ml b/src/cmd.ml
+index cbec4b9..4e03aba 100644
+--- a/src/cmd.ml
++++ b/src/cmd.ml
+@@ -96,12 +96,13 @@ let call_send_read (cmd : cmd) ~(sender : out_channel -> unit) ~(reader : in_cha
+   in
+   protect process @@ closing (output, input) cmd
+ 
+-(* let _ =
+- *   Tests.add_test "Cmd.io.cat" (fun () ->
+- *       let output oc = Printf.fprintf oc "test string\n" in
+- *       let input ic = input_line ic in
+- *       let a = io [|"cat"|] output input in
+- *       a = "test string") *)
++(** Call cmd and write it's output to file. Check the status is valid with {!check_status}*)
++let call_to_file (cmd : cmd) (file : string) : unit =
++  let fd = openfile file [O_WRONLY; O_CREAT; O_TRUNC] 00644 in
++  cmd.(0) <- get_full_path cmd.(0);
++  let pid = create_process cmd.(0) cmd stdin fd stderr in
++  let (_, status) = waitpid [] pid in
++  check_status cmd status
+ 
+ (*****************************************************************************)
+ (*****************************************************************************)
+diff --git a/src/cmd.mli b/src/cmd.mli
+index 5ca4f0b..b8d8f8d 100644
+--- a/src/cmd.mli
++++ b/src/cmd.mli
+@@ -67,6 +67,12 @@ val call_read_string : cmd -> string
+     May throw {!Crash} on error.*)
+ val call_send_read : cmd -> sender:(out_channel -> unit) -> reader:(in_channel -> 'a) -> 'a
+ 
++(** Call the command and redirect it's output into the specified filename.
++    The file is entirely overwritten.
++
++    May throw {!Crash} on error.*)
++val call_to_file : cmd -> string -> unit
++
+ (*****************************************************************************)
+ (*****************************************************************************)
+ (*****************************************************************************)
+diff --git a/src/files.ml b/src/files.ml
+index fb0b654..752437d 100644
+--- a/src/files.ml
++++ b/src/files.ml
+@@ -85,6 +85,11 @@ let read_bin (reader : 'a reader) (file : string) : 'a =
+   let c = open_in_bin file in
+   Protect.protect (fun () -> reader c) (fun () -> close_in c)
+ 
++(** Reads a sequence of items using the reader. Stops when the reader raise [End_of_file] *)
++
++(* let read_seq (reader : 'a reader) (file : string) : 'a Seq.t =
++ *   let c = open_int *)
++
+ (** Take a writer a file and object and write the object to the file using writer. Text mode *)
+ let write (writer : 'a writer) (file : string) (obj : 'a) =
+   let c = open_out file in
+diff --git a/src/objdump.ml b/src/objdump.ml
+new file mode 100644
+index 0000000..f2d5dff
+--- /dev/null
++++ b/src/objdump.ml
+@@ -0,0 +1,18 @@
++(** This module provides the management of objdumps *)
++
++type instr_data = { addr : int; opcode : BytesSeq.t; instr_text : ArchSig.instr_text }
++
++type t = { instrs : (int, instr_data) Hashtbl.t }
++
++(* let of_objdump_file objdump_file =
++ *   let process_scanf addr hexopcode instr =
++ *     let opcode = BytesSeq.of_hex hexopcode in
++ *     let instr_text = Arch.parse_text_instr instr in
++ *     {addr; opcode; instr_text}
++ *   in
++ *   let process_line line =
++ *     try
++ *       Some (Scanf.sscanf line "%d:\t%s@\t%s@/" process_scanf)
++ *     with
++ *     | Scanf.Scan_failure _ -> None
++ *   in *)
