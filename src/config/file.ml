@@ -51,13 +51,15 @@ end)
 (*****************************************************************************)
 (** {1 Toml helpers } *)
 
-module Table = TomlTypes.Table
+module Table = Toml.Types.Table
 
-type table = TomlTypes.table
+type table = Toml.Types.table
 
-type value = TomlTypes.value
+type value = Toml.Types.value
 
 module Key = Table.Key
+
+let key_of_string = Table.Key.bare_key_of_string 
 
 type key = Key.t
 
@@ -169,15 +171,15 @@ module ArchConf = struct
       Buffer.add_char b '\n';
       Digest.string (Buffer.contents b)
 
-    let ignored_regs_key = Toml.key "ignored-regs"
+    let ignored_regs_key = key_of_string "ignored-regs"
 
-    let arch_file_key = Toml.key "arch-file"
+    let arch_file_key = key_of_string "arch-file"
 
-    let arch_toml_key = Toml.key "arch-toml"
+    let arch_toml_key = key_of_string "arch-toml"
 
-    let linearize_key = Toml.key "linearize"
+    let linearize_key = key_of_string "linearize"
 
-    let other_opts_key = Toml.key "other-opts"
+    let other_opts_key = key_of_string "other-opts"
 
     let of_toml ~path table =
       let ignored_regs = toml_get_string_list table ignored_regs_key in
@@ -202,9 +204,9 @@ module ArchConf = struct
 
   type t = { arch : Arch.t; toolchain : string; isla : Isla.t }
 
-  let isla_key = Toml.key "isla"
+  let isla_key = key_of_string "isla"
 
-  let toolchain_key = Toml.key "toolchain"
+  let toolchain_key = key_of_string "toolchain"
 
   let of_toml ~arch ~path table =
     let toolchain = toml_get_string table toolchain_key in
@@ -228,11 +230,11 @@ module Z3 = struct
     simplify_opts : (string * bool) list;  (** List of option for the simplify command *)
   }
 
-  let timeout_key = Toml.key "timeout"
+  let timeout_key = key_of_string "timeout"
 
-  let memory_key = Toml.key "memory"
+  let memory_key = key_of_string "memory"
 
-  let simplify_opts_key = Toml.key "simplify-opts"
+  let simplify_opts_key = key_of_string "simplify-opts"
 
   let of_toml table =
     let timeout = toml_get_int_opt table timeout_key in
@@ -257,11 +259,11 @@ module Z3 = struct
       ]
 end
 
-let arch_key = Toml.key "default-arch"
+let arch_key = key_of_string "default-arch"
 
-let archs_key = Toml.key "archs"
+let archs_key = key_of_string "archs"
 
-let z3_key = Toml.key "z3"
+let z3_key = key_of_string "z3"
 
 type archs_type = (Arch.t, ArchConf.t) Hashtbl.t
 
