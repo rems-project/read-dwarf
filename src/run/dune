@@ -14,6 +14,7 @@
  (modules)
  (inline_tests.backend
   (generate_runner
-   (run qtest extract --preamble "[@@@ocaml.warning \"-33\"];; open Utils;; open Run;;" --quiet
+   (run qtest extract --preamble
+     "[@@@ocaml.warning \"-33\"];; open Utils;; open Run;;" --quiet
      %{impl-files} %{intf-files}))
   (runner_libraries qcheck ounit2 bytes)))

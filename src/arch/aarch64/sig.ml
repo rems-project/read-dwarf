@@ -372,11 +372,14 @@ let is_ret code =
   let ret_with_reg_zero = 0x00005fd6l in
   zero_out_reg_operand_mask land code = ret_with_reg_zero
 
-(*$inject
-let to_be_bytes_seq int32 =
-  let result = Bytes.create 4 in
-  Bytes.set_int32_le result 0 int32;
-  BytesSeq.of_bytes result
+(*$
+  ;;
+  inject
+
+  let to_be_bytes_seq int32 =
+    let result = Bytes.create 4 in
+    Bytes.set_int32_le result 0 int32;
+    BytesSeq.of_bytes result
 *)
 
 (*$T is_ret
@@ -418,10 +421,13 @@ let is_cmp' code_bs =
 
 (*$}*)
 
-(*$inject
-let check_cmp (reg, value) = function
-  | Some (reg', value') -> reg = reg' && value = BitVec.to_int value'
-  | None -> false
+(*$
+  ;;
+  inject
+
+  let check_cmp (reg, value) = function
+    | Some (reg', value') -> reg = reg' && value = BitVec.to_int value'
+    | None -> false
 *)
 
 (*$T is_cmp'
@@ -463,8 +469,11 @@ let is_bl code_bs =
     Some (BitVec.sign_extend 64 @@ BitVec.extract 0 27 ((code_bv land bottom26) lsl two))
   else None
 
-(*$inject
-let check_bl y = function None -> false | Some x -> x |> BitVec.to_z |> Z.equal (Z.of_int64 y)
+(*$
+  ;;
+  inject
+
+  let check_bl y = function None -> false | Some x -> x |> BitVec.to_z |> Z.equal (Z.of_int64 y)
 *)
 
 (*$T is_bl
