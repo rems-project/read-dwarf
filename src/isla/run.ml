@@ -147,16 +147,20 @@ let event_mut (vc : value_context) (state : State.t) : revent -> unit =
       debug "Reading Reg %s at %t from %t" name Pp.(top pp_accessor_list al) Pp.(top pp_valu valu);
       let string_path = Manip.string_of_accessor_list al in
       let valu = Manip.valu_get valu string_path in
-      let reg = Reg.of_path (name :: string_path) in
-      let e : State.exp = (Reg.Map.get state.regs reg).exp in
-      write_to_valu l vc valu e
+      Manip.iter_valu_path (fun string_path valu ->
+          let reg = Reg.of_path (name :: string_path) in
+          let e : State.exp = (Reg.Map.get state.regs reg).exp in
+          write_to_valu l vc valu e
+        ) string_path valu
   | WriteReg (name, al, valu, l) ->
       debug "Writing Reg %s at %t from %t" name Pp.(top pp_accessor_list al) Pp.(top pp_valu valu);
       let string_path = Manip.string_of_accessor_list al in
       let valu = Manip.valu_get valu string_path in
-      let reg = Reg.of_path (name :: string_path) in
-      let exp : State.exp = exp_of_valu l vc valu in
-      Reg.Map.set state.regs reg (State.Tval.make exp)
+      Manip.iter_valu_path (fun string_path valu ->
+          let reg = Reg.of_path (name :: string_path) in
+          let exp : State.exp = exp_of_valu l vc valu in
+          Reg.Map.set state.regs reg (State.Tval.make exp)
+        ) string_path valu
   | ReadMem (result, _kind, addr, size, _tag_opt, l) ->
       debug "Reading Mem";
       (* TODO stop ignoring kind and tag_opt *)

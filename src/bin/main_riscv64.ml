@@ -42,44 +42,48 @@
 (*                                                                                  *)
 (*==================================================================================*)
 
-(** This module provides an enumeration of architecture for internal identification *)
+open Cmdliner
+open Config.CommonOpt
 
-(** The supported architectures *)
-type t = X86 | X86_64 | PpC | PpC64 | ARM | AARCH64 | RISCV64
+module Default = struct
+  (** Default action to run when no command is set *)
+  let action _arch = print_endline "Error: read-dwarf, no command specified. Use --help for help"
 
-let to_string = function
-  | X86 -> "x86"
-  | X86_64 -> "x86_64"
-  | PpC -> "ppc"
-  | PpC64 -> "ppc64"
-  | ARM -> "arm"
-  | AARCH64 -> "aarch64"
-  | RISCV64 -> "riscv64"
+  (** Global documentation string and name *)
+  let info =
+    let doc = "Parse dwarf information and use isla to run assembly" in
+    Term.(info "read-dwarf" ~doc ~exits)
 
-let of_string = function
-  | "x86" -> X86
-  | "x86_64" -> X86_64
-  | "ppc" -> PpC
-  | "ppc64" -> PpC64
-  | "arm" -> ARM
-  | "aarch64" -> AARCH64
-  | "riscv64" -> RISCV64
-  | s -> Raise.inv_arg "Architecture string %s unknown" s
+  (** Default command *)
+  let command = (Term.(CmdlinerHelper.func_options comopts action $ arch), info)
+end
 
-let pp a = a |> to_string |> Pp.string
+(** List of all non-default commands *)
+let commands =
+  [
+    Run.ReadDwarf.command;
+    Isla.Test.command;
+    Other_cmds.DumpSym.command;
+    Isla.Server.Cmd.command;
+    Run.BB.command;
+    Other_cmds.DumpDwarf.command;
+    Cache.Cmd.command;
+    Run.Func.command;
+    Run.Instr.command;
+    Run.Block.command;
+    Run.FuncRD.command;
+    Other_cmds.CopySourcesCmd.command;
+    BranchTable.command;
+  ]
 
-let size : t -> int = function
-  | X86 -> 32
-  | X86_64 -> 64
-  | PpC -> 32
-  | PpC64 -> 64
-  | ARM -> 32
-  | AARCH64 -> 64
-  | RISCV64 -> 64
+let _ = Printexc.record_backtrace Config.enable_backtrace
 
-let fmt f t = t |> to_string |> Format.pp_print_string f
+(* Other architectures are unsupported for now. Remove this only when you are explicitly
+   working on making other architecture work with read-dwarf *)
+let _ = assert ("riscv64" = Arch.module_name)
 
-let conv =
-  let docv = "Architecture type (aarch64, arm, x86, x86_64, ppc, ppc64 or riscv64)" in
-  let parser a = try Ok (of_string a) with Invalid_argument s -> Error (`Msg s) in
-  Cmdliner.Arg.conv ~docv (parser, fmt)
+(* TODO allow to set the seed in compile time or run time config for debugging *)
+let _ = Random.self_init ()
+
+(** Main entry point *)
+let _ = Term.exit @@ Term.eval_choice Default.command commands

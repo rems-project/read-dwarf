@@ -64,6 +64,7 @@ let machine_of_linksem lmachine =
   else if lmachine = Elf_header.elf_ma_aarch64 then Supp AARCH64
   else if lmachine = Elf_header.elf_ma_ppc then Supp PpC
   else if lmachine = Elf_header.elf_ma_ppc64 then Supp PpC64
+  else if lmachine = Elf_header.elf_ma_riscv then Supp RISCV64
   else Other (Z.to_int lmachine)
 
 (** Convert a {!machine} to a human readable string *)

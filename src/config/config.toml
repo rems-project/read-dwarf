@@ -68,8 +68,20 @@ toolchain = "aarch64-linux-gnu"
     linearize = ["ConditionHolds", "integer_conditional_select", "InterruptPending"]
     other-opts = []
 
-# [archs.riscv]
-# riscv stuff for example
+[archs.riscv64]
+toolchain = "riscv64-linux-gnu"
+
+    [archs.riscv64.isla]
+    # The TLB registers get None written to them during init, read-dwarf doesn't know what to do with them
+    ignored-regs = ["tlb39",
+                    "tlb48",
+                    # Enum registers don't appear to translate to Z3 yet
+                    "cur_privilege"]
+    arch-file = "../../riscv64.ir" # relative to the toml file
+    arch-toml = "isla_riscv64.toml" # relative to the toml file
+    linearize = []
+    other-opts = []
+
 
 [z3]
 timeout = 1000 # ms, optional

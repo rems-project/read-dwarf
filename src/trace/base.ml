@@ -247,9 +247,9 @@ let exp_of_valu l vc : Isla.valu -> exp = function
 let write_to_valu vc valu exp =
   match valu with Isla.Val_Symbolic i -> HashVector.set vc i exp | _ -> ()
 
-(** Convert an isla event to optionally a Trace event, most events are deleted *)
-let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
-    Isla.revent -> event option = function
+(** Convert an isla event to Trace events, most events are deleted *)
+let events_of_isla ~written_registers ~read_counter ~(vc : value_context) :
+    Isla.revent -> event list = function
   | Smt (DeclareConst (i, ty), _) ->
       ( try
           match ty with
@@ -260,60 +260,64 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
                 (Pp.top Isla.pp_ty ty)
         with OfIslaError -> warn "not setting nondet:%d" i
       );
-      None
+      []
   | Smt (DefineConst (i, e), _) ->
       ( try HashVector.set vc i (exp_conv_subst vc e)
         with OfIslaError -> warn "not setting v%d" i
       );
-      None
-  | Smt (Assert e, _) -> Some (Assert (exp_conv_subst vc e))
-  | Smt (DefineEnum _, _) -> None
+      []
+  | Smt (Assert e, _) -> [Assert (exp_conv_subst vc e)]
+  | Smt (DefineEnum _, _) -> []
   | ReadReg (name, al, valu, _) ->
       let string_path = Isla.Manip.string_of_accessor_list al in
       let valu = Isla.Manip.valu_get valu string_path in
-      let reg = State.Reg.of_path (name :: string_path) in
-      (* If the register was already written, we use that value, otherwise, we read a
-         symbolic variable *)
-      ( match Hashtbl.find_opt written_registers reg with
-      | Some exp -> write_to_valu vc valu exp
-      | None -> write_to_valu vc valu (Exp.of_reg reg)
-      );
-      None
+      Isla.Manip.iter_valu_path (fun string_path valu ->
+          let reg = State.Reg.of_path (name :: string_path) in
+          (* If the register was already written, we use that value, otherwise, we read a
+             symbolic variable *)
+          ( match Hashtbl.find_opt written_registers reg with
+            | Some exp -> write_to_valu vc valu exp
+            | None -> write_to_valu vc valu (Exp.of_reg reg)
+          )
+        ) string_path valu;
+      []
   | WriteReg (name, al, valu, l) ->
       let string_path = Isla.Manip.string_of_accessor_list al in
       let valu = Isla.Manip.valu_get valu string_path in
-      let reg = State.Reg.of_path (name :: string_path) in
-      let value = exp_of_valu l vc valu in
-      Hashtbl.add written_registers reg value;
-      Some (WriteReg { reg; value })
+      Isla.Manip.map_valu_path (fun string_path valu ->
+          let reg = State.Reg.of_path (name :: string_path) in
+          let value = exp_of_valu l vc valu in
+          Hashtbl.add written_registers reg value;
+            WriteReg { reg; value }
+        ) string_path valu
   | ReadMem (result, _kind, addr, size, _tag_opt, l) ->
       let addr = exp_of_valu l vc addr |> Typed.extract ~last:(Arch.address_size - 1) ~first:0 in
       let size = Ast.Size.of_bytes size in
       let value = Counter.get read_counter in
       write_to_valu vc result (Exp.of_var @@ Var.Read (value, size));
-      Some (ReadMem { addr; size; value })
+      [ReadMem { addr; size; value }]
   | WriteMem (_success, _kind, addr, data, size, _tag_opt, l) ->
       let addr = exp_of_valu l vc addr |> Typed.extract ~last:(Arch.address_size - 1) ~first:0 in
       let size = Ast.Size.of_bytes size in
       let value = exp_of_valu l vc data in
-      Some (WriteMem { addr; size; value })
-  | Cycle _ -> None
-  | Branch _ -> None
-  | BranchAddress _ -> None
-  | WakeRequest _ -> None
-  | MarkReg _ -> None
-  | SleepRequest _ -> None
-  | Sleeping _ -> None
-  | Instr _ -> None
-  | Barrier _ -> None
-  | CacheOp _ -> None
+      [WriteMem { addr; size; value }]
+  | Cycle _ -> []
+  | Branch _ -> []
+  | BranchAddress _ -> []
+  | WakeRequest _ -> []
+  | MarkReg _ -> []
+  | SleepRequest _ -> []
+  | Sleeping _ -> []
+  | Instr _ -> []
+  | Barrier _ -> []
+  | CacheOp _ -> []
 
 (** Top level function to convert an isla trace to one of this module *)
 let of_isla (Trace events : Isla.rtrc) : t =
   let written_registers = Hashtbl.create 10 in
   let read_counter = Counter.make 0 in
   let vc = HashVector.empty () in
-  List.filter_map (event_of_isla ~written_registers ~read_counter ~vc) events
+  List.concat_map (events_of_isla ~written_registers ~read_counter ~vc) events
 
 (*****************************************************************************)
 (*****************************************************************************)

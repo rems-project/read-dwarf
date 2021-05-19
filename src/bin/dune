@@ -6,6 +6,14 @@
   (:standard -open Utils))
  (libraries config run utils sig_aarch64 other_cmds branchTable))
 
+(executable
+ (name main_riscv64)
+ (public_name read-dwarf-riscv64)
+ (modules main_riscv64)
+ (flags
+  (:standard -open Utils))
+ (libraries config run utils sig_riscv64 other_cmds branchTable))
+
 (library
  (name other_cmds)
  (public_name read-dwarf.other_cmds)

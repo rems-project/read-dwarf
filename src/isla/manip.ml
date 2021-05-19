@@ -223,6 +223,16 @@ let rec exp_iter_var (f : int -> unit) : 'a exp -> unit = function
 
 let event_iter_valu = direct_event_iter_valu
 
+(** Iterate a function over a [valu] broken up into fields, extending the given path. *)
+let rec iter_valu_path (f : string list -> valu -> unit) (path : string list) : valu -> unit = function
+  | Val_Struct l -> List.iter (fun (name, v) -> iter_valu_path f (path @ [name]) v) l
+  | v -> f path v
+
+(** Map a function over a [valu] broken up into fields, extending the given path. *)
+let rec map_valu_path (f : string list -> valu -> 'a) (path : string list) : valu -> 'a list = function
+  | Val_Struct l -> List.concat_map (fun (name, v) -> map_valu_path f (path @ [name]) v) l
+  | v -> [f path v]
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
