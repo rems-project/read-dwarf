@@ -253,7 +253,7 @@ let event_of_isla ~written_registers ~read_counter ~(vc : value_context) :
   | Smt (DeclareConst (i, ty), _) ->
       ( try
           match ty with
-          | Ty_BitVec ((8 | 16 | 32 | 64) as size) ->
+          | Ty_BitVec ((8 | 16 | 32 | 64 | 128) as size) ->
               HashVector.set vc i (Exp.of_var (Var.NonDet (i, Ast.Size.of_bits size)))
           | Ty_BitVec _ | Ty_Bool | Ty_Enum _ | Ty_Array (_, _) ->
               debug "Unimplemented: ignoring non-det variable %i of type %t" i

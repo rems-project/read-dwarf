@@ -127,7 +127,7 @@ let event_mut (vc : value_context) (state : State.t) : revent -> unit =
   function
   | Smt (DeclareConst (i, ty), l) -> (
       match ty with
-      | Ty_BitVec ((8 | 16 | 32 | 64) as size) ->
+      | Ty_BitVec ((8 | 16 | 32 | 64 | 128) as size) ->
           write_to_var l vc i State.(Exp.of_var (Var.NonDet (i, Ast.Size.of_bits size)))
       | Ty_BitVec _ | Ty_Bool | Ty_Enum _ | Ty_Array (_, _) ->
           debug "Unimplemented: ignoring non-det variable %i of type %t" i (Pp.top pp_ty ty)

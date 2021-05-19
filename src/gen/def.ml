@@ -84,8 +84,8 @@ type loc = Lexing.position
 type lrng = Isla_lang.AST.lrng
 
 module Size = struct
-  (** The possible sizes for memory accesses. It may be necessary to add [B128] at some point *)
-  type t = B8 | B16 | B32 | B64
+  (** The possible sizes for memory accesses. *)
+  type t = B8 | B16 | B32 | B64 | B128
 
   (** Create a size value from a valid size in byte *)
   let of_bytes = function
@@ -93,6 +93,7 @@ module Size = struct
     | 2 -> B16
     | 4 -> B32
     | 8 -> B64
+    | 16 -> B128
     | bytes -> Raise.inv_arg "%d bytes is not a valid memory size" bytes
 
   (** Create a size value from a valid size in bits *)
@@ -101,10 +102,11 @@ module Size = struct
     | 16 -> B16
     | 32 -> B32
     | 64 -> B64
+    | 128 -> B128
     | bits -> Raise.inv_arg "%d bits is not a valid memory size" bits
 
   (** Get the byte size corresponding to that value *)
-  let to_bytes = function B8 -> 1 | B16 -> 2 | B32 -> 4 | B64 -> 8
+  let to_bytes = function B8 -> 1 | B16 -> 2 | B32 -> 4 | B64 -> 8 | B128 -> 16
 
   (** Get the bits size corresponding to that value *)
   let to_bits size = 8 * to_bytes size

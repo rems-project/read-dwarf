@@ -60,7 +60,9 @@ toolchain = "aarch64-linux-gnu"
                     "__v82_implemented",
                     "__v83_implemented",
                     "__v84_implemented",
-                    "__v85_implemented"]
+                    "__v85_implemented",
+                    # Vector registers are held in a vector, not yet fully supported
+                     "_V"]
     arch-file = "../../aarch64.ir" # relative to the toml file
     arch-toml = "isla_aarch64.toml" # relative to the toml file
     linearize = ["ConditionHolds", "integer_conditional_select", "InterruptPending"]
