@@ -271,7 +271,7 @@ let ptr_deref ~dwarf ~fenv ~size frag (offset : Ctype.offset) : Ctype.t option =
 
 (** Does the same as {!State.read}, but additionally take care of reading the type from a fragment
     and marking the type of the read variable. *)
-let read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size : State.tval =
+let[@warning "-16"] read ~(dwarf : Dw.t) (s : State.t) ?(ptrtype : Ctype.t option) ~addr ~size : State.tval =
   match ptrtype with
   | Some { unqualified = Ptr { fragment; offset; provenance }; _ } ->
       let fenv = s.fenv in

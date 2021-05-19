@@ -451,7 +451,7 @@ and struc_of_linksem ~cc name size members : struc =
 (** Build a struct from it's cupdie and name.
     If [force_complete] is true and the struct is incomplete. It will try
     to complete is using [cupdie] and throw {!LinkError} if it fails.*)
-and struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : unqualified =
+and[@warning "-16"] struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie ~mname ~decl : unqualified =
   let open Dwarf in
   (* If the struct has no name we fallback on the potential name. If the
      the fallback fails, we throw a link error *)
