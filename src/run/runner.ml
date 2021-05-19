@@ -115,8 +115,8 @@ let load_sym runner (sym : Elf.Symbol.t) =
           Hashtbl.add runner.instrs addr (Normal instr)
         end
       with exn ->
-        warn "Could not convert isla trace of instruction at 0x%x in %s to Trace.t: %s" addr
-          runner.elf.filename (Printexc.to_string exn);
+        warn "Could not convert isla trace of instruction at 0x%x in %s to Trace.t: %s\n%s" addr
+          runner.elf.filename (Printexc.to_string exn) (Printexc.get_backtrace ());
         Hashtbl.add runner.instrs addr (IslaFail instr_len))
     opcode_list
 
