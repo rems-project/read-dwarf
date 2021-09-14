@@ -1,0 +1,19 @@
+(library
+ (public_name read-dwarf.riscv64)
+ (name sig_riscv64)
+ (flags
+  (:standard -open Utils))
+ (implements sig)
+ (inline_tests
+  (backend read-dwarf.qtest.sig.riscv64))
+ (libraries utils config state))
+
+(library
+ (name qtest_sig_riscv64)
+ (public_name read-dwarf.qtest.sig.riscv64)
+ (modules)
+ (inline_tests.backend
+  (generate_runner
+   (run qtest extract --preamble "[@@@ocaml.warning \"-33\"];; open Utils;;"
+     --quiet %{impl-files} %{intf-files}))
+  (runner_libraries qcheck ounit2 bytes)))
