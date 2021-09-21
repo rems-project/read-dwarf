@@ -63,10 +63,7 @@ let is_linear (Trace events : 'a trc) =
 
 (** Get the annotation of an expression *)
 let annot_exp : 'a exp -> 'a = function
-  | Var (_, a) -> a
-  | Bits (_, a) -> a
-  | Bool (_, a) -> a
-  | Enum (_, a) -> a
+  | Val (_, a) -> a
   | Unop (_, _, a) -> a
   | Binop (_, _, _, a) -> a
   | Manyop (_, _, a) -> a
@@ -108,10 +105,7 @@ let direct_exp_map_exp (f : 'a exp -> 'a exp) = function
   | Binop (b, e, e', l) -> Binop (b, f e, f e', l)
   | Manyop (m, el, l) -> Manyop (m, List.map f el, l)
   | Ite (c, e, e', l) -> Ite (f c, f e, f e', l)
-  | Bits (bv, a) -> Bits (bv, a)
-  | Bool (b, a) -> Bool (b, a)
-  | Enum (e, a) -> Enum (e, a)
-  | Var (v, a) -> Var (v, a)
+  | Val (v, a) -> Val (v, a)
 
 let direct_exp_iter_exp (i : 'a exp -> unit) = function
   | Unop (_, e, _) -> i e
@@ -123,10 +117,7 @@ let direct_exp_iter_exp (i : 'a exp -> unit) = function
       i c;
       i e;
       i e'
-  | Bits _ -> ()
-  | Bool _ -> ()
-  | Enum _ -> ()
-  | Var _ -> ()
+  | Val _ -> ()
 
 let direct_smt_map_exp (m : 'a exp -> 'a exp) : 'a smt -> 'a smt = function
   | DefineConst (v, exp) -> DefineConst (v, m exp)
@@ -178,23 +169,20 @@ let direct_event_map_valu (m : valu -> valu) : 'a event -> 'a event = function
   | e -> e
 
 let direct_valu_iter_valu (i : valu -> unit) : valu -> unit = function
-  | Val_Symbolic _ -> ()
-  | Val_Bool _ -> ()
-  | Val_I _ -> ()
-  | Val_Bits _ -> ()
-  | Val_Enum _ -> ()
-  | Val_String _ -> ()
-  | Val_Unit -> ()
-  | Val_NamedUnit _ -> ()
-  | Val_Vector l -> List.iter i l
-  | Val_List l -> List.iter i l
-  | Val_Struct l -> List.iter (fun (_, v) -> i v) l
-  | Val_Poison -> ()
+  | RegVal_Base _ -> ()
+  | RegVal_I _ -> ()
+  | RegVal_String _ -> ()
+  | RegVal_Unit -> ()
+  | RegVal_NamedUnit _ -> ()
+  | RegVal_Vector l -> List.iter i l
+  | RegVal_List l -> List.iter i l
+  | RegVal_Struct l -> List.iter (fun (_, v) -> i v) l
+  | RegVal_Poison -> ()
 
 let direct_valu_map_valu (m : valu -> valu) : valu -> valu = function
-  | Val_Vector l -> Val_Vector (List.map m l)
-  | Val_List l -> Val_List (List.map m l)
-  | Val_Struct l -> Val_Struct (List.map (Pair.map Fun.id m) l)
+  | RegVal_Vector l -> RegVal_Vector (List.map m l)
+  | RegVal_List l -> RegVal_List (List.map m l)
+  | RegVal_Struct l -> RegVal_Struct (List.map (Pair.map Fun.id m) l)
   | valu -> valu
 
 (*****************************************************************************)
@@ -218,19 +206,19 @@ let direct_valu_map_valu (m : valu -> valu) : valu -> valu = function
 
 (** iterate a function on all the variable of an expression *)
 let rec exp_iter_var (f : int -> unit) : 'a exp -> unit = function
-  | Var (v, _) -> f v
+  | Val (Val_Symbolic v, _) -> f v
   | exp -> direct_exp_iter_exp (exp_iter_var f) exp
 
 let event_iter_valu = direct_event_iter_valu
 
 (** Iterate a function over a [valu] broken up into fields, extending the given path. *)
 let rec iter_valu_path (f : string list -> valu -> unit) (path : string list) : valu -> unit = function
-  | Val_Struct l -> List.iter (fun (name, v) -> iter_valu_path f (path @ [name]) v) l
+  | RegVal_Struct l -> List.iter (fun (name, v) -> iter_valu_path f (path @ [name]) v) l
   | v -> f path v
 
 (** Map a function over a [valu] broken up into fields, extending the given path. *)
 let rec map_valu_path (f : string list -> valu -> 'a) (path : string list) : valu -> 'a list = function
-  | Val_Struct l -> List.concat_map (fun (name, v) -> map_valu_path f (path @ [name]) v) l
+  | RegVal_Struct l -> List.concat_map (fun (name, v) -> map_valu_path f (path @ [name]) v) l
   | v -> [f path v]
 
 (*****************************************************************************)
@@ -241,7 +229,7 @@ let rec map_valu_path (f : string list -> valu -> 'a) (path : string list) : val
 (** Substitute variable with expression according to subst function *)
 let rec var_subst (subst : int -> 'a -> 'a exp) (exp : 'a exp) : 'a exp =
   let s = var_subst subst in
-  match exp with Var (v, a) -> subst v a | _ -> direct_exp_map_exp s exp
+  match exp with Val (Val_Symbolic v, a) -> subst v a | _ -> direct_exp_map_exp s exp
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -265,7 +253,7 @@ let string_of_accessor_list = function Nil -> [] | Cons l -> List.map string_of_
 let rec valu_get valu path =
   match (valu, path) with
   | (_, []) -> valu
-  | (Val_Struct s, a :: l) -> valu_get (List.assoc a s) l
+  | (RegVal_Struct s, a :: l) -> valu_get (List.assoc a s) l
   | _ -> failwith "islaManip.valu_get: Invalid path in IslaManip.valu_get"
 
 (*****************************************************************************)

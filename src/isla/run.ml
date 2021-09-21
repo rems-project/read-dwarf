@@ -102,12 +102,12 @@ let exp_conv_subst (vc : value_context) (exp : rexp) : State.exp =
 
     If the value is not convertible to a state expression, throw a {!RunError} *)
 let rec exp_of_valu l vc : valu -> State.exp = function
-  | Val_Symbolic i -> get_var l vc i
-  | Val_Bool b -> Exp.Typed.bool b
-  | Val_Bits bv -> Exp.Typed.bits_smt bv
-  | Val_I (int, size) -> Exp.Typed.bits_int ~size int
-  | Val_Enum (n, a) -> Exp.Typed.enum (n, a)
-  | Val_Vector list -> Exp.Typed.vec @@ List.map (exp_of_valu l vc) list
+  | RegVal_Base (Val_Symbolic i) -> get_var l vc i
+  | RegVal_Base (Val_Bool b) -> Exp.Typed.bool b
+  | RegVal_Base (Val_Bits bv) -> Exp.Typed.bits_smt bv
+  | RegVal_I (int, size) -> Exp.Typed.bits_int ~size int
+  | RegVal_Base (Val_Enum (n, a)) -> Exp.Typed.enum (n, a)
+  | RegVal_Vector list -> Exp.Typed.vec @@ List.map (exp_of_valu l vc) list
   | valu -> run_error l "Can't convert %t to a state expression" (Pp.tos pp_valu valu)
 
 (** This function write an expression to symbolic variable.
@@ -119,7 +119,7 @@ let write_to_var _ vc var exp = HashVector.set vc var exp
 
     If the valu is a variable, it is added to the context, otherwise nothing happens. *)
 let write_to_valu l vc valu exp =
-  match valu with Val_Symbolic i -> write_to_var l vc i exp | _ -> ()
+  match valu with RegVal_Base (Val_Symbolic i) -> write_to_var l vc i exp | _ -> ()
 
 (** Run an event on {!State.t} and a {!value_context} by mutating both *)
 let event_mut (vc : value_context) (state : State.t) : revent -> unit =

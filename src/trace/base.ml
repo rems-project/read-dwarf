@@ -234,18 +234,18 @@ let exp_conv_subst (vc : value_context) (exp : Isla.rexp) : exp =
 
 (** Convert an {!Isla.valu} in a expression *)
 let exp_of_valu l vc : Isla.valu -> exp = function
-  | Val_Symbolic i -> get_var vc i
-  | Val_Bool b -> Typed.bool b
-  | Val_Bits bv -> Typed.bits_smt bv
-  | Val_I (int, size) -> Typed.bits_int ~size int
-  | Val_Enum (n, a) -> Typed.enum (n, a)
+  | RegVal_Base (Val_Symbolic i) -> get_var vc i
+  | RegVal_Base (Val_Bool b) -> Typed.bool b
+  | RegVal_Base (Val_Bits bv) -> Typed.bits_smt bv
+  | RegVal_I (int, size) -> Typed.bits_int ~size int
+  | RegVal_Base (Val_Enum (n, a)) -> Typed.enum (n, a)
   | valu ->
       Raise.fail "%t Can't convert %t to a trace expression" (Pp.tos Ast.pp_lrng l)
         (Pp.tos Isla.pp_valu valu)
 
 (** Write an expression to an {!Isla.valu} *)
 let write_to_valu vc valu exp =
-  match valu with Isla.Val_Symbolic i -> HashVector.set vc i exp | _ -> ()
+  match valu with Isla.(RegVal_Base (Val_Symbolic i)) -> HashVector.set vc i exp | _ -> ()
 
 (** Convert an isla event to Trace events, most events are deleted *)
 let events_of_isla ~written_registers ~read_counter ~(vc : value_context) :

@@ -43,7 +43,7 @@
 %==================================================================================%
 
 % Ott grammar for the internal and Z3 AST of read-dwarf
-% need to merged with sections "terminals,annotations,types,bool,operations"
+% need to merged with sections "terminals,annotations,types,integers,bool,operations"
 % of isla_lang.ott (handled by dune automatically)
 
 % bounded varaible (by let)

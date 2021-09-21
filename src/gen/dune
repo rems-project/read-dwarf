@@ -48,7 +48,7 @@
  (action
   (with-stdout-to
    base.ott
-   (run awk -v SECS=terminals,annotations,types,bool,operations -f
+   (run awk -v SECS=terminals,annotations,types,integers,bool,operations -f
      extract_sections.awk isla_lang.ott))))
 
 (rule

@@ -107,17 +107,17 @@ let manyop : Base.manyop -> Ast.manyop = function
 
 let direct_exp_no_var (conv : 'a Base.exp -> ('a, 'v, 'b, 'm) Ast.exp) :
     'a Base.exp -> ('a, 'v, 'b, 'm) Ast.exp = function
-  | Bits (b, a) -> Bits (BitVec.of_smt b, a)
-  | Bool (b, a) -> Bool (b, a)
-  | Enum (e, a) -> Enum (e, a)
+  | Val (Val_Bits b, a) -> Bits (BitVec.of_smt b, a)
+  | Val (Val_Bool b, a) -> Bool (b, a)
+  | Val (Val_Enum e, a) -> Enum (e, a)
   | Unop (u, e, a) -> Unop (unop u, conv e, a)
   | Binop (b, e, e', a) -> Binop (binop b, conv e, conv e', a)
   | Manyop (m, el, a) -> Manyop (manyop m, List.map conv el, a)
   | Ite (c, e, e', a) -> Ite (conv c, conv e, conv e', a)
-  | Var (_, _) -> failwith "var in direct_exp_no_var"
+  | Val (Val_Symbolic _, _) -> failwith "var in direct_exp_no_var"
 
 let rec exp_var_conv (vconv : int -> 'v) : 'a Base.exp -> ('a, 'v, 'b, 'm) Ast.exp = function
-  | Var (i, a) -> Var (vconv i, a)
+  | Val (Val_Symbolic i, a) -> Var (vconv i, a)
   | e -> direct_exp_no_var (exp_var_conv vconv) e
 
 let exp e = exp_var_conv Fun.id e
@@ -125,7 +125,7 @@ let exp e = exp_var_conv Fun.id e
 (** Convert an expression from isla to Ast but using a var-to-exp conversion function *)
 let rec exp_var_subst (vconv : int -> 'a -> ('a, 'v, 'b, 'm) Ast.exp) :
     'a Base.exp -> ('a, 'v, 'b, 'm) Ast.exp = function
-  | Var (i, a) -> vconv i a
+  | Val (Val_Symbolic i, a) -> vconv i a
   | e -> direct_exp_no_var (exp_var_subst vconv) e
 
 (** Convert directly from an untyped isla expression to an {!Exp.Typed} by
@@ -134,10 +134,10 @@ let rec exp_add_type_var_subst (vconv : int -> 'a -> ('v, 'm) Exp.Typed.t) (exp 
     ('v, 'm) Exp.Typed.t =
   let at = exp_add_type_var_subst vconv in
   match exp with
-  | Var (v, a) -> vconv v a
-  | Bits (bv, _) -> Exp.Typed.bits_smt bv
-  | Bool (b, _) -> Exp.Typed.bool b
-  | Enum (e, _) -> Exp.Typed.enum e
+  | Val (Val_Symbolic v, a) -> vconv v a
+  | Val (Val_Bits bv, _) -> Exp.Typed.bits_smt bv
+  | Val (Val_Bool b, _) -> Exp.Typed.bool b
+  | Val (Val_Enum e, _) -> Exp.Typed.enum e
   | Unop (op, e, _) -> Exp.Typed.unop (unop op) (at e)
   | Binop (op, e, e', _) -> Exp.Typed.binop (binop op) (at e) (at e')
   | Manyop (op, el, _) -> Exp.Typed.manyop (manyop op) (List.map at el)

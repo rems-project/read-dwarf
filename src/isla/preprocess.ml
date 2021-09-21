@@ -73,7 +73,7 @@ let simplify_trc (Trace events : rtrc) : rtrc =
   let used = HashVector.empty () in
   let process_used event =
     let rec process_used_valu = function
-      | Val_Symbolic i ->
+      | RegVal_Base (Val_Symbolic i) ->
           debug "Marking v%d as used" i;
           HashVector.set used i ()
       | v -> Manip.direct_valu_iter_valu process_used_valu v
@@ -123,8 +123,8 @@ let simplify_trc (Trace events : rtrc) : rtrc =
       | Declared _ ->
           debug "Simplifying declared variable %d" v;
           let new_v = commit v in
-          Var (new_v, loc)
-      | Processed new_v -> Var (new_v, loc)
+          Val (Val_Symbolic new_v, loc)
+      | Processed new_v -> Val (Val_Symbolic new_v, loc)
       | Defined { exp; _ } ->
           debug "Simplifying defined variable %d with exp %t" v (Pp.top pp_exp exp);
           simplify_exp exp
@@ -132,7 +132,7 @@ let simplify_trc (Trace events : rtrc) : rtrc =
     Manip.var_subst simplify_var e
   in
   let rec simplify_valu = function
-    | Val_Symbolic i -> Val_Symbolic (i |> HashVector.get simplify_context |> expect_processed)
+    | RegVal_Base (Val_Symbolic i) -> RegVal_Base (Val_Symbolic (i |> HashVector.get simplify_context |> expect_processed))
     | valu -> Manip.direct_valu_map_valu simplify_valu valu
   in
   let simplify_event = function

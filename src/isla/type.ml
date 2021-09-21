@@ -147,38 +147,38 @@ let type_manyop l (m : manyop) (ltl : lty list) : ty =
 let rec type_valu loc (cont : type_context) : valu -> (State.Reg.Path.t * State.Reg.ty) list =
   let plain ty = [([], Conv.ty ty)] in
   function
-  | Val_Symbolic var -> (
+  | RegVal_Base (Val_Symbolic var) -> (
       try plain @@ HashVector.get cont var
       with Invalid_argument _ ->
         raise (TypeError (loc, Printf.sprintf "Variable v%d is used but never defined" var))
     )
-  | Val_Bool _ -> plain Ty_Bool
-  | Val_I (_, size) -> plain (Ty_BitVec size)
-  | Val_Bits str ->
+  | RegVal_Base (Val_Bool _) -> plain Ty_Bool
+  | RegVal_I (_, size) -> plain (Ty_BitVec size)
+  | RegVal_Base (Val_Bits str) ->
       plain
         (Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2))
-  | Val_Struct l ->
+  | RegVal_Struct l ->
       let open List in
       let* (name, value) = l in
       let+ (path, ty) = type_valu loc cont value in
       (name :: path, ty)
-  | Val_Enum (n, _) -> plain (Ty_Enum n)
-  | Val_List l | Val_Vector l ->
+  | RegVal_Base (Val_Enum (n, _)) -> plain (Ty_Enum n)
+  | RegVal_List l | RegVal_Vector l ->
       let open List in
       let* value = l in
       let+ (path, ty) = type_valu loc cont value in
       (path, ty)
-  | Val_Unit -> fatal "valu unit not implemented"
-  | Val_NamedUnit _ -> fatal "valu named unit not implemented"
-  | Val_Poison -> fatal "Hey I got poisoned! Bad sail !"
-  | Val_String _ -> fatal "valu string not implemented"
+  | RegVal_Unit -> fatal "valu unit not implemented"
+  | RegVal_NamedUnit _ -> fatal "valu named unit not implemented"
+  | RegVal_Poison -> fatal "Hey I got poisoned! Bad sail !"
+  | RegVal_String _ -> fatal "valu string not implemented"
 
 let rec ltype_expr (cont : type_context) : rexp -> lty = function
-  | Var (var, l) -> (l, HashVector.get cont var)
-  | Bits (str, l) ->
+  | Val (Val_Symbolic var, l) -> (l, HashVector.get cont var)
+  | Val (Val_Bits str, l) ->
       (l, Ty_BitVec (if str.[1] = 'x' then 4 * (String.length str - 2) else String.length str - 2))
-  | Bool (_, l) -> (l, Ty_Bool)
-  | Enum ((n, _), l) -> (l, Ty_Enum n)
+  | Val (Val_Bool _, l) -> (l, Ty_Bool)
+  | Val (Val_Enum (n, _), l) -> (l, Ty_Enum n)
   | Unop (u, e, l) -> (l, type_unop l u @@ ltype_expr cont e)
   | Binop (b, e, e', l) -> (l, type_binop l b (ltype_expr cont e) (ltype_expr cont e'))
   | Manyop (m, el, l) -> (l, type_manyop l m (List.map (ltype_expr cont) el))
