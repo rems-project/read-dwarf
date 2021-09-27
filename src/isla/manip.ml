@@ -86,6 +86,8 @@ let annot_event : 'a event -> 'a = function
   | Sleeping (_, a) -> a
   | SleepRequest a -> a
   | MarkReg (_, _, a) -> a
+  | AssumeReg (_, _, _, a) -> a
+  | Assume (_, a) -> a
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -155,6 +157,8 @@ let direct_event_iter_valu (i : valu -> unit) : 'a event -> unit = function
   | MarkReg _ -> ()
   | Instr (v, _) -> i v
   | Sleeping _ -> ()
+  | AssumeReg (_, _, v, _) -> i v
+  | Assume _ -> ()
 
 let direct_event_map_valu (m : valu -> valu) : 'a event -> 'a event = function
   | BranchAddress (v, l) -> BranchAddress (m v, l)

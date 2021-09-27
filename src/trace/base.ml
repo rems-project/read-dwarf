@@ -311,6 +311,9 @@ let events_of_isla ~written_registers ~read_counter ~(vc : value_context) :
   | Instr _ -> []
   | Barrier _ -> []
   | CacheOp _ -> []
+  (* Not currently used in read-dwarf (but are in isla-coq) *)
+  | AssumeReg _ -> []
+  | Assume _ -> []
 
 (** Top level function to convert an isla trace to one of this module *)
 let of_isla (Trace events : Isla.rtrc) : t =

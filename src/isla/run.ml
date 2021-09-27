@@ -188,6 +188,9 @@ let event_mut (vc : value_context) (state : State.t) : revent -> unit =
   | Barrier _ -> ()
   | CacheOp _ -> ()
   | Instr _ -> ()
+  (* Not currently used in read-dwarf (but are in isla-coq) *)
+  | AssumeReg _ -> ()
+  | Assume _ -> ()
 
 (* I don't need that information at that stage *)
 
