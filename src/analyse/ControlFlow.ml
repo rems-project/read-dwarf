@@ -449,20 +449,20 @@ let parse_objdump_line (s : string) : objdump_instruction option =
     try Scanf.sscanf s' "%x" (fun i -> i)
     with _ -> fatal "cannot parse opcode '%s' byte in objdump line %s\n" s' s
   in
-  let rec string_spaces s =
+  let rec strip_whitespace s =
     if s = "" then ""
     else
       let tail = String.sub s 1 ((String.length s) - 1) in
       match String.get s 0 with
-      | ' ' | '\n' | '\r' | '\t' -> string_spaces tail
-      | c -> String.make 1 c ^ (string_spaces tail)
+      | ' ' | '\n' | '\r' | '\t' -> strip_whitespace tail
+      | c -> String.make 1 c ^ (strip_whitespace tail)
   in
   if Str.string_match objdump_line_regexp s 0 then
     begin
       let addr_int64 = parse_hex_int64 (Str.matched_group 1 s) in
       let addr = Nat_big_num.of_int64 addr_int64 in
       let op = Str.matched_group 2 s in
-      let op = string_spaces op in
+      let op = strip_whitespace op in
       let opcode_byte_strings =
         [String.sub op 0 2;
          String.sub op 2 2;
