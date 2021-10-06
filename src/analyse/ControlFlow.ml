@@ -433,35 +433,47 @@ AArch64:
  *)
 
 let objdump_line_regexp =
-  Str.regexp " *\\([0-9a-fA-F]+\\):\t\\([0-9a-fA-F ]+\\)\t\\([^ \t]+\\) *\\(.*\\)$"
+  Str.regexp " *\\([0-9a-fA-F]+\\):[ \t]\\([0-9a-fA-F ]+\\)\t\\([^ \r\t\n]+\\) *\\(.*\\)$"
 
 type objdump_instruction =
   natural (*address*) * int list (*opcode bytes*) * string (*mnemonic*) * string
 
 (*args etc*)
 
-let parse_objdump_line arch (s : string) : objdump_instruction option =
+let parse_objdump_line (s : string) : objdump_instruction option =
   let parse_hex_int64 s' =
     try Scanf.sscanf s' "%Lx" (fun i64 -> i64)
     with _ -> fatal "cannot parse address in objdump line %s\n" s
   in
   let parse_hex_int s' =
     try Scanf.sscanf s' "%x" (fun i -> i)
-    with _ -> fatal "cannot parse opcode byte in objdump line %s\n" s
+    with _ -> fatal "cannot parse opcode '%s' byte in objdump line %s\n" s' s
+  in
+  let rec strip_whitespace s =
+    if s = "" then ""
+    else
+      let tail = String.sub s 1 ((String.length s) - 1) in
+      match String.get s 0 with
+      | ' ' | '\n' | '\r' | '\t' -> strip_whitespace tail
+      | c -> String.make 1 c ^ (strip_whitespace tail)
   in
   if Str.string_match objdump_line_regexp s 0 then
-    let addr_int64 = parse_hex_int64 (Str.matched_group 1 s) in
-    let addr = Nat_big_num.of_int64 addr_int64 in
-    let op = Str.matched_group 2 s in
-    let opcode_byte_strings =
-      match arch with
-      | AArch64 -> [String.sub op 0 2; String.sub op 2 2; String.sub op 4 2; String.sub op 6 2]
-      | X86 -> List.filter (function s' -> s' <> "") (String.split_on_char ' ' op)
-    in
-    let opcode_bytes = List.map parse_hex_int opcode_byte_strings in
-    let mnemonic = Str.matched_group 3 s in
-    let operands = Str.matched_group 4 s in
-    Some (addr, opcode_bytes, mnemonic, operands)
+    begin
+      let addr_int64 = parse_hex_int64 (Str.matched_group 1 s) in
+      let addr = Nat_big_num.of_int64 addr_int64 in
+      let op = Str.matched_group 2 s in
+      let op = strip_whitespace op in
+      let opcode_byte_strings =
+        [String.sub op 0 2;
+         String.sub op 2 2;
+         String.sub op 4 2;
+         String.sub op 6 2]
+      in
+      let opcode_bytes = List.map parse_hex_int opcode_byte_strings in
+      let mnemonic = Str.matched_group 3 s in
+      let operands = Str.matched_group 4 s in
+      Some (addr, opcode_bytes, mnemonic, operands)
+    end
   else None
 
 (*
@@ -473,7 +485,7 @@ let rec parse_objdump_lines arch lines (next_index : int) (last_address : natura
     objdump_instruction list =
   if next_index >= Array.length lines then []
   else
-    match parse_objdump_line arch lines.(next_index) with
+    match parse_objdump_line lines.(next_index) with
     (* skip over unparseable lines *)
     | None -> parse_objdump_lines arch lines (next_index + 1) last_address
     | Some ((addr, _opcode_bytes, _mnemonic, _operands) as i) -> (
