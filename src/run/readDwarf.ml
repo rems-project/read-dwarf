@@ -157,7 +157,7 @@ let html =
       $ Arg.(value & flag & info ["h"; "html"] ~doc))
 
 let morello =
-  let doc = "Enable Morello suppost" in
+  let doc = "Enable Morello support" in
   setter Analyse.Globals.morello
     Arg.(value & flag & info ["morello"] ~docv:"MORELLO" ~doc)
 
