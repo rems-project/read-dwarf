@@ -85,3 +85,5 @@ let src_target_dir = ref (None : string option)
 let copy_sources_dry_run = ref false
 
 let skylight = ref false
+
+let morello = ref false

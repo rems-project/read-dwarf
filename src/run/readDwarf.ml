@@ -156,6 +156,11 @@ let html =
       const (fun b -> if b then Analyse.Types.Html else Analyse.Types.Ascii)
       $ Arg.(value & flag & info ["h"; "html"] ~doc))
 
+let morello =
+  let doc = "Enable Morello suppost" in
+  setter Analyse.Globals.morello
+    Arg.(value & flag & info ["morello"] ~docv:"MORELLO" ~doc)
+
 let options =
   [
     skylight;
@@ -178,6 +183,7 @@ let options =
     cfg_source_nodes;
     cfg_source_nodes2;
     html;
+    morello ;
     Logs.term;
   ]
 
