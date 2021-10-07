@@ -58,6 +58,10 @@ open ControlFlowTypes
 type call_graph_node = addr * index * string list
 
 let pp_call_graph test (instructions, index_of_address, _address_of_index, _indirect_branches) =
+  let mask_addr x:natural =
+    if !Globals.morello
+    then Nat_big_num.shift_left (Nat_big_num.shift_right x 1) 1
+    else x in
   (* take the nodes to be all the elf symbol addresses of stt_func
      symbol type (each with their list of elf symbol names) together
      with all the other-address bl-targets (of which in Hf there are just
@@ -67,7 +71,7 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
       List.sort_uniq compare
         (List.filter_map
            (fun (_name, (typ, _size, address, _mb, _binding)) ->
-             if typ = Elf_symbol_table.stt_func then Some address else None)
+             if typ = Elf_symbol_table.stt_func then Some (mask_addr address) else None)
            test.symbol_map)
     in
     List.map
