@@ -749,7 +749,7 @@ let pp_test_analysis m test an =
               ))
           ranges_of_compilation_units
       in
-
+(*
       let re_ranged_compilation_units : ((addr * addr) * Dwarf.sdt_compilation_unit) list =
         let rec f (rcus : ((addr * addr) * Dwarf.sdt_compilation_unit) list) :
             ((addr * addr) * Dwarf.sdt_compilation_unit) list =
@@ -762,6 +762,9 @@ let pp_test_analysis m test an =
         in
         f ranges_of_compilation_units'
       in
+ *)
+      (* HACK: for pKVM the above re-ranging was useful for some reason, but in general not *)
+      let re_ranged_compilation_units = ranges_of_compilation_units' in
 
       let filename_stem = "" in
 

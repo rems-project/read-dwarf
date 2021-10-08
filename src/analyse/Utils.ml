@@ -54,7 +54,8 @@ type natural = Nat_big_num.num
 (** machine address *)
 type addr = natural
 
-let pp_addr (a : natural) = Ml_bindings.hex_string_of_big_int_pad8 a
+(* hackishly mask out bigint conversion failure *)
+let pp_addr (a : natural) = try Ml_bindings.hex_string_of_big_int_pad8 a with Failure s -> let s' = "Failure: int64_of_big_int " ^ Nat_big_num.to_string a in (warn "pp_addr failure: %s" s); s'| e -> raise e
 
 (** index into instruction-indexed arrays *)
 type index = int

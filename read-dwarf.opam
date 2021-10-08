@@ -17,14 +17,12 @@ depends: [
   "cmdliner" {>= "1.0.0"}
   "res" {>= "5.0.0"}
   "ocamlgraph" {>= "1.8.8"}
-  "toml" {>= "6.0.0" & < "7.0.0"}
+  "toml" {>= "6.0.0"}
   "isla-lang"
   "ott" {>= "0.31" & build}
   "qtest" {with-test}
   "ounit" {with-test}
   "odoc" {with-doc}
-  "uutf"
-  "qcheck"
 ]
 build: [
   ["dune" "subst"] {pinned}
