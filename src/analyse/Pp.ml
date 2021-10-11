@@ -737,7 +737,9 @@ let pp_test_analysis m test an =
             | (cu : Dwarf.sdt_compilation_unit) -> (
                 match cu.scu_pc_ranges with
                 | None -> []
-                | Some ranges -> List.map (function (low, high) -> ((low, high), cu)) ranges
+                | Some ranges -> List.map (function (low, high) ->
+                                             Printf.printf "CU range %s : %s %s\n" (Dwarf.pp_cupdie cu.scu_cupdie) (pp_addr low) (pp_addr high) ;
+                                             ((low, high), cu)) ranges
               ))
           an.sdt.Dwarf.sd_compilation_units
       in
