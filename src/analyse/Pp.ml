@@ -417,7 +417,7 @@ links:
 
 let skylight () =
   match !Globals.comp_dir with
-  | None -> fatal "skylight: no --comp_dir"
+  | None -> (warn "skylight: no --comp_dir"; "skylight: no --comp_dir")
   | Some comp_dir -> (
       match !Globals.out_dir with
       | None -> fatal "skylight: no --out_dir"
@@ -559,8 +559,14 @@ let whole_file_chunks m test an filename_stem cu_files =
      ^ pp_evaluated_line_info ds.ds_evaluated_line_info
  *)
 
+(* strangely, the pc range data for some CUs seems not to cover the objdump-printed disassembly, e.g. in the last CU of noub.elf *)
 let pp_instructions_ranged m test an (low, high) =
   (* [ (f k a.(k)) ; (f (k+1) a.(k+1)) ; ... ; (f k' a.(k'-1)) ] *)
+(*  Printf.printf "pp_instructions_ranged size=%i low=%s  high=%s \n" (Array.length an.instructions) (pp_addr low)  (pp_addr high) ;
+  Printf.printf "pp_instructions_ranged indices: low=%i  high=%i \n"   (an.index_of_address low)  (an.index_of_address high);
+ *)
+  let index_low = an.index_of_address low in
+  let index_high = (an.index_of_address (Nat_big_num.sub high (Nat_big_num.of_int 4)))+1 in
   let rec subarray_map_to_list f a k k' =
     if k >= k' then [] else f k a.(k) :: subarray_map_to_list f a (k + 1) k'
   in
@@ -571,13 +577,13 @@ let pp_instructions_ranged m test an (low, high) =
            | k -> (
                function _i -> an.rendered_control_flow.(k)
              ))
-         an.instructions (an.index_of_address low) (an.index_of_address high)
+         an.instructions index_low index_high
       @ subarray_map_to_list
           (function
             | k -> (
                 function _i -> an.rendered_control_flow_inbetweens.(k)
               ))
-          an.instructions (an.index_of_address low) (an.index_of_address high)
+         an.instructions index_low index_high
       )
   in
 
@@ -585,7 +591,7 @@ let pp_instructions_ranged m test an (low, high) =
   String.concat ""
     (subarray_map_to_list
        (pp_instruction m test an rendered_control_flow_common_prefix_end)
-       an.instructions (an.index_of_address low) (an.index_of_address high))
+       an.instructions index_low index_high)
 
 let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   let open Dwarf in
