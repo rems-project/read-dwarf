@@ -9,7 +9,8 @@ authors: ["Peter Sewell" "Thibaut Pérami"]
 homepage: "https://github.com/rems-project/read-dwarf"
 bug-reports: "https://github.com/rems-project/read-dwarf/issues"
 depends: [
-  "dune" {>= "2.6"}
+  "dune" {>= "2.9.1"}
+  "dune-site"
   "ocaml" {>= "4.08.0"}
   "pprint" {>= "20171003"}
   "menhir" {build}
@@ -25,7 +26,7 @@ depends: [
   "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {pinned}
+  ["dune" "subst"] {dev}
   [
     "dune"
     "build"
@@ -36,6 +37,15 @@ build: [
     "@install"
     "@runtest" {with-test}
     "@doc" {with-doc}
+  ]
+  [
+    "dune"
+    "install"
+    "-p"
+    name
+    "-j"
+    jobs
+    "--create-install-files"
   ]
 ]
 dev-repo: "git+https://github.com/rems-project/read-dwarf.git"

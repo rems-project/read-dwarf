@@ -1,4 +1,5 @@
-(lang dune 2.6)
+(lang dune 2.8)
+(using dune_site 0.1)
 (name "read-dwarf")
 (authors "Peter Sewell" "Thibaut Pérami")
 (maintainers "Peter Sewell <peter.sewell@cl.cam.ac.uk>"
@@ -12,6 +13,7 @@
 (package
  (name read-dwarf)
  (synopsis "C Translation checking software")
+ (sites (share html))
  (depends
   (ocaml (>= 4.08.0))
   (pprint (>= 20171003))

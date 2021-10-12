@@ -658,10 +658,20 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   (title, instructions_chunk :: chunks0)
 
 let wrap_body m (chunk_name, chunk_title, chunk_body) =
+  let read_html name =
+    let rec inter_p = function
+      | [] -> Error "not found"
+      | dir::dirs ->
+         let filename = Filename.concat dir name  in
+         if Sys.file_exists filename
+         then read_file_lines filename
+         else inter_p dirs
+    in inter_p (Htmlpaths.Sites.html)
+  in
   match m with
   | Ascii ->
       ( if chunk_name = "instructions" then
-        match read_file_lines "src/analyse/emacs-highlighting" with
+        match read_html "emacs-highlighting" with
         | Error _ -> "Error: src/analyse/no emacs-highlighting file\n"
         | Ok lines -> String.concat "\n" (Array.to_list lines)
       else ""
@@ -669,17 +679,17 @@ let wrap_body m (chunk_name, chunk_title, chunk_body) =
       ^ "* ************* " ^ chunk_title ^ " **********\n" ^ chunk_body
   | Html -> (
       ( if chunk_name = "instructions" then
-        match read_file_lines "src/analyse/html-preamble-insts.html" with
+        match read_html "html-preamble-insts.html" with
         | Error _ -> "Error: src/analyse/no html-preamble-insts.html file\n"
         | Ok lines -> String.concat "\n" (Array.to_list lines)
       else
-        match read_file_lines "src/analyse/html-preamble.html" with
+        match read_html "html-preamble.html" with
         | Error _ -> "Error: no src/analyse/html-preamble.html file\n"
         | Ok lines -> String.concat "\n" (Array.to_list lines)
       )
       ^ "<h1>" ^ chunk_title ^ "</h1>\n" ^ chunk_body
       ^
-      match read_file_lines "src/analyse/html-postamble.html" with
+      match read_html "html-postamble.html" with
       | Error _ -> "Error: no src/analyse/html-postamble.html file\n"
       | Ok lines -> String.concat "\n" (Array.to_list lines)
     )
