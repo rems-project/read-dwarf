@@ -20,4 +20,4 @@
  (flags
   (:standard -open Utils))
  (modules copySourcesCmd copySources dumpDwarf dumpSym readDwarf)
- (libraries run utils config analyse state trace))
+ (libraries run utils config state trace))

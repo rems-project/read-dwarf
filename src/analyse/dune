@@ -3,4 +3,13 @@
  (public_name read-dwarf.analyse)
  (flags
   (:standard -open Utils))
- (libraries uutf utils))
+ (modules :standard htmlpaths)
+ (libraries dune-site uutf utils))
+
+(install
+ (section (site (read-dwarf html)))
+ (files emacs-highlighting html-preamble.html html-preamble-insts.html html-postamble.html))
+
+(generate_sites_module
+ (module htmlpaths)
+ (sites read-dwarf))
