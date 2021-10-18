@@ -287,7 +287,12 @@ let branch_table_target_addresses test filename_branch_table_option : (addr * ad
 
 (* hacky parsing of AArch64 assembly from objdump -d to identify control-flow instructions and their arguments *)
 
-let parse_addr (s : string) : natural = Scanf.sscanf s "%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
+let parse_addr (s : string) : natural =
+try 
+  Scanf.sscanf s "0x%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
+with
+  Scanf.Scan_failure _  ->
+   Scanf.sscanf s "%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
 
 let parse_target s =
   match Scanf.sscanf s " %s %s" (fun s1 s2 -> (s1, s2)) with
