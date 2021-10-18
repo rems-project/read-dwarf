@@ -198,7 +198,7 @@ apply-header:
 
 BEN=../system-litmus-harness/elfs/litmus
 $(BEN).read-dwarf.html: $(BEN).elf
-	./read-dwarf rd --elf $(BEN).elf --objdump-d $(BEN).objdump-d  --html --out $(BEN).read-dwarf.html
+	dune-exec read-dwarf -- rd --elf $(BEN).elf --objdump-d $(BEN).objdump-d  --html --out $(BEN).read-dwarf.html
 
 ############### misc handy targets ###################################
 

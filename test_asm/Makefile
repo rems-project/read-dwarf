@@ -48,7 +48,7 @@ TOOLCHAIN=aarch64-linux-gnu-
 
 CONFIG := ../src/config/config.toml
 
-RD=../read-dwarf run-block --config $(CONFIG) --len=24 --linear
+RD=dune exec read-dwarf -- run-block --config $(CONFIG) --len=24 --linear
 
 all: $(foreach BIN,$(BINS), build/$(BIN))
 .PHONY: all
