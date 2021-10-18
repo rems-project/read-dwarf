@@ -161,6 +161,13 @@ let morello =
   setter Analyse.Globals.morello
     Arg.(value & flag & info ["morello"] ~docv:"MORELLO" ~doc)
 
+let suppress_stuff =
+  let doc = "Suppress some stuff in html output" in
+  setter Analyse.Globals.suppress_stuff
+    Arg.(value & flag & info ["suppress_stuff"] ~docv:"SUPPRESS_STUFF" ~doc)
+
+
+  
 let options =
   [
     skylight;
@@ -184,6 +191,7 @@ let options =
     cfg_source_nodes2;
     html;
     morello ;
+    suppress_stuff;
     Logs.term;
   ]
 

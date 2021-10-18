@@ -472,6 +472,10 @@ let wrap_chunks m chunks =
     chunks
 
 let whole_file_chunks m test an filename_stem cu_files =
+  (*  let pr s = prerr_endline s in*)
+  (*  let ps s = ((prerr_endline s); s)  in *)
+  let pr _ = () in
+  let ps s = s in
   let open Dwarf in
   let ds = test.dwarf_static in
   let d = ds.ds_dwarf in
@@ -480,14 +484,11 @@ let whole_file_chunks m test an filename_stem cu_files =
     let cu = myhead d.d_compilation_units in
     cu.cu_header
   in
+  pr "1";
   let iss = analyse_inlined_subroutines_sdt_dwarf an.sdt in
-  let (call_graph, transitive_call_graph) =
-    pp_call_graph test
-      (an.instructions, an.index_of_address, an.address_of_index, an.indirect_branches)
-  in
-
+  pr "2";
   let sources_chunk_body = skylight () in
-
+  pr "3";
   let cu_index_body =
     String.concat ""
       (List.map
@@ -504,36 +505,46 @@ let whole_file_chunks m test an filename_stem cu_files =
              ))
          cu_files)
   in
+  pr "4";
   let chunks =
     (* ("compilation_units"             , "compilation units",         cu_index_body)
        ::*)
     wrap_chunks m
-      [
-        ("_loc", ".debug_loc location lists", pp_loc c cuh_default d.d_loc);
-        ( "_loc_eval",
-          "evaluated location info",
-          pp_analysed_location_data ds.ds_dwarf ds.ds_analysed_location_data );
-        ("_ranges", ".debug_ranges range lists", pp_ranges c cuh_default d.d_ranges);
-        ("_frame", ".debug_frame frame info", pp_frame_info c cuh_default d.d_frame_info);
-        ("_frame_eval", "evaluated frame info", pp_evaluated_frame_info ds.ds_evaluated_frame_info);
-        ("_inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
-        ( "_inlined_by_range",
-          "inlined subroutine info by range",
-          pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
-        ("_sdt_globals", "simple die tree globals", pp_sdt_globals_dwarf an.sdt);
-        ("_sdt_locals", "simple die tree locals", pp_sdt_locals_dwarf an.sdt);
-        (*    ("subprogram_line_extents" , "subprogram line-number extent info", Dwarf.pp_subprograms ds.ds_subprogram_line_extents);*)
-        ( "_types",
-          "struct/union/enum type definitions",
-          let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
-          String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps) );
-        ("_call_graph", "call graph", call_graph);
-        ("_call_graph_trans", "transitive call graph", transitive_call_graph);
-        ("_count", "instruction count", string_of_int (Array.length an.instructions));
-      ]
+      (
+        [ (ps "_loc", ".debug_loc location lists", pp_loc c cuh_default d.d_loc)]
+        @ (if not(!Globals.suppress_stuff) then 
+             [  (ps "_loc_eval", "evaluated location info",
+                 pp_analysed_location_data ds.ds_dwarf ds.ds_analysed_location_data ) ] else [] )
+        @ [
+            (ps "_ranges", ".debug_ranges range lists", pp_ranges c cuh_default d.d_ranges);
+            (ps "_frame", ".debug_frame frame info", pp_frame_info c cuh_default d.d_frame_info);
+            (ps "_frame_eval", "evaluated frame info", pp_evaluated_frame_info ds.ds_evaluated_frame_info);
+            (ps "_inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
+            (ps "_inlined_by_range",
+             "inlined subroutine info by range",
+             pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
+            (ps "_sdt_globals", "simple die tree globals", pp_sdt_globals_dwarf an.sdt);
+            (ps "_sdt_locals", "simple die tree locals", pp_sdt_locals_dwarf an.sdt);
+            (*    ("subprogram_line_extents" , "subprogram line-number extent info", Dwarf.pp_subprograms ds.ds_subprogram_line_extents);*)
+            (ps "_types",
+             "struct/union/enum type definitions",
+             let ctyps : Dwarf.c_type list = Dwarf.struct_union_enum_types d in
+             String.concat "" (List.map Dwarf.pp_struct_union_type_defn' ctyps) )
+          ]
+        @
+          (
+            let (call_graph, transitive_call_graph) =
+              pp_call_graph test
+                (an.instructions, an.index_of_address, an.address_of_index, an.indirect_branches)
+            in
+            [ (ps "_call_graph", "call graph", call_graph);
+              (ps "_call_graph_trans", "transitive call graph", transitive_call_graph) ]
+          )
+        @  [(ps "_count", "instruction count", string_of_int (Array.length an.instructions)) ]
+      )
   in
   let index_chunk =
-    ( "index",
+    (ps "index",
       "index",
       "<a href=\"sources.html\">source files</a>\n\n" ^ cu_index_body ^ "\n"
       ^ String.concat ""
@@ -719,12 +730,14 @@ let output_per_cu_files m test an filename_stem re_ranged_compilation_units =
   List.map
     (function
       | ((low, high), cu) ->
-          let (cu_title, chunks) =
+         prerr_endline ("output_per_cu_files cu " ^ cu.Dwarf.scu_name);
+         let (cu_title, chunks) =
             chunks_of_ranged_cu m test an filename_stem ((low, high), cu)
           in
           List.map
             (function
-              | (chunk_name, chunk_title, chunk_body) ->
+             | (chunk_name, chunk_title, chunk_body) ->
+                (*                prerr_endline ("output_per_cu_files chunk_name " ^ chunk_name);*)
                   let (path, filename) = chunk_filename_per_cu m filename_stem chunk_name cu in
                   let body =
                     wrap_body m (chunk_name, cu_title ^ "\n" ^ chunk_title, chunk_body)
@@ -754,7 +767,7 @@ let pp_test_analysis m test an =
                 match cu.scu_pc_ranges with
                 | None -> []
                 | Some ranges -> List.map (function (low, high) ->
-                                             Printf.printf "CU range %s : %s %s\n" (Dwarf.pp_cupdie cu.scu_cupdie) (pp_addr low) (pp_addr high) ;
+                                             (*                                             Printf.printf "CU %s range %s : %s %s\n" cu.scu_name (Dwarf.pp_cupdie cu.scu_cupdie) (pp_addr low) (pp_addr high) ; flush stdout; *)
                                              ((low, high), cu)) ranges
               ))
           an.sdt.Dwarf.sd_compilation_units
@@ -788,7 +801,10 @@ let pp_test_analysis m test an =
 
       let cu_files = output_per_cu_files m test an filename_stem re_ranged_compilation_units in
 
+      (*      if not(!Globals.suppress_whole_file_files) then*)
       output_whole_file_files m test an filename_stem cu_files
+(*      else
+        ()*)
       (*
 
   String.concat ""
@@ -847,6 +863,7 @@ let pp_test_analysis m test an =
       call_graph ^ "* ************* transitive call graph **************\n"
       ^ transitive_call_graph
   | Html ->
-      (* "\n* ************* instructions *****************\n" *)
-      pp_instruction_init ();
-      String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions))
+     ""
+     (* "\n* ************* instructions *****************\n" *)
+       (*pp_instruction_init ();
+      String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions))*)
