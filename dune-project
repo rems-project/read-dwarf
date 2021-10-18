@@ -1,4 +1,4 @@
-(lang dune 2.8)
+(lang dune 2.9)
 (using dune_site 0.1)
 (name "read-dwarf")
 (authors "Peter Sewell" "Thibaut Pérami")
