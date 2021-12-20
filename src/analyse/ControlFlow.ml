@@ -314,7 +314,7 @@ let parse_drop_one s =
   | exception _ -> None
 
 let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
-     Printf.printf "s=\"%s\" mnemonic=\"%s\" s'=\"%s\"\n"s mnemonic s';flush stdout;
+  (*     Printf.printf "s=\"%s\" mnemonic=\"%s\" s'=\"%s\"\n"s mnemonic s';flush stdout;*)
      (*     Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic (String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic))) s';flush stdout;*)
   let c =
     if List.mem String.equal mnemonic [".word"] then C_no_instruction
