@@ -67,7 +67,150 @@ let pp_symbol_map (symbol_map : Elf_file.global_symbol_init_info) =
 
 (*****************************************************************************)
 
+
+(* new version, using linksem machinery directly without Sail_interface adaptor *)
+
+(*open Byte_sequence*)
+open Error
+
+open Elf_header
+open Elf_file
+open Elf_types_native_uint
+
+
+(* this is adapted from the Lem-generated OCaml of linksem/src/adaptors/sail_interface.lem*)
+(* ultimately it might be better expressed in Lem as another linksem adaptor *)
+
+(* the second return value used to be 
+     Elf_file.global_symbol_init_info
+     =(I think)  (string*(Nat_big_num.num*Nat_big_num.num*Nat_big_num.num*(byte_sequence0)option*Nat_big_num.num))list
+
+   now it's a more primitive:
+
+     (Elf_symbol_table.elf64_symbol_table*String_table.string_table)
+
+*)
+   
+let populate_and_obtain_global_symbol_init_info_new fname1:(elf64_file*(Elf_symbol_table.elf64_symbol_table*String_table.string_table))error=
+  (bind (
+       (* Acquire the data from the file... *)Byte_sequence.acquire fname1) (fun bs0 -> bind (
+       (* Read the magic number and the flags in the header... *)repeatM' Elf_header.ei_nident bs0 (read_unsigned_char Endianness.default_endianness)) (fun (ident, _bs) ->
+    (match Lem_list.list_index ident 4 with
+      | None -> fail "populate_and_obtain_global_symbol_init_info_new: ELF ident transcription error"
+      | Some c  ->
+        (* Calculate whether we are dealing with a 32- or 64-bit file based on
+         * what we have read.  For now, we only handle 64-bit here.
+         *)
+         if Nat_big_num.equal (Uint32_wrapper.to_bigint c) Elf_header.elf_class_64 then
+           bind (Elf_file.read_elf64_file bs0) (fun f1 ->
+               bind (Elf_file.get_elf64_file_symbol_table f1) (fun syms ->
+                   return (f1, syms) ))
+         else
+           fail "populate_and_obtain_global_symbol_init_info_new: ELF class unrecognised - not elf_class_64"
+    ))))
+
+  
 let parse_elf_file (filename : string) : test =
+  (* call ELF analyser on file *)
+  let info = populate_and_obtain_global_symbol_init_info_new filename in
+
+  let ( (f64 : elf64_file),
+        (symbol_map : (Elf_symbol_table.elf64_symbol_table*String_table.string_table) )) =
+    match info with
+    | Error.Fail s -> fatal "populate_and_obtain_global_symbol_init_info_new: %s" s
+    | Error.Success x -> x
+  in
+
+  (* linksem main_elf --symbols looks ok for gcc and clang
+
+     That uses                 Elf_file.read_elf64_file bs0 >>= fun f1 ->
+                return (Harness_interface.harness_string_of_elf64_syms
+  *)
+
+  (*
+  let pp_string_table strtab =
+    match strtab with String_table.Strings(c,s) ->
+      String.map (function c' -> if c'=c then ' ' else c') s
+  in
+
+  (*
+  (* check the underlying string table - looks right for clang and gcc*)
+  let string_table :String_table.string_table =
+    match Elf_file.get_elf64_file_symbol_string_table f64 with
+    | Error.Success x -> x
+    | Error.Fail s -> raise (Failure ("foo "^s))
+  in
+  Printf.printf "%s\n" (pp_string_table string_table);
+  exit 0;
+*)
+
+  (* check the symbol table - plausible looking "Name" offsets for both gcc and clang *)
+
+  (match Elf_file.get_elf64_file_symbol_table f64 with
+  | Error.Success (symtab,strtab) ->
+       Printf.printf "%s\n%s" (pp_string_table strtab)
+         (Elf_symbol_table.string_of_elf64_symbol_table symtab)
+  | Error.Fail s -> raise (Failure "foo"));
+
+
+
+
+  (* check the symbol_map - right number of entries, and strings for gcc,
+     but no strings for clang... *)
+  Printf.printf "symbol_map=\n%s"  (pp_symbol_map symbol_map);
+  (* Printf.printf "%s\n" (Sail_interface.string_of_executable_process_image elf_epi);*)
+(*  exit 0;*)
+ *)
+
+  (*  Debug.print_string "elf segments etc\n";*)
+
+  (* architectures from linksem elf_header.lem *)
+  let arch =
+    if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_aarch64 then AArch64
+    else if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_x86_64 then X86
+    else fatal "unrecognised ELF file architecture"
+  in
+
+  (* remove all the auto generated segments (they contain only 0s) *)
+  (*
+  let segments =
+    Lem_list.mapMaybe
+      (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None)
+      segments
+  in
+   *)
+  let ds =
+    match Dwarf.extract_dwarf_static (Elf_file.ELF_File_64 f64) with
+    | None -> fatal "%s" "extract_dwarf_static failed"
+    | Some ds ->
+       (* Debug.print_string2 (Dwarf.pp_analysed_location_data ds.Dwarf.ds_dwarf
+          ds.Dwarf.ds_analysed_location_data);
+          Debug.print_string2 (Dwarf.pp_evaluated_frame_info
+          ds.Dwarf.ds_evaluated_frame_info);*)
+       ds
+  in
+  let dwarf_semi_pp_frame_info =
+    Dwarf.semi_pp_evaluated_frame_info ds.ds_evaluated_frame_info
+  in
+  let test =
+    {
+      elf_file=Elf_file.ELF_File_64 f64;
+      arch;
+      symbol_map (*@ (symbols_for_stacks !Globals.elf_threads)*);
+      segments=None;
+      e_entry=None;
+      e_machine=None;
+      dwarf_static = ds;
+      dwarf_semi_pp_frame_info;
+    }
+  in
+  test
+
+  
+
+(* old version *)
+(*  
+let parse_elf_file_old (filename : string) : test =
   (* call ELF analyser on file *)
   let info = Sail_interface.populate_and_obtain_global_symbol_init_info filename in
 
@@ -160,15 +303,15 @@ let parse_elf_file (filename : string) : test =
           elf_file;
           arch;
           symbol_map (*@ (symbols_for_stacks !Globals.elf_threads)*);
-          segments;
-          e_entry;
-          e_machine;
+          segments=Some segments;
+          e_entry=Some e_entry;
+          e_machine=Some e_machine;
           dwarf_static = ds;
           dwarf_semi_pp_frame_info;
         }
       in
       test
-
+ *)
 (*****************************************************************************)
 (**       marshal and unmarshal test                                         *)
 

@@ -67,23 +67,33 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
      with all the other-address bl-targets (of which in Hf there are just
      three, the same in O0 and O2, presumably explicit in assembly) *)
   let elf_symbols : (natural * string list) list =
+    let (symtab,strtab)=test.symbol_map in 
     let elf_symbol_addresses =
       List.sort_uniq compare
         (List.filter_map
-           (fun (_name, (typ, _size, address, _mb, _binding)) ->
-             if typ = Elf_symbol_table.stt_func then Some (mask_addr address) else None)
-           test.symbol_map)
+           (fun entry -> 
+             if Elf_symbol_table.extract_symbol_type entry.Elf_symbol_table.elf64_st_info = Elf_symbol_table.stt_func then Some entry.Elf_symbol_table.elf64_st_value else None)
+           symtab)
     in
     List.map
       (fun address ->
+        let address = mask_addr address in 
         let names =
           List.sort_uniq compare
             (List.filter_map
-               (fun (name, (_typ, _size, address', _mb, _binding)) ->
-                 if address' = address && String.length name >= 1 && name.[0] <> '$' then
+               (fun entry' ->
+                 let name =
+                   let name_idx = Uint32_wrapper.to_bigint (*natural_of_elf64_word*) entry'.Elf_symbol_table.elf64_st_name in
+                   match String_table.get_string_at name_idx strtab with
+                   | Success s -> s
+                   | Fail e -> fatal "get_string_at strtab lookup %s" e
+                 in
+                 if mask_addr entry'.Elf_symbol_table.elf64_st_value = address &&
+                      String.length name >= 1 && name.[0] <> '$'
+                 then
                    Some name
                  else None)
-               test.symbol_map)
+               symtab)
         in
         (address, names))
       elf_symbol_addresses

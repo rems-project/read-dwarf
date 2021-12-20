@@ -92,7 +92,7 @@ let mk_inlining test sdt instructions =
         match issr_new with
         | [] -> (List.rev_append acc [], label_last)
         | issr :: issr_new' ->
-            if List.length labels_in_use >= 26 then fatal "%s" "inlining depth > 26";
+           if List.length labels_in_use >= 260 (*HACK!*) then fatal "%s" "inlining depth > 26";
             let rec fresh_label l =
               let l = (l + 1) mod 26 in
               if not (List.mem Int.equal l labels_in_use) then l else fresh_label l

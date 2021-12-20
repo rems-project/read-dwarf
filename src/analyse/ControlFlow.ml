@@ -288,12 +288,17 @@ let branch_table_target_addresses test filename_branch_table_option : (addr * ad
 (* hacky parsing of AArch64 assembly from objdump -d to identify control-flow instructions and their arguments *)
 
 let parse_addr (s : string) : natural =
+  (*  Printf.printf "parse_addr \"%s\"" s;flush stdout;*)
 try 
   Scanf.sscanf s "0x%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
 with
-  Scanf.Scan_failure _  ->
-   Scanf.sscanf s "%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
-
+  Scanf.Scan_failure _ | End_of_file ->
+   try
+     Scanf.sscanf s "%Lx" (fun i64 -> Nat_big_num.of_int64 i64)
+   with
+     Scanf.Scan_failure _ | End_of_file ->
+     fatal "parse_addr Scan_failure on %s" s
+     
 let parse_target s =
   match Scanf.sscanf s " %s %s" (fun s1 s2 -> (s1, s2)) with
   | (s1, s2) -> Some (parse_addr s1, s2)
@@ -309,7 +314,8 @@ let parse_drop_one s =
   | exception _ -> None
 
 let parse_control_flow_instruction s mnemonic s' : control_flow_insn =
-  (*   Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic (String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic))) s';flush stdout;*)
+     Printf.printf "s=\"%s\" mnemonic=\"%s\" s'=\"%s\"\n"s mnemonic s';flush stdout;
+     (*     Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic (String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic))) s';flush stdout;*)
   let c =
     if List.mem String.equal mnemonic [".word"] then C_no_instruction
     else if List.mem String.equal mnemonic ["ret"] then C_ret
