@@ -80,6 +80,7 @@ open Pp
 (*****************************************************************************)
 
 let process_file () : unit =
+
   (*filename_objdump_d filename_branch_tables (filename_elf : string) : unit =*)
   let m = !Globals.ppmode in
 
@@ -155,7 +156,7 @@ let process_file () : unit =
       begin
         match m with
         | Ascii -> (
-            match read_file_lines "src/analyse/emacs-highlighting" with
+            match read_file_lines (output_preamble_file "emacs-highlighting") with
             | Error _ -> ()
             | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
           )
@@ -167,7 +168,7 @@ let process_file () : unit =
         match m with
         | Ascii -> ()
         | Html -> (
-            match read_file_lines "src/analyse/html-preamble.html" with
+            match read_file_lines (output_preamble_file "html-preamble.html") with
             | Error _ -> ()
             | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
           )
@@ -180,7 +181,7 @@ let process_file () : unit =
         match m with
         | Ascii -> ()
         | Html -> (
-            match read_file_lines "src/analyse/html-postamble.html" with
+            match read_file_lines (output_preamble_file "html-postamble.html") with
             | Error _ -> ()
             | Ok lines -> Array.iter (function s -> Printf.fprintf c "%s\n" s) lines
           )

@@ -87,6 +87,11 @@ let objdump_d =
   setter Analyse.Globals.objdump_d
     Arg.(value & opt (some non_dir_file) None & info ["objdump-d"] ~docv:"OBJDUMP_FILE" ~doc)
 
+let output_preamble_dir =
+  let doc = "Path to directory containing output preamble/postamble files" in
+  setter Analyse.Globals.output_preamble_dir
+    Arg.(value & opt (some string) None & info ["output_preamble_dir"] ~docv:"OUTPUT_PREAMBLE_DIR" ~doc)
+
 let branch_tables =
   let doc = "File containing branch table base addresses and sizes" in
   setter Analyse.Globals.branch_table_data_file
@@ -172,6 +177,7 @@ let options =
   [
     skylight;
     dry_run;
+    output_preamble_dir;
     comp_dir;
     no_vars;
     no_cfa;

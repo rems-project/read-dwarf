@@ -80,6 +80,8 @@ let show_source = ref true
 
 let ppmode = ref Types.Html
 
+let output_preamble_dir = ref (None : string option)
+
 let src_target_dir = ref (None : string option)
 
 let copy_sources_dry_run = ref false

@@ -670,20 +670,23 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
 
 let wrap_body m (chunk_name, chunk_title, chunk_body) =
   let read_html name =
-    let rec inter_p = function
-      | [] -> Error "not found"
-      | dir::dirs ->
-         let filename = Filename.concat dir name  in
-         if Sys.file_exists filename
-         then read_file_lines filename
-         else inter_p dirs
-    in inter_p (Htmlpaths.Sites.html)
-  in
+    (* let rec inter_p = function
+     *   | [] -> Error "not found"
+     *   | dir::dirs ->
+     *      let filename = Filename.concat dir name  in
+     *      if Sys.file_exists filename
+     *      then read_file_lines filename
+     *      else inter_p dirs
+     * in inter_p (Htmlpaths.Sites.html) *)
+    (* TODO: not sure what the above was - a partial VZ fix? Need a cleaner scheme for finding the preamble files *)
+    (* TODO: some code duplication here wrt Base.ml *)
+      read_file_lines (output_preamble_file name)
+    in
   match m with
   | Ascii ->
       ( if chunk_name = "instructions" then
         match read_html "emacs-highlighting" with
-        | Error _ -> "Error: src/analyse/no emacs-highlighting file\n"
+        | Error _ -> "Error: no emacs-highlighting file\n"
         | Ok lines -> String.concat "\n" (Array.to_list lines)
       else ""
       )
@@ -691,7 +694,7 @@ let wrap_body m (chunk_name, chunk_title, chunk_body) =
   | Html -> (
       ( if chunk_name = "instructions" then
         match read_html "html-preamble-insts.html" with
-        | Error _ -> "Error: src/analyse/no html-preamble-insts.html file\n"
+        | Error _ -> "Error: no html-preamble-insts.html file\n"
         | Ok lines -> String.concat "\n" (Array.to_list lines)
       else
         match read_html "html-preamble.html" with
@@ -701,7 +704,7 @@ let wrap_body m (chunk_name, chunk_title, chunk_body) =
       ^ "<h1>" ^ chunk_title ^ "</h1>\n" ^ chunk_body
       ^
       match read_html "html-postamble.html" with
-      | Error _ -> "Error: no src/analyse/html-postamble.html file\n"
+      | Error _ -> "Error: no html-postamble.html file\n"
       | Ok lines -> String.concat "\n" (Array.to_list lines)
     )
 

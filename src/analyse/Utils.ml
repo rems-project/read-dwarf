@@ -80,6 +80,15 @@ let read_file_lines (name : string) : (string array, string) result =
   | lines -> Ok lines
   | exception Sys_error s -> Error (Printf.sprintf "read_file_lines Sys_error \"%s\"\n" s)
 
+
+let output_preamble_file filename =
+  let filename' = Filename.concat (match !Globals.output_preamble_dir with None -> "" | Some dir -> dir) filename in 
+  if Sys.file_exists filename' then
+    filename'
+  else
+    fatal ("not found: %s") filename'
+
+                           
 (** escape HTML *)
 let html_escape s =
   let escaping = ref true in
