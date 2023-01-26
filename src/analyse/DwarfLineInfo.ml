@@ -324,6 +324,19 @@ let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
 let source_file_cache =
   ref ([] : ((string option * string option * string) * string array option) list)
 
+let pp_source_file_cache_index (comp_diro, dir, file) = 
+  "comp_diro=" 
+  ^ (match comp_diro with None->"None"|Some s->s) ^ ", " 
+  ^ "dir=" ^ (match dir with None->"None"|Some s->s) ^", "
+  ^ "file=" ^ file
+
+let pp_source_file_cache () =
+  (*debug*)  Printf.printf "%s\n\n" (String.concat "\n" (List.map (function ((comp_diro, dir, file), lineso) ->
+                                                                     pp_source_file_cache_index (comp_diro, dir, file)
+                                                                     ^ " |-> "
+                                                                     ^ (match lineso with None->"None" | Some lines->"["^lines.(0) ^", ...]")) !source_file_cache))
+  
+                   
 let actual_directories replacement (comp_diro, dir, file) : string (*directory_original*) * string
     (*directory_replacement*) =
   let ppo a = match a with None -> "none" | Some s -> s in
@@ -387,8 +400,9 @@ let source_line (comp_diro, dir, file) n1 =
   in
 
   let n = n1 - 1 in
+
   match
-    try Some (List.assoc (comp_diro, dir, file) !source_file_cache) with Not_found -> None
+    try Some (List.assoc (comp_diro, dir, file) !source_file_cache) with Not_found -> (*(  Printf.printf "source_line lookup of %s in:\n" (pp_source_file_cache_index (comp_diro, dir, file));   pp_source_file_cache (); (*DEBUG*) Printf.printf "Not_found\n";*)  None
   with
   | Some (Some lines) -> access_lines lines n
   | Some None -> None
