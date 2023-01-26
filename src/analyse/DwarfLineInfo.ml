@@ -136,8 +136,9 @@ let split_into_sequences
             | None -> fatal "split_into_sequences found sequence of length 0"
           in
           let last = lnr.lnr_address in
-          if Nat_big_num.equal first last then fatal "split_into_sequences found first=last"
-          else ();
+          (* this arises in hyp-init.S at O0, apparently due to an "alternatives" which gives rise to a wrapping LNS_PC_advance, so comment out the check*)
+          (*if Nat_big_num.equal first last then fatal "split_into_sequences found first=last"
+          else ();*)
           let elis =
             {
               elis_first = first;
