@@ -83,7 +83,7 @@ module Id : sig
 
   val equal : t -> t -> bool
 
-  val pp : t -> PPrintEngine.document
+  val pp : t -> Pp.document
 end
 
 type id = Id.t
@@ -136,10 +136,10 @@ module Var : sig
   val hash : t -> int
 
   (** Basically [to_string] in pp mode *)
-  val pp : t -> PPrintEngine.document
+  val pp : t -> Pp.document
 
   (** Pretty prints but with bars around *)
-  val pp_bar : t -> PPrintEngine.document
+  val pp_bar : t -> Pp.document
 
   (** Get the type of a variable *)
   val ty : t -> Reg.ty
@@ -184,7 +184,7 @@ module Tval : sig
 
   val equal : t -> t -> bool
 
-  val pp : t -> PPrintEngine.document
+  val pp : t -> Pp.document
 end
 
 type tval = Tval.t
@@ -475,8 +475,8 @@ val set_last_pc : t -> int -> unit
 
 (** {1 Pretty printing } *)
 
-val pp : t -> PPrintEngine.document
+val pp : t -> Pp.document
 
 (** Print only the mentioned regs and the memory and asserts since the base_state.
     Until a better solution is found, the fenv will be printed entirely all the time *)
-val pp_partial : regs:Reg.t list -> t -> PPrintEngine.document
+val pp_partial : regs:Reg.t list -> t -> Pp.document
