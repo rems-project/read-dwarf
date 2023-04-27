@@ -11,6 +11,7 @@ bug-reports: "https://github.com/rems-project/read-dwarf/issues"
 depends: [
   "dune" {>= "2.9"}
   "ocaml" {>= "4.08.0"}
+  "dune-site" {>= "3.6.2"}
   "pprint" {>= "20171003"}
   "menhir" {build}
   "linksem" {>= "0.7"}

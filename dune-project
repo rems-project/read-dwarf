@@ -16,6 +16,7 @@
  (sites (share html))
  (depends
   (ocaml (>= 4.08.0))
+  (dune-site (>= 3.6.2))
   (pprint (>= 20171003))
   (menhir :build)
   (linksem (>= 0.7))
