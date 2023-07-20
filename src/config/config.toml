@@ -77,7 +77,7 @@ toolchain = "riscv64-linux-gnu"
                     "tlb48",
                     # Enum registers don't appear to translate to Z3 yet
                     "cur_privilege"]
-    arch-file = "../../riscv64.ir" # relative to the toml file
+    arch-file = "../../../isla-snapshots/riscv64.ir" # relative to the toml file
     arch-toml = "isla_riscv64.toml" # relative to the toml file
     linearize = []
     other-opts = []
