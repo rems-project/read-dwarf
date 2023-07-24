@@ -204,6 +204,6 @@ let info =
      the assembly. It will also try to read the source file to interleave the original source \
      code."
   in
-  Term.(info "rd" ~doc ~exits)
+  Cmd.(info "rd" ~doc ~exits)
 
 let command = (full_term, info)

@@ -497,6 +497,6 @@ let info =
     "Symbolically run the required instructions up to and including a branch-register \
      instruction."
   in
-  Term.(info "branch-tables" ~doc ~exits)
+  Cmd.(info "branch-tables" ~doc ~exits)
 
 let command = (term, info)

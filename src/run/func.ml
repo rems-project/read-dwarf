@@ -159,6 +159,6 @@ let info =
      encountered which generally means a return (The return address is symbolic). If any loop is \
      present termination is not ensured unless option -l/--loop is used"
   in
-  Term.(info "run-func" ~doc ~exits)
+  Cmd.(info "run-func" ~doc ~exits)
 
 let command = (term, info)

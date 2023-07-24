@@ -648,11 +648,11 @@ module Cmd = struct
   let exits =
     let doc = "on external errors, (Parsing error, Typing error, ...)." in
     let doc2 = "on non-exception internal errors like assertion failed." in
-    Term.exit_info ~doc 1 :: Term.exit_info ~doc:doc2 2 :: Term.default_exits
+    Cmd.Exit.(info ~doc 1 :: info ~doc:doc2 2 :: defaults)
 
   let info =
     let doc = "Manipulate the caching system" in
-    Term.(info "cache" ~doc ~exits)
+    Cmd.(info "cache" ~doc ~exits)
 
   let command = (term, info)
 end

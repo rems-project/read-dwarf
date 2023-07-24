@@ -10,4 +10,4 @@ val get_state_tree :
   unit ->
   Block_lib.label State.Tree.t
 
-val command : unit Cmdliner.Term.t * Cmdliner.Term.info
+val command : unit Cmdliner.Term.t * Cmdliner.Cmd.info

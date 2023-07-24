@@ -52,7 +52,7 @@ module Default = struct
   (** Global documentation string and name *)
   let info =
     let doc = "Parse dwarf information and use isla to run assembly" in
-    Term.(info "read-dwarf" ~doc ~exits)
+    Cmd.(info "read-dwarf" ~doc ~exits)
 
   (** Default command *)
   let command = (Term.(CmdlinerHelper.func_options comopts action $ arch), info)
@@ -86,4 +86,4 @@ let _ = assert ("riscv64" = Arch.module_name)
 let _ = Random.self_init ()
 
 (** Main entry point *)
-let _ = Term.exit @@ Term.eval_choice Default.command commands
+let _ = grouped_exe commands Default.command

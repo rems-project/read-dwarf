@@ -75,6 +75,6 @@ let info =
      src-target-dir directory.  This can then be used, for example, as the argument to comp-dir, \
      to run read-dwarf without the original build tree."
   in
-  Term.(info "copy-sources" ~doc ~exits)
+  Cmd.(info "copy-sources" ~doc ~exits)
 
 let command = (full_term, info)
