@@ -59,7 +59,7 @@ type value = Toml.Types.value
 
 module Key = Table.Key
 
-let key_of_string = Table.Key.bare_key_of_string
+let key_of_string = Table.Key.of_string
 
 type key = Key.t
 

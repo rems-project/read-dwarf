@@ -13,8 +13,6 @@ There is one dependency that is not on opam: `isla-lang`. Go to [the `isla-lang`
 repository](https://github.com/rems-project/isla-lang) and install the latest
 version. `opam install .` should work there.
 
-For `toml` one currently needs version 6.0.0.
-
 Then you can either install the default configuration of read-dwarf with opam,
 with `opam install .` or just install other dependencies with
 `opam install --deps-only .` and then follow the rest of the README.
