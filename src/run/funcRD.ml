@@ -179,6 +179,6 @@ let info =
      of printing a tree of possibility. The output will be printed with the rd format with state \
      diffs between instructions"
   in
-  Term.(info "run-func-rd" ~doc ~exits)
+  Cmd.(info "run-func-rd" ~doc ~exits)
 
 let command = (term, info)

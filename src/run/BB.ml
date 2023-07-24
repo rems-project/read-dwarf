@@ -146,6 +146,6 @@ let info =
     "Run a basic block. This will run instructions in order, without updating the PC: Any jump \
      will be ignored."
   in
-  Term.(info "run-bb" ~doc ~exits)
+  Cmd.(info "run-bb" ~doc ~exits)
 
 let command = (term, info)

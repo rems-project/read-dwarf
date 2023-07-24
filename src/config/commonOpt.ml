@@ -59,7 +59,7 @@ open CmdlinerHelper
 let exits =
   let doc = "on external errors, (Parsing error, Typing error, ...)." in
   let doc2 = "on non-exception internal errors like assertion failed." in
-  Term.exit_info ~doc 1 :: Term.exit_info ~doc:doc2 2 :: Term.default_exits
+  Cmd.Exit.(info ~doc 1 :: info ~doc:doc2 2 :: defaults)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -80,7 +80,7 @@ let config =
     Printf.sprintf "Overrides the default location of the configuration file (%s)"
       Default.config_file
   in
-  let env = Arg.env_var "READ_DWARF_CONFIG" ~doc in
+  let env = Cmd.Env.info "READ_DWARF_CONFIG" ~doc in
   let doc = "Configuration file path" in
   Term.(
     const File.ensure_loaded
@@ -110,7 +110,7 @@ let isla_client_ref = ref "isla-client"
 
 let isla_client =
   let doc = "Overrides the default isla position (named isla-client)" in
-  let env = Arg.env_var "ISLA_CLIENT" ~doc in
+  let env = Cmd.Env.info "ISLA_CLIENT" ~doc in
   let doc = "isla-client location" in
   setter isla_client_ref
     Arg.(value & opt string "isla-client" & info ["isla"] ~env ~docv:"ISLA_CLIENT_PATH" ~doc)
@@ -126,7 +126,7 @@ let z3_ref = ref "z3"
 (** The z3 option *)
 let z3 =
   let doc = "Overrides the default z3 position" in
-  let env = Arg.env_var "Z3_PATH" ~doc in
+  let env = Cmd.Env.info "Z3_PATH" ~doc in
   let doc = "z3 location" in
   setter z3_ref Arg.(value & opt string "z3" & info ["z3"] ~env ~docv:"Z3_PATH" ~doc)
 
@@ -138,6 +138,13 @@ let z3 =
 (** The list of common options. Almost all sub-commands should use this. *)
 let comopts = [isla_client; z3; Logs.term; config]
 
+let command_tuple_to_cmd_t (term, info) = Cmd.v info term
+
+let grouped_exe commands default_command =
+  let commands = List.map command_tuple_to_cmd_t commands in
+  let default_term, default_info = default_command in
+  exit @@ Cmd.eval @@ Cmd.group default_info ~default:default_term commands
+
 let quick_exe ~name:str ~doc main =
-  let command = Term.(CmdlinerHelper.func_options comopts main $ pure (), info str ~doc ~exits) in
-  Term.exit @@ Term.eval command
+  let command = Term.(CmdlinerHelper.func_options comopts main $ const (), Cmd.info str ~doc ~exits) in
+  exit @@ Cmd.eval @@ command_tuple_to_cmd_t command

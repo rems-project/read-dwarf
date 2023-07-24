@@ -283,7 +283,7 @@ module Cmd = struct
        un-parsed and transmitted as raw text to isla, however the result is parsed and printed \
        again as the protocol is partially a binary protocol."
     in
-    Term.(info "isla-server" ~doc ~exits)
+    Cmd.(info "isla-server" ~doc ~exits)
 
   let command = (term, info)
 end

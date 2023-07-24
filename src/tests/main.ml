@@ -99,10 +99,8 @@ let info =
      and also does some direct read-dwarf call and checks they do not fail"
   in
   let exits = Config.CommonOpt.exits in
-  Term.(info "rd-tester" ~doc ~exits)
+  Cmd.(info "rd-tester" ~doc ~exits)
 
-let command = (term, info)
-
-let _ = Term.exit @@ Term.eval command
+let _ = exit @@ Cmd.eval' (Cmd.v info term)
 
 (* let () = QCheck_base_runner.run_tests_main tests *)

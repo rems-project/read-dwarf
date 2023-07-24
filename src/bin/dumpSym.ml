@@ -74,7 +74,7 @@ let sym =
 
 let info =
   let doc = "Dump the elf symbol with their size and content" in
-  Term.(info "dump-sym" ~doc ~exits:default_exits)
+  Cmd.(info "dump-sym" ~doc)
 
 let term = Term.(func_option Logs.term dump_symbols $ elf $ sym)
 

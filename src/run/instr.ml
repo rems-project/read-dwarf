@@ -218,6 +218,6 @@ let info =
     "Run a single instruction. This is for instruction that works. If something fails early int \
      the Isla pipeline, use isla-test"
   in
-  Term.(info "run-instr" ~doc ~exits)
+  Cmd.(info "run-instr" ~doc ~exits)
 
 let command = (term, info)

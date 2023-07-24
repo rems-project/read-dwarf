@@ -276,6 +276,6 @@ let info =
      particular it allows to parse an isla trace text from disk and other similar low-level \
      testing operation. It completely ignores the Cache."
   in
-  Term.(info "isla-test" ~doc ~exits)
+  Cmd.(info "isla-test" ~doc ~exits)
 
 let command = (term, info)

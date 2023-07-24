@@ -20,7 +20,7 @@
   (pprint (>= 20171003))
   (menhir :build)
   (linksem (>= 0.7))
-  (cmdliner (>= 1.0.0))
+  (cmdliner (>= 1.1.0))
   (res (>= 5.0.0))
   (ocamlgraph (>= 1.8.8))
   (toml (>= 6.0.0))

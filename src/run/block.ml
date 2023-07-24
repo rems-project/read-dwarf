@@ -152,6 +152,6 @@ let info =
      condition must be specified using --len, -s/--stop-sym or -b/--break. If the end condition \
      is not specified enough and --stop-sym is not specified, then the run will fail."
   in
-  Term.(info "run-block" ~doc ~exits)
+  Cmd.(info "run-block" ~doc ~exits)
 
 let command = (term, info)
