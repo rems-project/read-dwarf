@@ -24,6 +24,7 @@
   (res (>= 5.0.0))
   (ocamlgraph (>= 1.8.8))
   (toml (>= 6.0.0))
+  (uutf (>= 1.0.0))
   isla-lang
   (ott (and (>= 0.31) :build))
   (qtest :with-test)
