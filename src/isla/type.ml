@@ -169,7 +169,7 @@ let rec type_valu loc (cont : type_context) : valu -> (State.Reg.Path.t * State.
       let+ (path, ty) = type_valu loc cont value in
       (path, ty)
   | RegVal_Unit -> fatal "valu unit not implemented"
-  | RegVal_NamedUnit _ -> fatal "valu named unit not implemented"
+  | RegVal_Constructor _ -> fatal "valu constructor not implemented"
   | RegVal_Poison -> fatal "Hey I got poisoned! Bad sail !"
   | RegVal_String _ -> fatal "valu string not implemented"
 

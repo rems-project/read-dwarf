@@ -191,6 +191,11 @@ let event_mut (vc : value_context) (state : State.t) : revent -> unit =
   (* Not currently used in read-dwarf (but are in isla-coq) *)
   | AssumeReg _ -> ()
   | Assume _ -> ()
+  (* Not currently used in read-dwarf (not sure if in isla-coq) *)
+  | FunAssume _ -> ()
+  | UseFunAssume _ -> ()
+  | AbstractCall _ -> ()
+  | AbstractPrimop _ -> ()
 
 (* I don't need that information at that stage *)
 

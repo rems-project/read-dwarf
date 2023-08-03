@@ -314,6 +314,11 @@ let events_of_isla ~written_registers ~read_counter ~(vc : value_context) :
   (* Not currently used in read-dwarf (but are in isla-coq) *)
   | AssumeReg _ -> []
   | Assume _ -> []
+  (* Not currently used in read-dwarf (not sure if in isla-coq) *)
+  | FunAssume _ -> []
+  | UseFunAssume _ -> []
+  | AbstractCall _ -> []
+  | AbstractPrimop _ -> []
 
 (** Top level function to convert an isla trace to one of this module *)
 let of_isla (Trace events : Isla.rtrc) : t =
