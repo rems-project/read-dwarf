@@ -88,6 +88,10 @@ let annot_event : 'a event -> 'a = function
   | MarkReg (_, _, a) -> a
   | AssumeReg (_, _, _, a) -> a
   | Assume (_, a) -> a
+  | FunAssume (_, _, _, a) -> a
+  | UseFunAssume (_, _, _, a) -> a
+  | AbstractCall (_, _, _, a) -> a
+  | AbstractPrimop (_, _, _, a) -> a
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -159,6 +163,10 @@ let direct_event_iter_valu (i : valu -> unit) : 'a event -> unit = function
   | Sleeping _ -> ()
   | AssumeReg (_, _, v, _) -> i v
   | Assume _ -> ()
+  | FunAssume (_, v,_, _) -> i v
+  | UseFunAssume (_, v,_, _) -> i v
+  | AbstractCall (_, v,_, _) -> i v
+  | AbstractPrimop (_, v,_, _) -> i v
 
 let direct_event_map_valu (m : valu -> valu) : 'a event -> 'a event = function
   | BranchAddress (v, l) -> BranchAddress (m v, l)
@@ -177,7 +185,7 @@ let direct_valu_iter_valu (i : valu -> unit) : valu -> unit = function
   | RegVal_I _ -> ()
   | RegVal_String _ -> ()
   | RegVal_Unit -> ()
-  | RegVal_NamedUnit _ -> ()
+  | RegVal_Constructor _ -> ()
   | RegVal_Vector l -> List.iter i l
   | RegVal_List l -> List.iter i l
   | RegVal_Struct l -> List.iter (fun (_, v) -> i v) l
