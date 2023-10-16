@@ -44,6 +44,7 @@
 
 include Base
 module Base = Base
+module CallGraph = CallGraph
 module Collected = Collected
 module DwarfLineInfo = DwarfLineInfo
 module Elf = Elf

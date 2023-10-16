@@ -533,10 +533,7 @@ let whole_file_chunks m test an filename_stem cu_files =
           ]
         @
           (
-            let (call_graph, transitive_call_graph) =
-              pp_call_graph test
-                (an.instructions, an.index_of_address, an.address_of_index, an.indirect_branches)
-            in
+            let (call_graph, transitive_call_graph) = pp_call_graph test an in
             [ (ps "_call_graph", "call graph", call_graph);
               (ps "_call_graph_trans", "transitive call graph", transitive_call_graph) ]
           )
@@ -856,10 +853,7 @@ let pp_test_analysis m test an =
       (*  ^ pp_branch_targets instructions*)
       ^ "\n* ************* call graph *****************\n"
       ^
-      let (call_graph, transitive_call_graph) =
-        pp_call_graph test
-          (an.instructions, an.index_of_address, an.address_of_index, an.indirect_branches)
-      in
+      let (call_graph, transitive_call_graph) = pp_call_graph test an in
       call_graph ^ "* ************* transitive call graph **************\n"
       ^ transitive_call_graph
   | Html ->

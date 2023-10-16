@@ -57,7 +57,7 @@ open ControlFlowTypes
 
 type call_graph_node = addr * index * string list
 
-let pp_call_graph test (instructions, index_of_address, _address_of_index, _indirect_branches) =
+let mk_call_graph test (an : CollectedType.analysis) =
   let mask_addr x:natural =
     if !Globals.morello
     then Nat_big_num.shift_left (Nat_big_num.shift_right x 1) 1
@@ -115,7 +115,7 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
                        then Some (a', ["FROM BL:" ^ s'])
                        else None)
                  bl_targets)
-         (Array.to_list instructions))
+         (Array.to_list an.instructions))
   in
 
   let rec dedup axs acc =
@@ -139,11 +139,7 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
   in
 
   let nodes : call_graph_node list =
-    List.map (function (a, ss) -> (a, index_of_address a, ss)) nodes0
-  in
-
-  let pp_node (a, _, ss) =
-    pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
+    List.map (function (a, ss) -> (a, an.index_of_address a, ss)) nodes0
   in
 
   let node_of_index k =
@@ -161,10 +157,10 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
     | k :: todo' ->
         if List.mem Int.equal k acc_reachable then
           stupid_reachability acc_reachable acc_bl_targets todo'
-        else if not (k < Array.length instructions) then
+        else if not (k < Array.length an.instructions) then
           stupid_reachability acc_reachable acc_bl_targets todo'
         else
-          let i = instructions.(k) in
+          let i = an.instructions.(k) in
           let (bl_targets, non_bl_targets) =
             List.partition
               (function
@@ -195,12 +191,6 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
       nodes
   in
 
-  let pp_call_graph_entry (n, ns) =
-    pp_node n ^ ":\n" ^ String.concat "" (List.map (function n' -> "  " ^ pp_node n' ^ "\n") ns)
-  in
-
-  let pp_call_graph call_graph = String.concat "" (List.map pp_call_graph_entry call_graph) in
-
   let rec stupid_reachability' (acc_reachable : call_graph_node list)
       (todo : call_graph_node list) : call_graph_node list =
     match todo with
@@ -222,6 +212,20 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
       nodes
   in
 
+  (call_graph, transitive_call_graph)
+
+
+let pp_call_graph test an =
+  let pp_node (a, _, ss) =
+    pp_addr a (*" " ^ string_of_int k ^*) ^ " <" ^ String.concat ", " ss ^ ">"
+  in
+
+  let pp_call_graph_entry (n, ns) =
+    pp_node n ^ ":\n" ^ String.concat "" (List.map (function n' -> "  " ^ pp_node n' ^ "\n") ns)
+  in
+
+  let pp_call_graph call_graph = String.concat "" (List.map pp_call_graph_entry call_graph) in
+
   let pp_transitive_call_graph transitive_call_graph =
     String.concat ""
       (List.map
@@ -232,5 +236,7 @@ let pp_call_graph test (instructions, index_of_address, _address_of_index, _indi
                ^ pp_call_graph_entry (n, ns))
          transitive_call_graph)
   in
+
+  let call_graph, transitive_call_graph = mk_call_graph test an in
 
   (pp_call_graph call_graph, pp_transitive_call_graph transitive_call_graph)
