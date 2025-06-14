@@ -98,6 +98,8 @@ module type S = sig
     type t =
       | Read of Block.t * var  (** From [Block.t], read [var] *)
       | Write of Block.t * exp  (** To [Block.t], write [exp] *)
+
+    val pp : t -> Pp.document
   end
 
   (** The type of a memory fragment *)

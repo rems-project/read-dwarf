@@ -42,13 +42,17 @@
 (*                                                                                  *)
 (*==================================================================================*)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (* The documentation is in the mli file *)
 
 let rec split =
   let open Ast in
   function
   | Manyop (Bvmanyarith Bvadd, l, _) -> List.concat_map split l
-  | Unop (Extract (last, first), e, _) ->
+  | Unop (Extract (last, (0 as first)), e, _) ->
       let l = split e in
       List.map (Typed.extract ~first ~last) l
   | Unop (Bvneg, e, _) ->
@@ -88,6 +92,8 @@ let smart_substract ~equal ~term exp =
 let split_concrete exp =
   let size = Typed.expect_bv (Typed.get_type exp) in
   let terms = split exp in
+  debug "Split:";
+  List.iter (fun t -> debug "\t%t" Pp.(top (PpExp.pp_exp (fun _ -> !^"var")) t)) terms;
   let (symterms, concvals) = List.partition_map ConcreteEval.eval_if_concrete terms in
   let concbvs = List.map Value.expect_bv concvals in
   let concbv = List.fold_left BitVec.( + ) (BitVec.zero ~size) concbvs in

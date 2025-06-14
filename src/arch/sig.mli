@@ -109,7 +109,7 @@ val sp : unit -> State.Reg.t
 val assemble_to_elf : string -> string
 
 (**  Split a byte-sequence into a list of instructions. *)
-val split_into_instrs : BytesSeq.t -> BytesSeq.t list
+val split_into_instrs : Elf.Symbol.data -> Elf.Symbol.data list
 
 (** Tell if an instruction is a return instruction. *)
 val is_ret : BytesSeq.t -> bool

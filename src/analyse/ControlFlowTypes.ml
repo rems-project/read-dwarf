@@ -83,6 +83,7 @@ type instruction = {
   i_operands : string;
   i_control_flow : control_flow_insn;
   i_targets : target list;
+  i_relocation : (string * string) option;
 }
 
 type come_from = {

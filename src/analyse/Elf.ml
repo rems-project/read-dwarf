@@ -58,8 +58,8 @@ let pp_symbol_map (symbol_map : Elf_file.global_symbol_init_info) =
   String.concat ""
     (List.map
        (fun (name, (typ, _size, address, _mb, _binding)) ->
-         Printf.sprintf "**** name = %s  address = %s  typ = %d\n" name (pp_addr address)
-           (Nat_big_num.to_int typ))
+         Printf.sprintf "**** name = %s  address = %s  typ = %d\n" name (pp_addr (Sym_ocaml.Num.Absolute address))
+           (Sym.to_int (Sym_ocaml.Num.Absolute typ)))
        symbol_map)
 
 (*****************************************************************************)
@@ -69,20 +69,23 @@ let pp_symbol_map (symbol_map : Elf_file.global_symbol_init_info) =
 
 let parse_elf_file (filename : string) : test =
   (* call ELF analyser on file *)
-  let info = Sail_interface.populate_and_obtain_global_symbol_init_info filename in
-
-  let ( (elf_file : Elf_file.elf_file),
-        (elf_epi : Sail_interface.executable_process_image),
-        (symbol_map : Elf_file.global_symbol_init_info) ) =
-    match info with
-    | Error.Fail s -> fatal "populate_and_obtain_global_symbol_init_info: %s" s
+  let bs = match Byte_sequence.acquire filename with
+    | Error.Fail s -> fatal "Linksem: Byte_sequence.acquire: %s" s
+    | Error.Success x -> x
+  in
+  let f64 = match Elf_file.read_elf64_file bs with
+    | Error.Fail s -> fatal "Linksem: read_elf64_file: %s" s
+    | Error.Success x -> x
+  in
+  let symbol_map = match Symbols.get_elf64_file_global_symbol_init f64 with
+    | Error.Fail s -> fatal "LinksemRelocatable: get_elf64_file_global_symbol_init: %s" s
     | Error.Success x -> x
   in
 
-  let f64 =
-    match elf_file with Elf_file.ELF_File_64 f -> f | _ -> raise (Failure "not Elf64")
-  in
+  let elf_file = Elf_file.ELF_File_64 f64 in
 
+  let entry = f64.elf64_file_header.elf64_entry in
+  let machine = f64.elf64_file_header.elf64_machine in
   (* linksem main_elf --symbols looks ok for gcc and clang
 
      That uses                 Elf_file.read_elf64_file bs0 >>= fun f1 ->
@@ -125,49 +128,38 @@ let parse_elf_file (filename : string) : test =
  *)
 
   (*  Debug.print_string "elf segments etc\n";*)
-  match (elf_epi, elf_file) with
-  | (Sail_interface.ELF_Class_32 _, _) -> fatal "%s" "cannot handle ELF_Class_32"
-  | (_, Elf_file.ELF_File_32 _) -> fatal "%s" "cannot handle ELF_File_32"
-  | (Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1) ->
-      (* architectures from linksem elf_header.lem *)
-      let arch =
-        if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_aarch64 then AArch64
-        else if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_x86_64 then X86
-        else fatal "unrecognised ELF file architecture"
-      in
+    (* architectures from linksem elf_header.lem *)
+    let arch =
+      if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_aarch64 then AArch64
+      else if f64.elf64_file_header.elf64_machine = Elf_header.elf_ma_x86_64 then X86
+      else fatal "unrecognised ELF file architecture"
+    in
 
-      (* remove all the auto generated segments (they contain only 0s) *)
-      let segments =
-        Lem_list.mapMaybe
-          (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None)
-          segments
-      in
-      let ds =
-        match Dwarf.extract_dwarf_static (Elf_file.ELF_File_64 f1) with
-        | None -> fatal "%s" "extract_dwarf_static failed"
-        | Some ds ->
-            (* Debug.print_string2 (Dwarf.pp_analysed_location_data ds.Dwarf.ds_dwarf
-                                      ds.Dwarf.ds_analysed_location_data);
-               Debug.print_string2 (Dwarf.pp_evaluated_frame_info
-                                      ds.Dwarf.ds_evaluated_frame_info);*)
-            ds
-      in
-      let dwarf_semi_pp_frame_info =
-        Dwarf.semi_pp_evaluated_frame_info ds.ds_evaluated_frame_info
-      in
-      let test =
-        {
-          elf_file;
-          arch;
-          symbol_map (*@ (symbols_for_stacks !Globals.elf_threads)*);
-          segments;
-          e_entry;
-          e_machine;
-          dwarf_static = ds;
-          dwarf_semi_pp_frame_info;
-        }
-      in
-      test
+    let ds =
+      match Dwarf.extract_dwarf_static (Elf_file.ELF_File_64 f64) Abi_aarch64_symbolic_relocation.aarch64_data_relocation_interpreter with
+      | None -> fatal "%s" "extract_dwarf_static failed"
+      | Some ds ->
+          (* Debug.print_string2 (Dwarf.pp_analysed_location_data ds.Dwarf.ds_dwarf
+                                    ds.Dwarf.ds_analysed_location_data);
+              Debug.print_string2 (Dwarf.pp_evaluated_frame_info
+                                    ds.Dwarf.ds_evaluated_frame_info);*)
+          ds
+    in
+    let dwarf_semi_pp_frame_info =
+      Dwarf.semi_pp_evaluated_frame_info ds.ds_evaluated_frame_info
+    in
+    let test =
+      {
+        elf_file;
+        arch;
+        symbol_map (*@ (symbols_for_stacks !Globals.elf_threads)*);
+        e_entry = Sym_ocaml.Num.Absolute (entry);
+        e_machine = Sym_ocaml.Num.Absolute (machine);
+        dwarf_static = ds;
+        dwarf_semi_pp_frame_info;
+      }
+    in
+    test
 
 (*****************************************************************************)
 (**       marshal and unmarshal test                                         *)

@@ -90,11 +90,18 @@ let ctxfull state =
       (fun e ->
         declare e;
         match Z3St.check_both serv e with
-        | Some true -> None
+        | Some true ->
+            debug "%t is redundant" (Pp.top Exp.pp e);
+            None
         | Some false ->
             found_false := true;
+            debug "%t is impossible" (Pp.top Exp.pp e);
             None
-        | None -> Some e)
+        | None -> 
+            debug "%t is possible" (Pp.top Exp.pp e);
+            Z3St.send_assert serv e;
+            Some e
+        )
       state.asserts
   in
   (* If state is impossible then it has a single assertion: false *)

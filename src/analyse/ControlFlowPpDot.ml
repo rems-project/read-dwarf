@@ -793,7 +793,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
                            let ((_comp_dir, _dir, _file) as ufe) =
                              Dwarf.unpack_file_entry lnh lnr.lnr_file
                            in
-                           (ufe, Nat_big_num.to_int lnr.lnr_line))
+                           (ufe, Sym.to_int lnr.lnr_line))
                      an.line_info.(k))
               in
 

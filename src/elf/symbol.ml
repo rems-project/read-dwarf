@@ -42,27 +42,37 @@
 (*                                                                                  *)
 (*==================================================================================*)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (* The documentation is in the mli file *)
 
 type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
 
 type linksem_typ = Z.t
 
+type data = {
+  data: BytesSeq.t;
+  relocations: Relocations.t
+}
+
 type t = {
   name : string;
   other_names : string list;
   typ : typ;
-  addr : int;
+  addr : Address.t;
+  (* addr : int; *)
   size : int;
   writable : bool;
-  data : BytesSeq.t;
+  data : data;
 }
 
-type linksem_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
+type linksem_t = LinksemRelocatable.symbol
 
 let push_name s t = { t with other_names = s :: t.other_names }
 
-let is_in t addr = t.addr <= addr && addr < t.addr + t.size
+(* let is_in t addr = t.addr <= addr && addr < t.addr + t.size *)
 
 let len t = t.size
 
@@ -75,7 +85,7 @@ let typ_of_linksem ltyp =
   | 4 -> FILE
   | _ -> UNKNOWN
 
-let linksem_typ (_name, (typ, _size, _addr, _data, _)) = typ
+let linksem_typ (_name, (typ, _size, _addr, _data, _), _) = typ
 
 (** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded *)
 exception LoadingError of string * int
@@ -86,26 +96,26 @@ let _ =
         Some (Printf.sprintf "Symbol %s at 0x%x could not be loaded" name addr)
     | _ -> None)
 
-let of_linksem segs (name, (typ, size, addr, data, _)) =
+(* for debugging TODO remove *)
+(* module SMap = Map.Make (String)
+let locs = SMap.empty |> SMap.add ".text" 0 |> SMap.add ".data" 1000000 |> SMap.add ".eh_frame" 2000000 *)
+
+let of_linksem (name, (typ, size, addr, (data, rels), _), writable) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
-  let addr = Z.to_int addr in
-  let segment =
-    Option.value_fail (Segment.get_containing segs addr) "No segment contains symbol %s" name
-  in
-  let writable = segment.write in
-  let data =
-    data
-    |> Option.value_fun ~default:(fun () ->
-           Segment.get_addr (BytesSeq.getbs ~len:size) segment addr)
-  in
+  let addr = Address.of_linksem addr in
+  let data = { data; relocations = Relocations.of_linksem rels } in
+  (* let addr = SMap.find section locs + Z.to_int offset in *)
   { name; other_names = []; typ; size; addr; data; writable }
 
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
 let is_interesting_linksem lsym = lsym |> linksem_typ |> typ_of_linksem |> is_interesting
 
-let sub sym off len = BytesSeq.sub sym.data off len
+let sub sym off len = {
+  data = BytesSeq.sub sym.data.data off len;
+  relocations = Relocations.sub sym.data.relocations off len;
+}
 
 let compare s1 s2 = compare s1.addr s2.addr
 
@@ -128,8 +138,9 @@ let pp_raw sym =
            ("name", !^(sym.name));
            ("other names", separate nbspace (List.map string sym.other_names));
            ("typ", pp_typ sym.typ);
-           ("addr", ptr sym.addr);
+           ("addr", Address.pp sym.addr);
+           (* ("addr", ptr sym.addr); *)
            ("size", ptr sym.size);
            ("writable", bool sym.writable);
-           ("data", BytesSeq.ppby ~by:4 sym.data);
+           ("data", pair (BytesSeq.ppby ~by:4) Relocations.pp (sym.data.data, sym.data.relocations));
          ])

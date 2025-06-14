@@ -140,7 +140,7 @@ let get_instr arch instr elfopt : BytesSeq.t =
   in
   debug "Got symbol:\n%t\n" (Pp.topi Elf.Symbol.pp_raw sym);
   let len = 4 (* TODO proper Instruction length system *) in
-  BytesSeq.sub sym.data off len
+  BytesSeq.sub sym.data.data off len (*TODO relocations*)
 
 let instr_term = Term.(CmdlinerHelper.func_options comopts get_instr $ arch $ instr $ elf)
 
@@ -148,14 +148,15 @@ let simp_trace_term = Term.(const ( || ) $ simp_trace $ simp)
 
 let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
-let get_traces instr isla_run dump_types : traces =
-  Isla.Cache.start @@ Arch.get_isla_config ();
+let get_traces _instr _isla_run _dump_types : traces =
+  Raise.todo()
+  (* Isla.Cache.start @@ Arch.get_isla_config ();
   (* I call Init.init manually to print the register types *)
   Init.init () |> ignore;
-  let rtraces = Isla.Cache.get_traces instr in
+  let rtraces = Isla.Cache.get_traces (instr, None) in (* TODO relocs *)
   List.iter (fun t -> Isla.Type.type_trc t |> ignore) rtraces;
   if dump_types then base "Register types:\n%t\n" (Pp.topi State.Reg.pp_index ());
-  if isla_run then IslaTraces rtraces else Traces (List.map Trace.of_isla rtraces)
+  if isla_run then IslaTraces rtraces else Traces (List.map Trace.of_isla rtraces) *)
 
 let pre_traces_term = Term.(const get_traces $ instr_term $ isla_run $ reg_types)
 

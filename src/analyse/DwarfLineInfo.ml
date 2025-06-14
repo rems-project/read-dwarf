@@ -86,18 +86,18 @@ type evaluated_line_info_for_instruction = {
 (* line number sequences can overlap, and we have to walk through instructions (not addresses), so we simplify by splitting all of them into individual entries, sort them by first address, and then walk through them painting a per-instruction array.  This is algorithmically a bit terrible, but seems to add only a couple of seconds to read-dwarf rd *)
 
 let pp_line_number_header_concise (lnh : Dwarf.line_number_header) : string =
-  "lnh offset =    " ^ Dwarf.pphex lnh.lnh_offset ^ "\n"
+  "lnh offset =    " ^ Dwarf.pphex_sym lnh.lnh_offset ^ "\n"
 
 (*^ ("dwarf_format =                       " ^ (pp_dwarf_format lnh.lnh_dwarf_format ^ ("\n"
-^ ("unit_length =                        " ^ (Nat_big_num.to_string lnh.lnh_unit_length ^ ("\n"
-^ ("version =                            " ^ (Nat_big_num.to_string lnh.lnh_version ^ ("\n"
-^ ("header_length =                      " ^ (Nat_big_num.to_string lnh.lnh_header_length ^ ("\n"
-^ ("minimum_instruction_length =         " ^ (Nat_big_num.to_string lnh.lnh_minimum_instruction_length ^ ("\n"
-^ ("maximum_operations_per_instruction = " ^ (Nat_big_num.to_string lnh.lnh_maximum_operations_per_instruction ^ ("\n"
+^ ("unit_length =                        " ^ (Sym.to_string lnh.lnh_unit_length ^ ("\n"
+^ ("version =                            " ^ (Sym.to_string lnh.lnh_version ^ ("\n"
+^ ("header_length =                      " ^ (Sym.to_string lnh.lnh_header_length ^ ("\n"
+^ ("minimum_instruction_length =         " ^ (Sym.to_string lnh.lnh_minimum_instruction_length ^ ("\n"
+^ ("maximum_operations_per_instruction = " ^ (Sym.to_string lnh.lnh_maximum_operations_per_instruction ^ ("\n"
 ^ ("default_is_stmt =                    " ^ (string_of_bool lnh.lnh_default_is_stmt ^ ("\n"
-^ ("line_base =                          " ^ (Nat_big_num.to_string lnh.lnh_line_base ^ ("\n"
-^ ("line_range =                         " ^ (Nat_big_num.to_string lnh.lnh_line_range ^ ("\n"
-^ ("opcode_base =                        " ^ (Nat_big_num.to_string lnh.lnh_opcode_base ^ ("\n"
+^ ("line_base =                          " ^ (Sym.to_string lnh.lnh_line_base ^ ("\n"
+^ ("line_range =                         " ^ (Sym.to_string lnh.lnh_line_range ^ ("\n"
+^ ("opcode_base =                        " ^ (Sym.to_string lnh.lnh_opcode_base ^ ("\n"
 ^ ("standard_opcode_lengths =            " ^ (string_of_list
   instance_Show_Show_Num_natural_dict lnh.lnh_standard_opcode_lengths ^ ("\n"
 ^ ("comp_dir =                           " ^ (string_of_maybe
@@ -136,7 +136,8 @@ let split_into_sequences
             | None -> fatal "split_into_sequences found sequence of length 0"
           in
           let last = lnr.lnr_address in
-          if Nat_big_num.equal first last then fatal "split_into_sequences found first=last"
+          (* print_endline (Dwarf.pphex_sym first ^ " " ^ Dwarf.pphex_sym last); *)
+          if Sym.equal first last then fatal "split_into_sequences found first=last"
           else ();
           let elis =
             {
@@ -160,8 +161,8 @@ let split_into_entries (s : evaluated_line_info_sequence) : evaluated_line_info_
           {
             elie_first = l1.lnr_address;
             elie_last =
-              ( if Nat_big_num.equal l2.lnr_address l1.lnr_address then l1.lnr_address
-              else Nat_big_num.sub l2.lnr_address (Nat_big_num.of_int 1)
+              ( if Sym.equal l2.lnr_address l1.lnr_address then l1.lnr_address
+              else Sym.sub l2.lnr_address (Sym.of_int 1)
               );
             elie_lnh = s.elis_lnh;
             elie_lnr = l1;
@@ -176,9 +177,9 @@ let split_into_entries (s : evaluated_line_info_sequence) : evaluated_line_info_
 
 let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_info_for_instruction option array =
   let sequences = List.flatten (List.map split_into_sequences eli) in
-  let compare_sequence s1 s2 = Nat_big_num.compare s1.elis_first s2.elis_first in
+  let compare_sequence s1 s2 = Sym.compare s1.elis_first s2.elis_first in
   let sequences_sorted = List.sort compare_sequence sequences in
-  (*let overlap_sequence s1 s2 = not( Nat_big_num.greater_equal s2.first s1.last || Nat_big_num.greater_equal s1.first s2.last) in*)
+  (*let overlap_sequence s1 s2 = not( Sym.greater_equal s2.first s1.last || Sym.greater_equal s1.first s2.last) in*)
 
   Printf.printf "mk_line_info\n%s" (String.concat "\n" (List.map pp_sequence_concise sequences_sorted));
 
@@ -189,12 +190,12 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
     let (discardable,remaining') =
       List.partition
         (function sequence ->
-           Nat_big_num.less_equal sequence.elis_last addr)
+           Sym.less_equal sequence.elis_last addr)
         remaining_sequences in
     let (sequences,remaining'') =
       List.partition
         (function sequence ->
-           Nat_big_num.less_equal sequence.elis_first addr)
+           Sym.less_equal sequence.elis_first addr)
         remaining' in
     (sequences,remaining'') in
 
@@ -224,7 +225,7 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
       let addr = instructions.(k).i_addr in
       match remaining_lines with
       | l1::((l2::remaining_lines') as remaining_lines'') ->
-         if Nat_big_num.equal addr l1.lnr_address then
+         if Sym.equal addr l1.lnr_address then
            (* this instruction address exactly matches the first line of this sequence *)
            let elifi = {
                elifi_start = true;
@@ -232,7 +233,7 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
                elifi_line = l1 } in
            elifis.(k) <- Some elifi;
            f active_sequence remaining_lines remaining_sequences (k+1)
-         else if Nat_big_num.less l1.lnr_address addr && Nat_big_num.less addr l2.lnr_address then
+         else if Sym.less l1.lnr_address addr && Sym.less addr l2.lnr_address then
            (* this instruction address is within the range of the first line, but not equal to it*)
            let elifi = {
                elifi_start = false;
@@ -240,7 +241,7 @@ let mk_line_info (eli: Dwarf.evaluated_line_info) instructions : evaluated_line_
                elifi_line = l1 } in
            elifis.(k) <- Some elifi;
            f active_sequence remaining_lines remaining_sequences (k+1)
-         else if Nat_big_num.greater_equal addr l2.lnr_address then
+         else if Sym.greater_equal addr l2.lnr_address then
            (* this instruction address is after the range of the first line *)
            if not(l2.lnr_end_sequence (* invariant: iff remaining'=[]*)) then
              (* there are more non-end lines left in this sequence: try again with the next *)
@@ -268,11 +269,11 @@ let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
   let elifis = Array.make size [] in
 
   let sequences = List.flatten (List.map split_into_sequences eli) in
-  let compare_sequence s1 s2 = Nat_big_num.compare s1.elis_first s2.elis_first in
+  let compare_sequence s1 s2 = Sym.Ordered.compare s1.elis_first s2.elis_first in
   let sequences_sorted = List.sort compare_sequence sequences in
 
   let entries = List.flatten (List.map split_into_entries sequences_sorted) in
-  let compare_entry e1 e2 = Nat_big_num.compare e1.elie_first e2.elie_first in
+  let compare_entry e1 e2 = Sym.Ordered.compare e1.elie_first e2.elie_first in
   let entries_sorted = List.sort compare_entry entries in
 
   (*List.iter (function elie -> Printf.printf "%s" (pp_elie_concise elie)) entries_sorted;*)
@@ -285,7 +286,7 @@ let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
         match remaining with
         | [] -> (acc, remaining)
         | elie :: remaining' ->
-            if Nat_big_num.less_equal elie.elie_first addr then
+            if Sym.Ordered.less_equal elie.elie_first addr then
               mk_new_perhaps_relevant (elie :: acc) remaining'
             else (acc, remaining)
       in
@@ -293,7 +294,7 @@ let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
       let (new_perhaps_relevant, remaining') = mk_new_perhaps_relevant [] remaining_entries in
 
       let addr_in elie =
-        Nat_big_num.less_equal elie.elie_first addr && Nat_big_num.less_equal addr elie.elie_last
+        Sym.in_range elie.elie_first elie.elie_last addr
       in
 
       let still_active_entries =
@@ -305,7 +306,7 @@ let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
           (function
             | elie ->
                 let elifi =
-                  { elifi_start = Nat_big_num.equal addr elie.elie_first; elifi_entry = elie }
+                  { elifi_start = Sym.equal addr elie.elie_first; elifi_entry = elie }
                 in
                 elifi)
           still_active_entries;
@@ -443,14 +444,14 @@ let pp_dwarf_source_file_lines' m (ds : Dwarf.dwarf_static) (pp_actual_line : bo
     | Ascii -> s
     | Html ->
         "@<a class=\"link-inst\" href=\"" ^ "" ^ file ^ ".html#"
-        ^ Nat_big_num.to_string lnr.lnr_line
+        ^ Sym.to_string lnr.lnr_line
         ^ "\">" ^ s ^ "</a>@ "
   in
   wrap_link m
     (subprogram_name ^ ":"
-    ^ Nat_big_num.to_string lnr.lnr_line
+    ^ Sym.to_string lnr.lnr_line
     ^ "."
-    ^ Nat_big_num.to_string lnr.lnr_column
+    ^ Sym.to_string lnr.lnr_column
     ^ " (" ^ file ^ ")"
     )
   (*  ^ (if elifi.elifi_start then "S" else "s")*)
@@ -463,10 +464,10 @@ let pp_dwarf_source_file_lines' m (ds : Dwarf.dwarf_static) (pp_actual_line : bo
   ^ " "
   ^
   if pp_actual_line then
-    let line = Nat_big_num.to_int lnr.lnr_line in
+    let line = Sym.to_int lnr.lnr_line in
     if line = 0 then "line 0"
     else
-      pp_source_line (source_line (comp_dir, dir, file) line) (Nat_big_num.to_int lnr.lnr_column)
+      pp_source_line (source_line (comp_dir, dir, file) line) (Sym.to_int lnr.lnr_column)
   else ""
 
 (* OLD source line number for O0/2 correlation
@@ -479,11 +480,11 @@ let rec dwarf_source_file_line_numbers' test recursion_limit (a : natural) :
     match sls with
     | [] ->
         dwarf_source_file_line_numbers' test (recursion_limit - 1)
-          (Nat_big_num.sub a (Nat_big_num.of_int 4))
+          (Sym.sub a (Sym.of_int 4))
     | _ ->
         List.map
           (fun ((comp_dir, dir, file), n, lnr, subprogram_name) ->
-            (subprogram_name, Nat_big_num.to_int n))
+            (subprogram_name, Sym.to_int n))
           sls
 
 let dwarf_source_file_line_numbers test (a : natural) =
@@ -507,7 +508,7 @@ let dwarf_source_file_line_numbers_by_index test line_info k :
                    Dwarf.subprogram_at_line test.dwarf_static.ds_subprogram_line_extents ufe
                      lnr.lnr_line )
                in
-               (subprogram_name, Nat_big_num.to_int lnr.lnr_line))
+               (subprogram_name, Sym.to_int lnr.lnr_line))
          elifis)
   in
   match lines with [_] -> lines | [] -> lines | _ -> []

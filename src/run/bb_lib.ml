@@ -64,8 +64,9 @@ type t = { main : trc array }
     Also does the typing of traces for register discovery.
     TODO Support variable length instructions
 *)
-let from_binary (code : BytesSeq.t) : t =
-  let num = BytesSeq.length code / 4 in
+let from_binary (_code : BytesSeq.t) : t =
+  Raise.todo()
+  (* let num = BytesSeq.length code / 4 in
   (* TODO fix fixed size instructions *)
   if BytesSeq.length code != num * 4 then
     failwith "BB.from_binary: The specified range cuts an instruction";
@@ -80,10 +81,10 @@ let from_binary (code : BytesSeq.t) : t =
             "BB.from_binary: Multiple path instruction.\n\
              If this is not a branching instruction, try `run-block --linear'."
     in
-    code |> Isla.Cache.get_traces |> get_normal
+    (code, None) |> Isla.Cache.get_traces |> get_normal (*TODO relocs *)
   in
   let main = code |> BytesSeq.to_listbs ~len:4 |> List.map process |> Array.of_list in
-  { main }
+  { main } *)
 
 (* Sequence of the second test:
 mpool.c:116.6  (mpool_fini) 40012240:  37000049  tbnz

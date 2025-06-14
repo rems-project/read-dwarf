@@ -56,7 +56,7 @@ open Logs.Logger (struct
 end)
 
 (** [endpred pc_exp] gives when to stop *)
-type t = { runner : Runner.t; start : int; endpred : State.exp -> string option }
+type t = { runner : Runner.t; start : Elf.Address.t; endpred : State.exp -> string option }
 
 (** Build a complex block starting from [start] in [sym] and ending when [endpred] says so.
     [endpred] is a predicate on the symbolic PC expression *)
@@ -67,14 +67,14 @@ type label =
   | Start  (** Root node of the tree *)
   | End of string
       (** Lead node of the tree, the string describe which end condition has be triggered *)
-  | BranchAt of int  (** A Branching node at a given PC *)
-  | NormalAt of int  (** A normal instruction at PC. Exists only if [every_instruction] is true *)
+  | BranchAt of Elf.Address.t  (** A Branching node at a given PC *)
+  | NormalAt of Elf.Address.t  (** A normal instruction at PC. Exists only if [every_instruction] is true *)
 
 let label_to_string = function
   | Start -> "Start"
   | End s -> Printf.sprintf "End (%s)" s
-  | BranchAt pc -> Printf.sprintf "Branch at 0x%x" pc
-  | NormalAt pc -> Printf.sprintf "Normal at 0x%x" pc
+  | BranchAt pc -> Printf.sprintf "Branch at %t" Pp.(tos Elf.Address.pp pc)
+  | NormalAt pc -> Printf.sprintf "Normal at %t" Pp.(tos Elf.Address.pp pc)
 
 let pp_label label = label |> label_to_string |> Pp.string
 
@@ -93,24 +93,25 @@ let run ?(every_instruction = false) ?relevant (b : t) (start : State.t) : label
   assert (State.is_locked start);
   let rec run_from state =
     let pc_exp = State.get_reg_exp state pcreg in
+    State.Simplify.ctxfull state;
     if State.is_possible state then
       match b.endpred pc_exp with
       | Some endmsg ->
           info "Stopped at pc %t because %s" (Pp.top State.Exp.pp pc_exp) endmsg;
-          State.Simplify.ctxfull state;
+          (* State.Simplify.ctxfull state; *)
           State.lock state;
           State.Tree.{ state; data = End endmsg; rest = [] }
       | None -> (
-          let prelock state = State.Simplify.ctxfull state in
+          (* let prelock state = State.Simplify.ctxfull state in *)
           if every_instruction then begin
-            prelock state;
+            (* prelock state; *)
             State.lock state
           end;
           let states =
-            let pc = pc_exp |> Ast.expect_bits |> BitVec.to_int in
+            let pc = State.Exp.expect_sym_address pc_exp in
             if Option.fold ~none:true ~some:(Fun.flip Hashtbl.mem pc) relevant then (
               info "Running pc %t" (Pp.top State.Exp.pp pc_exp);
-              Runner.run ~prelock b.runner state
+              Runner.run ~prelock:ignore b.runner state
             )
             else (
               info "Skipping pc %t" (Pp.top State.Exp.pp pc_exp);
@@ -123,21 +124,21 @@ let run ?(every_instruction = false) ?relevant (b : t) (start : State.t) : label
           | [state] when not every_instruction -> run_from state
           | [nstate] when every_instruction ->
               let rest = [run_from nstate] in
-              { state; data = NormalAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
+              { state; data = NormalAt (State.Exp.expect_sym_address pc_exp); rest }
           | states ->
               let rest = List.map run_from states in
               State.Tree.
-                { state; data = BranchAt (pc_exp |> Ast.expect_bits |> BitVec.to_int); rest }
+                { state; data = BranchAt (State.Exp.expect_sym_address pc_exp); rest }
         )
     else begin
       info "Reached dead code at %t" (Pp.top State.Exp.pp pc_exp);
-      State.Simplify.ctxfull state;
+      (* State.Simplify.ctxfull state; *)
       State.lock state;
       State.Tree.{ state; data = End "Reached dead code"; rest = [] }
     end
   in
   let state = State.copy start in
-  State.set_pc ~pc:pcreg state b.start;
+  State.set_pc_sym ~pc:pcreg state b.start;
   let rest = [run_from state] in
   State.Tree.{ state = start; data = Start; rest }
 
@@ -158,21 +159,23 @@ let gen_endpred ?min ?max ?loop ?(brks = []) () : State.exp -> string option =
     | Some n -> Printf.sprintf "%d times" n
     | None -> ""
   in
-  function
-  | Ast.Bits (bv, _) -> (
-      let pc = BitVec.to_int bv in
-      debug "enpred: Evaluating PC 0x%x" pc;
+  fun pc_exp ->
+    ( try
+      Some (State.Exp.expect_sym_address pc_exp)
+    with
+      _ -> None
+    ) |> Option.map (fun pc ->
+      debug "enpred: Evaluating PC %t" (Pp.top Elf.Address.pp pc);
       match (min, max, loop) with
-      | (Some min, _, _) when pc < min -> endnow "PC 0x%x was below min 0x%x" pc min
-      | (_, Some max, _) when pc >= max -> endnow "PC 0x%x was above max 0x%x" pc max
-      | _ when List.exists (( = ) pc) brks -> endnow "PC 0x%x hit a breakpoint" pc
+      | (Some min, _, _) when Elf.Address.(pc < min) <> Some false -> endnow "PC %t was below min %t" Pp.(tos Elf.Address.pp pc) Pp.(tos Elf.Address.pp min)
+      | (_, Some max, _) when Elf.Address.(pc >= max) <> Some false -> endnow "PC %t was above max %t" Pp.(tos Elf.Address.pp pc) Pp.(tos Elf.Address.pp max)
+      | _ when List.exists (( = ) pc) brks -> endnow "PC %t hit a breakpoint" Pp.(tos Elf.Address.pp pc)
       | (_, _, Some loop) ->
           let current_num = Hashtbl.find_opt pchtbl pc |> Option.value ~default:0 in
-          if current_num >= loop then endnow "PC 0x%x had been seen more than %s" pc loop_str
+          if current_num >= loop then endnow "PC %t had been seen more than %s" Pp.(tos Elf.Address.pp pc) loop_str
           else begin
             Hashtbl.replace pchtbl pc (current_num + 1);
             None
           end
       | _ -> None
-    )
-  | exp -> endnow "PC %t is symbolic" Pp.(tos State.Exp.pp exp)
+    ) |> Option.value_fun ~default:(fun () -> endnow "PC %t is symbolic" Pp.(tos State.Exp.pp pc_exp))

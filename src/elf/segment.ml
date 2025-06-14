@@ -51,7 +51,7 @@
 
 (** The type of a segment *)
 type t = {
-  data : BytesSeq.t;
+  data : BytesSeq.t * Relocations.t;
   addr : int;  (** The actual start address of the BytesSeq *)
   size : int;  (** redundant with {!Utils.BytesSeq.length} data *)
   read : bool;
@@ -66,7 +66,7 @@ let of_linksem (lseg : Elf_interpreted_segment.elf64_interpreted_segment) : t =
   BytesSeq.blit lseg.elf64_segment_body 0 bytes 0 (Z.to_int lseg.elf64_segment_size);
   let (read, write, execute) = lseg.elf64_segment_flags in
   {
-    data = BytesSeq.of_bytes bytes;
+    data = BytesSeq.of_bytes bytes, Relocations.IMap.empty;
     addr = Z.to_int lseg.elf64_segment_base;
     size;
     read;

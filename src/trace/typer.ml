@@ -1,4 +1,4 @@
-(*==================================================================================*)
+(* ================================================================================== *)
 (*  BSD 2-Clause License                                                            *)
 (*                                                                                  *)
 (*  Copyright (c) 2020-2021 Thibaut Pérami                                          *)
@@ -98,6 +98,24 @@ let machine_of_size ?(update = 0) (typ : Ctype.t) : Ctype.t =
   let constexpr = typ.constexpr in
   Ctype.machine ~constexpr (size + update)
 
+let is_const tval =
+  tval.ctyp
+  |> Option.map Ctype.is_constexpr
+  |> Option.value_fun ~default:(fun () -> Exp.ConcreteEval.is_concrete tval.exp)
+
+let constexpr_of_exp e =
+  let ty = Exp.Typed.get_type e in
+  if Exp.Typed.is_bv ty then
+    let bitsize = Exp.Typed.expect_bv ty in
+    Option.some @@
+    if bitsize mod 8 = 0 || bitsize = Arch.address_size then
+      Ctype.machine ~constexpr:true (bitsize / 8)
+    else
+      Ctype.Bits |> Ctype.qual ~constexpr:true
+  else
+    None
+
+
 let unop (u : Ast.unop) tval : Ctype.t option =
   let open Option in
   let* typ = tval.ctyp in
@@ -106,7 +124,8 @@ let unop (u : Ast.unop) tval : Ctype.t option =
   | Bvneg | Bvnot -> machine_of_size typ |> some
   | Extract (b, a) ->
       debug "Extracting from type %t" Pp.(top (opt Ctype.pp) tval.ctyp);
-      if (* HACK for adrp: a = 0 && b = Arch.address_size - 1 &&*) Ctype.is_ptr typ then tval.ctyp
+      if (* HACK for adrp: a = 0 && b = Arch.address_size - 1 &&*) Ctype.is_ptr typ then
+        tval.ctyp
       else
         let bitsize = b - a + 1 in
         let constexpr = typ.constexpr in
@@ -178,7 +197,7 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
       match List.hd tvals with
       | {
        exp = Unop (Extract (_, _), _, _);
-       ctyp = Some ({ unqualified = Ptr { fragment = Global; offset; _ }; _ } as ctyp);
+       ctyp = Some ({ unqualified = Ptr { fragment = Global _; offset; _ }; _ } as ctyp);
       } -> (
           match offset with
           | Somewhere -> Some ctyp
@@ -203,6 +222,7 @@ let rec expr ~ctxt (exp : Base.exp) : Ctype.t option =
     | Var (Register reg, _) -> State.get_reg ctxt.state reg |> State.Tval.ctyp
     | Var (Read (r, _), _) -> HashVector.get ctxt.mem_reads r |> State.Tval.ctyp
     | Var (NonDet _, _) -> None
+    | Var (Segment _, _) -> None (* TODO? *)
     | Bits (bv, _) ->
         let size = BitVec.size bv in
         if size mod 8 = 0 || size = Arch.address_size then
@@ -211,12 +231,37 @@ let rec expr ~ctxt (exp : Base.exp) : Ctype.t option =
     | Bool _ -> None
     | Enum _ -> None
     | Vec _ -> None
-    | Unop (u, e, _) -> expr_tval ~ctxt e |> unop u
+    | Unop (u, e, _) ->
+        let tval = expr_tval ~ctxt e in
+        Option.(
+          unop u tval
+          |||
+          if is_const tval then
+            constexpr_of_exp exp
+          else
+            None
+        )
     | Binop (b, e, e', _) ->
         let te = expr_tval ~ctxt e in
         let te' = expr_tval ~ctxt e' in
-        binop ~ctxt b te te'
-    | Manyop (m, el, _) -> List.map (expr_tval ~ctxt) el |> manyop ~ctxt m
+        Option.(
+          binop ~ctxt b te te'
+          |||
+          if is_const te && is_const te' then
+            constexpr_of_exp exp
+          else
+            None
+        )
+    | Manyop (m, el, _) ->
+        let tvals = List.map (expr_tval ~ctxt) el in
+        Option.(
+          manyop ~ctxt m tvals
+          |||
+          if List.for_all is_const tvals then
+            constexpr_of_exp exp
+          else
+            None
+        )
     | Ite _ -> None
     | Bound _ -> .
     | Let _ -> .
@@ -254,8 +299,8 @@ let fragment_at ~(dwarf : Dw.t) ~fenv ~size (frag : Ctype.fragment) at : Ctype.t
       let frag = Fragment.Env.get fenv i in
       let* (typ, off) = Fragment.at_off_opt frag at in
       Ctype.type_at ~env ~size typ off
-  | Global -> (
-      match Elf.SymTable.of_addr_with_offset_opt dwarf.elf.symbols at with
+  | Global s -> (
+      match Elf.SymTable.of_addr_with_offset_opt dwarf.elf.symbols Elf.Address.{ section = s; offset = at } with
       | Some (sym, offset) -> (
           match Hashtbl.find_opt dwarf.vars sym.name with
           | Some v -> Ctype.type_at ~env ~size v.ctype offset

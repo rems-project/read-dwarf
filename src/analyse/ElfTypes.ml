@@ -62,8 +62,7 @@ type architecture =
 type test = {
   elf_file : Elf_file.elf_file;
   arch : architecture;
-  symbol_map : Elf_file.global_symbol_init_info;
-  segments : Elf_interpreted_segment.elf64_interpreted_segment list;
+  symbol_map : Symbols.global_symbol_init_info;
   e_entry : natural;
   e_machine : natural;
   dwarf_static : Dwarf.dwarf_static;

@@ -68,7 +68,7 @@ let mk_inlining test sdt instructions =
       let addr = i.i_addr in
       let issr_still_current =
         List.filter
-          (function (_label, ((_n1, n2), (_m, _n), _is)) -> Nat_big_num.less addr n2)
+          (function (_label, ((_n1, n2), (_m, _n), _is)) -> Sym.Ordered.less addr n2)
           issr_current
       in
 
@@ -83,8 +83,8 @@ let mk_inlining test sdt instructions =
 
       let (issr_starting_here0, issr_rest') =
         find_first
-          (function ((_n1, n2), (_m, _n), _is) -> Nat_big_num.less_equal n2 addr)
-          (function ((n1, _n2), (_m, _n), _is) -> Nat_big_num.equal n1 addr)
+          (function ((_n1, n2), (_m, _n), _is) -> Sym.Ordered.less_equal n2 addr)
+          (function ((n1, _n2), (_m, _n), _is) -> Sym.Ordered.equal n1 addr)
           [] issr_rest
       in
 

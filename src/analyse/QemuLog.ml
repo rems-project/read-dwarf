@@ -64,8 +64,8 @@ let read_qemu_log an filename_qemu_log : bool array =
           (*         Printf.printf "%s  " s;*)
           match Scanf.sscanf s "0x%x:%s" (fun addr _ -> addr) with
           | addr ->
-              (*Printf.printf "PARSED %s\n" (pp_addr (Nat_big_num.of_int addr));*)
-              Some (Nat_big_num.of_int addr)
+              (*Printf.printf "PARSED %s\n" (pp_addr (Sym.of_int addr));*)
+              Some (Sym.of_int addr)
           | exception _ -> (*Printf.printf "NOT\n";*) None
         in
         List.filter_map parse_line (Array.to_list lines)

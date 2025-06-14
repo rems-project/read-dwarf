@@ -79,13 +79,13 @@ let process_file () : unit =
       (function
         | lnfe ->
             ( lnh.lnh_comp_dir,
-              (let dir = Nat_big_num.to_int lnfe.lnfe_directory_index in
+              (let dir = Sym.to_int lnfe.lnfe_directory_index in
                if dir = 0 then None
                else
                  Some
                    (Byte_sequence.string_of_byte_sequence
-                      (List.nth lnh.lnh_include_directories (dir - 1)))),
-              Byte_sequence.string_of_byte_sequence lnfe.lnfe_path ))
+                      (Dwarf_byte_sequence.sym_bs_expect_const (List.nth lnh.lnh_include_directories (dir - 1))))),
+              Byte_sequence.string_of_byte_sequence (Dwarf_byte_sequence.sym_bs_expect_const lnfe.lnfe_path) ))
       lnh.lnh_file_entries
   in
 

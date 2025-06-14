@@ -331,7 +331,7 @@ let get_abi api =
     State.set_reg_type state sp
       (Ctype.of_frag ~provenance:stack_provenance @@ DynFragment stack_frag_id);
     State.set_reg state r30
-      (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere Ctype.Global) RetAddr);
+      (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere (Ctype.Global ".text")) RetAddr); (* TODO doesn't have to be .text *)
     let sp_exp = State.Exp.of_reg state.id sp in
     (* Assert that Sp is 16 bytes aligned *)
     State.push_assert state Exp.Typed.(extract ~last:3 ~first:0 sp_exp = bits_int ~size:4 0);
@@ -360,7 +360,19 @@ let assemble_to_elf instr =
   Sys.remove obj_file;
   elf_file
 
-let split_into_instrs = BytesSeq.to_listbs ~len:4
+let split_into_instrs (data: Elf.Symbol.data) = 
+  let module IMap = Elf.Relocations.IMap in
+  let rawdata = BytesSeq.to_listbs ~len:4 data.data in
+  List.mapi (fun i bytes ->
+      let pos = 4 * i in 
+      let (_, rel, rest) = IMap.split pos data.relocations in
+      if Option.is_some @@ IMap.find_first_opt (fun i -> i < pos + 4) rest then
+        Raise.fail "Misaligned relocation";      
+      Elf.Symbol.{
+        data = bytes;
+        relocations = rel |> Option.map (IMap.singleton 0) |> Option.value ~default:IMap.empty;
+      }
+    ) rawdata
 
 (** https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/RET--Return-from-subroutine- *)
 let is_ret code =

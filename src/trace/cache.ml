@@ -155,17 +155,23 @@ let get_cache () =
   match !cache with Some cache -> cache | None -> failwith "Trace cache was not started"
 
 (** Get the traces of the opcode given. Use {!Isla.Server} if the value is not in the cache *)
-let get_traces (opcode : BytesSeq.t) : Base.t list =
+let get_traces (opcode : Isla.Server.opcode) : Base.t list =
   let cache = get_cache () in
   match TC.get_opt cache (Some opcode) with
   | Some trcs -> trcs
   | None ->
-      let isla_traces = Isla.Cache.get_traces opcode in
-      let traces = List.map (tee (Isla.Type.type_trc %> ignore) %> Base.of_isla) isla_traces in
+      let segments, isla_traces = match Isla.Cache.get_traces opcode with
+      | Traces t -> [], t
+      | TracesWithSegments (Segments s, t) -> s, t
+      in 
+      let traces = List.map (tee (Isla.Type.type_trc %> ignore) %> Base.of_isla segments) isla_traces in
       let straces = List.map Base.simplify traces in
       TC.add cache (Some opcode) straces;
       straces
 
 (** Get a full blown {!Instr} from the opcode, going through the whole Isla pipeline
     if necessary.*)
-let get_instr (opcode : BytesSeq.t) : Instr.t = Instr.of_traces opcode @@ get_traces opcode
+let get_instr (opcode : BytesSeq.t * Elf.Relocations.rel option) : Instr.t =
+  let raw_opcode, reloc = opcode in
+  let reloc_target = Option.map (fun (x : Elf.Relocations.rel) -> x.target) reloc in
+  Instr.of_traces opcode @@ get_traces (raw_opcode, reloc_target)

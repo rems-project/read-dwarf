@@ -166,7 +166,7 @@ let input imode (arg : string) : (string * string) Term.ret =
         try Elf.SymTable.of_position_string elf.symbols s
         with Not_found -> fail "The position %s could not be found in %s" s arg
       in
-      `Ok (filename, BytesSeq.to_string (BytesSeq.sub sym.data off 4))
+      `Ok (filename, BytesSeq.to_string (BytesSeq.sub sym.data.data off 4)) (* TODO relocations *)
 
 let input_term = Term.(ret (const input $ imode_term $ arg))
 
@@ -186,8 +186,8 @@ let isla_mode_term =
 let isla_mode_to_request imode input =
   match imode with
   | ASM -> Server.TEXT_ASM input
-  | HEX -> Server.ASM (BytesSeq.of_hex input)
-  | BIN -> Server.ASM (BytesSeq.of_string input)
+  | HEX -> Server.ASM (BytesSeq.of_hex input, None) (* TODO? *)
+  | BIN -> Server.ASM (BytesSeq.of_string input, None)
   | _ -> assert false
 
 (** Run isla and return a text trace with a filename
@@ -204,7 +204,7 @@ let isla_run isla_mode arch (filename, input) : string * string * Server.config 
         start config;
         let msg : string =
           match request (isla_mode_to_request isla_mode input) with
-          | Traces l -> List.assoc true l
+          | Traces (_, l) -> List.assoc true l (* TODO segments *)
           | _ -> failwith "isla did not send back traces"
         in
         stop ();

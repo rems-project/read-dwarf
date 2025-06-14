@@ -395,6 +395,10 @@ module type S = sig
       This results in two calls to the SMT solver. one with {!check} and one with {!check_sat} *)
   val check_both : server -> exp -> bool option
 
+  val simplify_subterms : server -> exp -> exp
+
+  val simplify_subterms_decl : server -> declared:unit Htbl.t -> exp -> exp
+
   (*****************************************************************************)
   (*****************************************************************************)
   (*****************************************************************************)
@@ -415,6 +419,8 @@ module type S = sig
 
   (** Do a standalone check of whether the set of assertion is sat *)
   val check_sat_full : exp list -> bool option
+
+  val simplify_subterms_full : ?hyps:exp list -> exp -> exp
 end
 
 module SimpContext = ContextCounter (struct
@@ -516,4 +522,70 @@ module Make (Var : Var) : S with type var = Var.t = struct
     | _ -> (
         match check_sat serv e with Some false as f -> f | _ -> None
       )
+
+  
+  let rec simplify_subterms serv (e : Exp.t) : Exp.t =
+    e |> Ast.Manip.all_subterms
+    |> List.find_opt (fun t ->
+      Typed.get_type e = Typed.get_type t &&
+      let result = check serv Typed.(e = t) in
+      result = Some true
+    )
+    |> Option.map (simplify_subterms serv)
+    |> Option.value_fun ~default:(fun () ->
+      Ast.Manip.direct_exp_map_exp (simplify_subterms serv) e
+    )
+  
+  let simplify_subterms_decl serv ~declared (e : Exp.t) : Exp.t =
+    declare_vars serv ~declared e;
+    simplify_subterms serv e
+
+  let simplify_subterms_full ?(hyps = []) e =
+    let serv = ensure_started_get () in
+    SimpContext.openc ();
+    let declared = Htbl.create 10 in
+    List.iter (send_assert_decl ~declared serv) hyps;
+    let res = simplify_subterms_decl ~declared serv e in
+    SimpContext.closec ();
+    res
+end
+
+module Test = struct
+  module Var = struct
+    include String
+    
+    let pp = Pp.string
+
+    let ty _ = Ast.Ty_BitVec 64
+
+    let of_string = Fun.id
+  end
+
+  module Typed = Exp.Typed
+  module Exp = Exp.Make (Var)
+
+  module Z3Test = Make (Var)
+
+  let test () =
+    let x = Typed.var ~typ:(Ast.Ty_BitVec 64) "x" in
+    let bvint64 = Typed.bits_int ~size:64 in
+    let constr = Typed.(binop (Ast.Bvcomp Ast.Bvult) x (bvint64 16)) in
+    let exp = Typed.(concat [bits_int ~size:60 0; extract x ~first:0 ~last:3]) in
+    let simplified = Z3Test.simplify_subterms_full ~hyps:[constr] exp in
+    Printf.printf "original: %t\n" (Pp.top Exp.pp exp);
+    Printf.printf "simplified: %t\n" (Pp.top Exp.pp simplified);
+
+  
+  open Cmdliner
+  open Config.CommonOpt
+
+  
+  let term = Term.(CmdlinerHelper.func_options (config :: z3 :: comopts) test $ const ())
+
+  let info =
+    let doc = ""
+    in
+    Cmd.(info "z3-test" ~doc ~exits)
+  
+  let command = (term, info)
 end

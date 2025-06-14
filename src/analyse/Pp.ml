@@ -74,6 +74,7 @@ type render_kind =
   | Render_vars_old
   | Render_inlining
   | Render_ctrlflow
+  | Render_relocation
 
 let render_colour = function
   | Render_symbol_star -> "gold"
@@ -86,6 +87,7 @@ let render_colour = function
   | Render_vars_old -> "grey"
   | Render_inlining -> "red"
   | Render_ctrlflow -> "white"
+  | Render_relocation -> "purple"
 
 let render_class_name = function
   | Render_symbol_star -> "symbol-star"
@@ -98,6 +100,7 @@ let render_class_name = function
   | Render_vars_old -> "vars-old"
   | Render_inlining -> "inlining"
   | Render_ctrlflow -> "ctrlflow"
+  | Render_relocation -> "relocation"
 
 type html_idiom = HI_span | HI_pre | HI_classless_span | HI_font
 
@@ -327,13 +330,20 @@ let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
       (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end
          an.rendered_control_flow.(k))
   (* the address and (hex) instruction *)
-  ^ css m Render_instruction
-      (pp_addr addr ^ ":  "
+  ^ css m Render_instruction (
+      pp_addr addr ^ ":  "
       ^ pp_opcode_bytes test.arch i.i_opcode
       (* the dissassembly from objdump *)
       ^ "  "
       ^ i.i_mnemonic ^ "\t" ^ i.i_operands
       )
+  ^ css m Render_relocation
+      (match i.i_relocation with
+       | None -> ""
+       | Some (typ, targ) ->
+           "\t" ^ typ ^ " " ^ targ
+      )
+  (* the instruction's control flow *)
   (* any indirect-branch control flow from this instruction *)
   ^ css m Render_ctrlflow
       (begin
@@ -574,7 +584,7 @@ let pp_instructions_ranged m test an (low, high) =
   Printf.printf "pp_instructions_ranged indices: low=%i  high=%i \n"   (an.index_of_address low)  (an.index_of_address high);
  *)
   let index_low = an.index_of_address low in
-  let index_high = (an.index_of_address (Nat_big_num.sub high (Nat_big_num.of_int 4)))+1 in
+  let index_high = (an.index_of_address (Sym.sub high (Sym.of_int 4)))+1 in
   let rec subarray_map_to_list f a k k' =
     if k >= k' then [] else f k a.(k) :: subarray_map_to_list f a (k + 1) k'
   in
@@ -857,7 +867,6 @@ let pp_test_analysis m test an =
       call_graph ^ "* ************* transitive call graph **************\n"
       ^ transitive_call_graph
   | Html ->
-     ""
-     (* "\n* ************* instructions *****************\n" *)
-       (*pp_instruction_init ();
-      String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions))*)
+     "\n* ************* instructions *****************\n"
+     ^ (pp_instruction_init ();
+      String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions)))

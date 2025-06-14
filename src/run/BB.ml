@@ -101,7 +101,7 @@ let get_code elfname symname len : BytesSeq.t =
     with Not_found -> fail "The symbol %s cannot found in %s" symname elfname
   in
   let len = match len with Some i -> i | None -> sym.size - off in
-  Elf.Symbol.sub sym off len
+  (Elf.Symbol.sub sym off len).data (*TODO relocations*)
 
 let code_term = Term.(CmdlinerHelper.func_options comopts get_code $ elf $ sym $ len)
 

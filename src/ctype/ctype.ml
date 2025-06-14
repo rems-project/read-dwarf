@@ -81,17 +81,17 @@ end)
 (*****************************************************************************)
 (** {1 DWARF constants } *)
 
-let vDW_ATE_address = "DW_ATE_address" |> Dwarf.base_type_attribute_encode |> Z.to_int
+let vDW_ATE_address = "DW_ATE_address" |> Dwarf.base_type_attribute_encode |> Sym.to_int
 
-let vDW_ATE_boolean = "DW_ATE_boolean" |> Dwarf.base_type_attribute_encode |> Z.to_int
+let vDW_ATE_boolean = "DW_ATE_boolean" |> Dwarf.base_type_attribute_encode |> Sym.to_int
 
-let vDW_ATE_signed = "DW_ATE_signed" |> Dwarf.base_type_attribute_encode |> Z.to_int
+let vDW_ATE_signed = "DW_ATE_signed" |> Dwarf.base_type_attribute_encode |> Sym.to_int
 
-let vDW_ATE_signed_char = "DW_ATE_signed_char" |> Dwarf.base_type_attribute_encode |> Z.to_int
+let vDW_ATE_signed_char = "DW_ATE_signed_char" |> Dwarf.base_type_attribute_encode |> Sym.to_int
 
-let vDW_ATE_unsigned = "DW_ATE_unsigned" |> Dwarf.base_type_attribute_encode |> Z.to_int
+let vDW_ATE_unsigned = "DW_ATE_unsigned" |> Dwarf.base_type_attribute_encode |> Sym.to_int
 
-let vDW_ATE_unsigned_char = "DW_ATE_unsigned_char" |> Dwarf.base_type_attribute_encode |> Z.to_int
+let vDW_ATE_unsigned_char = "DW_ATE_unsigned_char" |> Dwarf.base_type_attribute_encode |> Sym.to_int
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -120,6 +120,7 @@ type unqualified =
   | Enum of { name : string; id : int }  (** See {!env} for what the id refers to *)
   | FuncPtr  (** Hack to accommodate PKVM *)
   | Missing  (** Hack to accommodate PKVM *)
+  | Bits (** Hack to prevent losing type information when processing bitvectors with non-whole-byte sizes *)
 
 (** The internal representation of generalized C types *)
 and t = {
@@ -136,7 +137,7 @@ and fragment =
   | Single of t  (** Single object: Only when accessing of a global variable *)
   | DynArray of t  (** Generic C pointer, may point to multiple element of that type *)
   | DynFragment of int  (** Writable fragment for memory whose type is changing dynamically *)
-  | Global
+  | Global of string
       (** The Global fragment that contains all the fixed ELF section
                .text, .data, .rodata, ... *)
 
@@ -337,6 +338,7 @@ let rec sizeof_unqualified = function
   | Array { elem; dims } ->
       let num = dims |> List.map (Option.value ~default:0) |> List.fold_left ( * ) 1 in
       num * sizeof elem
+  | Bits -> 0 (* Shouldn't use this value *)
 
 (** Give the size of an type. Need the environement. *)
 and sizeof t = sizeof_unqualified t.unqualified
@@ -372,7 +374,7 @@ type conversion_context = { env : env; potential_link_name : string option }
 
 (** Get the id of a linksem [cupdie] *)
 let ids_of_cupdie ((cu, _, die) : Dwarf.cupdie) : cupdie_id =
-  (Z.to_int cu.cu_header.cuh_offset, Z.to_int die.die_offset)
+  (Sym.to_int cu.cu_header.cuh_offset, Sym.to_int die.die_offset)
 
 (** Pretty print the dwarf decl type
 
@@ -380,7 +382,7 @@ let ids_of_cupdie ((cu, _, die) : Dwarf.cupdie) : cupdie_id =
 let pp_decl (d : Dwarf.decl) =
   Pp.dprintf "File %s, line %d"
     (Option.value d.decl_file ~default:"?")
-    (d.decl_line |> Option.map Z.to_int |> Option.value ~default:0)
+    (d.decl_line |> Option.map Sym.to_int |> Option.value ~default:0)
 
 (** This exception is raised when the type we are trying to reach
     must came from another translation unit or later in the current one.
@@ -402,14 +404,14 @@ let expect_some_link = Option.value_fun ~default:(fun _ -> raise LinkError)
     Only integers, chars and bools supported. No floating points
 *)
 let base_type_of_linksem ?size ~encoding name =
-  let encoding = Z.to_int encoding in
+  let encoding = Sym.to_int encoding in
   if encoding = vDW_ATE_boolean then Cbool
   else if encoding = vDW_ATE_signed || encoding = vDW_ATE_unsigned then
     let size =
       Option.value_fail size "In Ctype.base_type_of_linksem: integer type %s do not have a size"
         name
     in
-    Cint { name; signed = encoding = vDW_ATE_signed; size = Z.to_int size; ischar = false }
+    Cint { name; signed = encoding = vDW_ATE_signed; size = Sym.to_int size; ischar = false }
   else if encoding = vDW_ATE_signed_char || encoding = vDW_ATE_unsigned_char then
     Cint { name; signed = encoding = vDW_ATE_signed_char; size = 1; ischar = true }
   else Raise.fail "In Ctype.base_of_linksem: encoding %x unknown" encoding
@@ -428,7 +430,7 @@ let rec field_of_linksem ~cc ((_, fname, ltyp, offseto) : linksem_field) : field
   debug "Processed field %t" Pp.(top (opt string) fname);
   let offset =
     match offseto with
-    | Some offset -> Z.to_int offset
+    | Some offset -> Sym.to_int offset
     (* assume missing offsets are zero - perhaps should only occur for union members*)
     | None -> 0
   in
@@ -469,7 +471,7 @@ and[@warning "-16"] struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie
         match Hashtbl.find cc.env.lenv (ids_of_cupdie cupdie) with
         | CT (CT_struct_union (_, Atk_structure, _, msize, _, Some members)) ->
             let lsize = expect_some_link msize in
-            let size = Z.to_int lsize in
+            let size = Sym.to_int lsize in
             let cc = { cc with potential_link_name = Some name } in
             let struc : struc = struc_of_linksem ~cc name size members in
             IdMap.seti cc.env.structs id struc;
@@ -485,7 +487,7 @@ and[@warning "-16"] struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie
       | CT (CT_struct_union (_, Atk_structure, _, msize, _, Some members)) ->
           let size =
             match msize with
-            | Some x -> Z.to_int x
+            | Some x -> Sym.to_int x
             | None ->
                 warn "Struct %s doesn't have size" name;
                 0
@@ -503,7 +505,7 @@ and[@warning "-16"] struct_type_of_linksem ?(force_complete = false) ~cc ~cupdie
 
 and enum_of_linksem ~cc:_ name llabels : enum =
   let labels = Hashtbl.create 5 in
-  List.iter (fun (_, name, value) -> Hashtbl.add labels (Z.to_int value) name) llabels;
+  List.iter (fun (_, name, value) -> Hashtbl.add labels (Sym.to_int value) name) llabels;
   { name; labels }
 
 and enum_type_of_linksem ~cc ~cupdie ~mname ~decl : unqualified =
@@ -529,13 +531,13 @@ and unqualified_of_linksem ?(force_complete = false) ~cc : linksem_t -> unqualif
   | CT (CT_pointer (_, Some t)) -> ptr @@ of_linksem_cc ~cc t
   | CT (CT_pointer (_, None)) -> voidstar
   | CT (CT_array (_, elem, l)) ->
-      Array { elem = of_linksem_cc ~cc elem; dims = List.map Fun.(fst %> Option.map Z.to_int) l }
+      Array { elem = of_linksem_cc ~cc elem; dims = List.map Fun.(fst %> Option.map Sym.to_int) l }
   | CT (CT_struct_union (cupdie, Atk_structure, mname, _, decl, _)) ->
       struct_type_of_linksem ~force_complete ~cc ~cupdie ~mname ~decl
   | CT (CT_struct_union (_, Atk_union, _, size, decl, _)) ->
       let size =
         match size with
-        | Some s -> Z.to_int s
+        | Some s -> Sym.to_int s
         | None ->
             warn "%t: Sizeless union defaulting to 8 for now" Pp.(top pp_decl decl);
             8
@@ -619,7 +621,7 @@ let env_of_linksem (lenv : linksem_env) : env =
           Option.(
             let+! name = mname and+ size = msize in
             if not @@ IdMap.mem env.structs name then
-              IdMap.add env.structs name @@ incomplete_struct name (Z.to_int size) |> ignore)
+              IdMap.add env.structs name @@ incomplete_struct name (Sym.to_int size) |> ignore)
       | _ -> ())
     lenv;
   (* Third phase: Add all the type to the result environement *)
@@ -660,6 +662,7 @@ and pp_unqualified = function
   | Enum { name; _ } -> dprintf "Enum %s" name
   | FuncPtr -> dprintf "FuncPtr"
   | Missing -> dprintf "Missing"
+  | Bits -> dprintf "Bits"
 
 and pp_fragment frag =
   group
@@ -669,7 +672,7 @@ and pp_fragment frag =
   | DynArray t -> pp t ^^ !^"[]"
   | Unknown -> !^"unknown"
   | DynFragment i -> dprintf "frag %d" i
-  | Global -> !^"global"
+  | Global s -> !^"global " ^^ !^s
 
 and pp_offset = function
   | Const off when off = 0 -> empty
