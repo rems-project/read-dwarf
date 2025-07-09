@@ -140,10 +140,9 @@ let printvars ~st ~(dwarf: Dw.t) pc =
 
 
 let run_prog elfname name objdump_d branchtables =
-  match Analyse.Utils.read_file_lines "src/analyse/html-preamble-insts.html" with
-  | Error _ -> ()
-  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines
-  ;
+  (match Analyse.Utils.read_html "html-preamble-insts.html" with
+  | Error _ -> err "Could not read html-preamble-insts.html"
+  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines);
   base "Running with rd %s in %s" name elfname;
   base "Loading %s" elfname;
   let dwarf = Dw.of_file elfname in
@@ -191,9 +190,9 @@ let run_prog elfname name objdump_d branchtables =
     List.iter iter succ
   in
   iter tree;
-  match Analyse.Utils.read_file_lines "src/analyse/html-postamble.html" with
-  | Error _ -> ()
-  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines
+  (match Analyse.Utils.read_html "html-postamble.html" with
+  | Error _ -> err "Could not read html-postamble.html"
+  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines)
 
 
 let elf =

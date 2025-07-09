@@ -56,10 +56,9 @@ open Logs.Logger (struct
 end)
 
 let run_func_rd elfname name objdump_d branchtables breakpoints =
-  match Analyse.Utils.read_file_lines "src/analyse/html-preamble-insts.html" with
-  | Error _ -> ()
-  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines
-  ;
+  (match Analyse.Utils.read_html "html-preamble-insts.html" with
+  | Error _ -> err "Could not read html-preamble-insts.html"
+  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines);
   base "Running with rd %s in %s" name elfname;
   base "Loading %s" elfname;
   let dwarf = Dw.of_file elfname in
@@ -148,9 +147,9 @@ let run_func_rd elfname name objdump_d branchtables breakpoints =
                         base "At %t, %s:\n%t" Pp.(top Elf.Address.pp pc) msg Pp.(topi (State.pp_partial ~regs) st));
                  print_string (print_analyse_instruction pc)))
         runner.funcs; 
-  match Analyse.Utils.read_file_lines "src/analyse/html-postamble.html" with
-  | Error _ -> ()
-  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines
+  (match Analyse.Utils.read_html "html-postamble.html" with
+  | Error _ -> err "Could not read html-postamble.html"
+  | Ok lines -> Array.iter (function s -> Printf.printf "%s\n" s) lines)
 
 let elf =
   let doc = "ELF file from which to pull the code" in

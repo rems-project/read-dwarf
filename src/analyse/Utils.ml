@@ -119,3 +119,13 @@ let sys_command s =
   else
     let exit_code = Sys.command s in
     if exit_code <> 0 then fatal "sys_command %s failed with exit code %d" s exit_code else ()
+
+let read_html name =
+  let rec inter_p = function
+    | [] -> Error "not found"
+    | dir::dirs ->
+        let filename = Filename.concat dir name  in
+        if Sys.file_exists filename
+        then read_file_lines filename
+        else inter_p dirs
+  in inter_p (Htmlpaths.Sites.html)
