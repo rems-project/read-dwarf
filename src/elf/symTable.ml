@@ -52,8 +52,6 @@ open Symbol
 
 type sym = Symbol.t
 
-type linksem_sym = Symbol.linksem_t
-
 type sym_offset = sym * int
 
 module RMap = RngMap.Make (Symbol)
@@ -97,7 +95,10 @@ module AddrMap = struct
   
 end
 
-type linksem_t = LinksemRelocatable.global_symbol_init_info
+type linksem_relocatable_t = LinksemRelocatable.global_symbol_init_info
+
+type linksem_executable_t = Elf_file.global_symbol_init_info
+
 
 type t = { by_name : sym SMap.t; by_addr : AddrMap.t }
 
@@ -150,11 +151,17 @@ let of_position_string t s : sym_offset =
   if s.[0] = '0' then raise Not_found (* no absolute addresses *)
   else sym_offset_of_string t s
 
-let of_linksem linksem_map =
-  let add_linksem_sym_to_map (map : t) (lsym : linksem_sym) =
-    if is_interesting_linksem lsym then add map (Symbol.of_linksem lsym) else map
+let of_linksem_generic get_typ of_linksem linksem_map =
+  let add_linksem_sym_to_map (map : t) lsym =
+    if is_interesting_linksem get_typ lsym then add map (of_linksem lsym) else map
   in
   List.fold_left add_linksem_sym_to_map empty linksem_map
+
+let of_linksem_relocatable =
+  of_linksem_generic linksem_relocatable_typ of_linksem_relocatable
+
+let of_linksem_executable segments =
+  of_linksem_generic linksem_executable_typ (of_linksem_executable segments)
 
 let pp_raw st = AddrMap.bindings st.by_addr |> List.map (Pair.map Address.pp pp_raw) |> Pp.mapping "syms"
 

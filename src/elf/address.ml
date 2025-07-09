@@ -3,6 +3,8 @@ type t = {
   offset: int;
 }
 
+let absolute x = { section = ""; offset = x }
+
 let pp addr = Pp.(!^(addr.section) ^^ !^"+" ^^ ptr addr.offset)
 
 let of_linksem (section, offset) = { section; offset = Z.to_int offset }

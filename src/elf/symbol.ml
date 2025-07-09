@@ -68,7 +68,9 @@ type t = {
   data : data;
 }
 
-type linksem_t = LinksemRelocatable.symbol
+type linksem_relocatable_t = LinksemRelocatable.symbol
+
+type linksem_executable_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
 
 let push_name s t = { t with other_names = s :: t.other_names }
 
@@ -85,7 +87,9 @@ let typ_of_linksem ltyp =
   | 4 -> FILE
   | _ -> UNKNOWN
 
-let linksem_typ (_name, (typ, _size, _addr, _data, _), _) = typ
+let linksem_relocatable_typ (_name, (typ, _size, _addr, _data, _), _) = typ
+
+let linksem_executable_typ (_name, (typ, _size, _addr, _data, _)) = typ
 
 (** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded *)
 exception LoadingError of string * int
@@ -100,7 +104,7 @@ let _ =
 (* module SMap = Map.Make (String)
 let locs = SMap.empty |> SMap.add ".text" 0 |> SMap.add ".data" 1000000 |> SMap.add ".eh_frame" 2000000 *)
 
-let of_linksem (name, (typ, size, addr, (data, rels), _), writable) =
+let of_linksem_relocatable (name, (typ, size, addr, (data, rels), _), writable) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
   let addr = Address.of_linksem addr in
@@ -108,9 +112,25 @@ let of_linksem (name, (typ, size, addr, (data, rels), _), writable) =
   (* let addr = SMap.find section locs + Z.to_int offset in *)
   { name; other_names = []; typ; size; addr; data; writable }
 
+let of_linksem_executable segs (name, (typ, size, addr, data, _)) =
+  let typ = typ_of_linksem typ in
+  let size = Z.to_int size in
+  let addr = Z.to_int addr in
+  let segment =
+    Option.value_fail (Segment.get_containing segs addr) "No segment contains symbol %s" name
+  in
+  let writable = segment.write in
+  let data =
+    data
+    |> Option.value_fun ~default:(fun () ->
+      (* TODO use some wrapper for byte sequences with relocations *)
+      Segment.get_addr (fun (bs, _) -> BytesSeq.getbs ~len:size bs) segment addr)
+  in
+  { name; other_names = []; typ; size; addr=Address.absolute addr; data={data; relocations=Relocations.IMap.empty}; writable }
+
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
-let is_interesting_linksem lsym = lsym |> linksem_typ |> typ_of_linksem |> is_interesting
+let is_interesting_linksem get_typ lsym = lsym |> get_typ |> typ_of_linksem |> is_interesting
 
 let sub sym off len = {
   data = BytesSeq.sub sym.data.data off len;
