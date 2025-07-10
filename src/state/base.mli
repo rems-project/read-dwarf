@@ -162,7 +162,7 @@ module Exp : sig
   (** Create an expression from an register and a state id *)
   val of_reg : id -> Reg.t -> t
 
-  val expect_sym_address : t -> Elf.Address.t
+  val expect_address : t -> Elf.Address.t
 
   val of_section : size:int -> string -> t
 
@@ -498,9 +498,7 @@ val update_reg_exp : t -> Reg.t -> (exp -> exp) -> unit
 (** {1 Pc manipulation } *)
 
 (** Set the PC to a concrete value and keep its type appropriate *)
-val set_pc : pc:Reg.t -> t -> int -> unit
-
-val set_pc_sym : pc:Reg.t -> t -> Elf.Address.t -> unit
+val set_pc : pc:Reg.t -> t -> Elf.Address.t -> unit
 
 (** Bump a concrete PC by a concrete bump (generally the size of a non-branching instruction *)
 val bump_pc : pc:Reg.t -> t -> int -> unit

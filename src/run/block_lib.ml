@@ -108,7 +108,7 @@ let run ?(every_instruction = false) ?relevant (b : t) (start : State.t) : label
             State.lock state
           end;
           let states =
-            let pc = State.Exp.expect_sym_address pc_exp in
+            let pc = State.Exp.expect_address pc_exp in
             if Option.fold ~none:true ~some:(Fun.flip Hashtbl.mem pc) relevant then (
               info "Running pc %t" (Pp.top State.Exp.pp pc_exp);
               Runner.run ~prelock:ignore b.runner state
@@ -124,11 +124,11 @@ let run ?(every_instruction = false) ?relevant (b : t) (start : State.t) : label
           | [state] when not every_instruction -> run_from state
           | [nstate] when every_instruction ->
               let rest = [run_from nstate] in
-              { state; data = NormalAt (State.Exp.expect_sym_address pc_exp); rest }
+              { state; data = NormalAt (State.Exp.expect_address pc_exp); rest }
           | states ->
               let rest = List.map run_from states in
               State.Tree.
-                { state; data = BranchAt (State.Exp.expect_sym_address pc_exp); rest }
+                { state; data = BranchAt (State.Exp.expect_address pc_exp); rest }
         )
     else begin
       info "Reached dead code at %t" (Pp.top State.Exp.pp pc_exp);
@@ -138,7 +138,7 @@ let run ?(every_instruction = false) ?relevant (b : t) (start : State.t) : label
     end
   in
   let state = State.copy start in
-  State.set_pc_sym ~pc:pcreg state b.start;
+  State.set_pc ~pc:pcreg state b.start;
   let rest = [run_from state] in
   State.Tree.{ state = start; data = Start; rest }
 
@@ -161,7 +161,7 @@ let gen_endpred ?min ?max ?loop ?(brks = []) () : State.exp -> string option =
   in
   fun pc_exp ->
     ( try
-      Some (State.Exp.expect_sym_address pc_exp)
+      Some (State.Exp.expect_address pc_exp)
     with
       _ -> None
     ) |> Option.map (fun pc ->

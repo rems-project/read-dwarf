@@ -191,7 +191,7 @@ let execute_normal ?(prelock = ignore) ~pc runner (instr : Trace.Instr.t) state 
 let skip runner state : State.t list =
   let pc_exp = State.get_reg_exp state runner.pc in
   try
-    let pc = State.Exp.expect_sym_address pc_exp in
+    let pc = State.Exp.expect_address pc_exp in
     match fetch runner pc with
     | Normal { traces = _; read = _; written = _; length; opcode = _; relocation = _ }
      |Special length
@@ -223,7 +223,7 @@ let skip runner state : State.t list =
 let run ?prelock runner state : State.t list =
   let pc_exp = State.get_reg_exp state runner.pc in
   try
-    let pc = State.Exp.expect_sym_address pc_exp in
+    let pc = State.Exp.expect_address pc_exp in
     match fetch runner pc with
     | Normal instr -> execute_normal ?prelock ~pc runner instr state
     | Special _ ->

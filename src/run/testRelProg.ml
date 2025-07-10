@@ -30,7 +30,7 @@ let rec process_tree ~pc ~ret ~ext (node:Block_lib.label State.Tree.t) =
   | Block_lib.End _ -> let result = (
       let pc_exp = State.get_reg_exp st pc in
       let pc_addr = try
-        Some (State.Exp.expect_sym_address pc_exp)
+        Some (State.Exp.expect_address pc_exp)
       with
         _ -> None
       in

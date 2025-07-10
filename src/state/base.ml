@@ -182,14 +182,15 @@ module Exp = struct
 
   let of_reg id reg = Var.of_reg id reg |> of_var
 
-  let expect_sym_address exp =
+  let expect_address exp =
     let sym, conc = Exp.Sums.split_concrete exp in
     let section = match sym with
-    | Some(Ast.Var (Var.Section s, _)) -> s
-    | _ -> Raise.fail "Expected symbolic Section base"
+    | Some(Ast.Var (Var.Section s, _)) -> Some s
+    | None -> None
+    | Some e -> Raise.fail "Address %t contains symbolic subexpression: %t" (Pp.tos pp exp) (Pp.tos pp e)
     in
     let offset = BitVec.to_int conc in
-    Elf.Address.{ section = Some section; offset }
+    Elf.Address.{ section = section; offset }
   
   let of_section ~(size : int) (section : string) =
     Typed.extract ~last:(size-1) ~first:0
@@ -709,14 +710,7 @@ let get_reg_exp s reg = get_reg s reg |> Tval.exp
 let update_reg_exp (s : t) (reg : Reg.t) (f : exp -> exp) =
   Reg.Map.get s.regs reg |> Tval.map_exp f |> Reg.Map.set s.regs reg
 
-(* TODO *)
-let set_pc ~(pc : Reg.t) (s : t) (pcval : int) =
-  let exp = Typed.bits_int ~size:64 pcval in
-  let ctyp = Ctype.of_frag (Ctype.Global ".text") ~offset:pcval ~constexpr:true in
-  set_reg s pc @@ Tval.make ~ctyp exp
-
-(* TODO name is misleading *)
-let set_pc_sym ~(pc : Reg.t) (s : t) (pcval : Elf.Address.t) =
+let set_pc ~(pc : Reg.t) (s : t) (pcval : Elf.Address.t) =
   let exp = Exp.of_address ~size:64 pcval in
   let ctyp = Ctype.of_frag (Ctype.Global ".text") ~offset:pcval.offset ~constexpr:true in
   set_reg s pc @@ Tval.make ~ctyp exp
@@ -724,12 +718,12 @@ let set_pc_sym ~(pc : Reg.t) (s : t) (pcval : Elf.Address.t) =
 
 let bump_pc ~(pc : Reg.t) (s : t) (bump : int) =
   let pc_exp = get_reg_exp s pc in
-  let old_pc = Exp.expect_sym_address pc_exp in
+  let old_pc = Exp.expect_address pc_exp in
   let new_pc = Elf.Address.(old_pc + bump) in
-  set_pc_sym ~pc s new_pc
+  set_pc ~pc s new_pc
 
 let concretize_pc ~(pc : Reg.t) (s : t) =
-  pc |> get_reg_exp s |> eval_address s |> Option.iter (set_pc_sym ~pc s)
+  pc |> get_reg_exp s |> eval_address s |> Option.iter (set_pc ~pc s)
 
 let set_last_pc state pc =
   assert (not @@ is_locked state);
