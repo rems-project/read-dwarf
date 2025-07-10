@@ -56,12 +56,16 @@ type sym_offset = sym * int
 
 module RMap = RngMap.Make (Symbol)
 module SMap = Map.Make (String)
+module OSMap = Map.Make (struct
+  type t = string option
+  let compare = Option.compare String.compare
+end)
 
 module AddrMap = struct
-  type t = RMap.t SMap.t
+  type t = RMap.t OSMap.t
 
   let add t (addr: Address.t) sym =
-    SMap.update addr.section (fun old ->
+    OSMap.update addr.section (fun old ->
       let old = match old with
       | None -> RMap.empty
       | Some x -> x
@@ -70,24 +74,24 @@ module AddrMap = struct
     ) t
   
   let update f t (addr: Address.t) =
-    SMap.update addr.section (Option.map (fun x -> RMap.update f x addr.offset)) t
+    OSMap.update addr.section (Option.map (fun x -> RMap.update f x addr.offset)) t
   
-  let empty = SMap.empty
+  let empty = OSMap.empty
 
   let at t (addr: Address.t) =
-    SMap.find addr.section t |> Fun.flip RMap.at addr.offset
+    OSMap.find addr.section t |> Fun.flip RMap.at addr.offset
 
   let at_opt t (addr: Address.t) =
-    Option.bind (SMap.find_opt addr.section t) @@ Fun.flip RMap.at_opt addr.offset
+    Option.bind (OSMap.find_opt addr.section t) @@ Fun.flip RMap.at_opt addr.offset
   
   let at_off t (addr: Address.t) =
-    SMap.find addr.section t |> Fun.flip RMap.at_off addr.offset
+    OSMap.find addr.section t |> Fun.flip RMap.at_off addr.offset
   
   let at_off_opt t (addr: Address.t) =
-    Option.bind (SMap.find_opt addr.section t) @@ Fun.flip RMap.at_off_opt addr.offset
+    Option.bind (OSMap.find_opt addr.section t) @@ Fun.flip RMap.at_off_opt addr.offset
   
   let bindings t =
-    let sections = SMap.bindings t in
+    let sections = OSMap.bindings t in
     List.bind sections @@ fun (section, rmap) ->
       let inner_bindings = RMap.bindings rmap in
       List.map (fun (offset, sym) -> (Address.{section; offset}, sym)) inner_bindings
@@ -148,7 +152,7 @@ let sym_offset_of_string t s : sym_offset =
 let of_position_string t s : sym_offset =
   let s = String.trim s in
   if s = "" then raise Not_found;
-  if s.[0] = '0' then raise Not_found (* no absolute addresses *)
+  if s.[0] = '0' then raise Not_found (* no absolute addresses *) (* TODO handle absolute addresses *)
   else sym_offset_of_string t s
 
 let of_linksem_generic get_typ of_linksem linksem_map =

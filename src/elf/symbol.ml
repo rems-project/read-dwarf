@@ -107,7 +107,7 @@ let locs = SMap.empty |> SMap.add ".text" 0 |> SMap.add ".data" 1000000 |> SMap.
 let of_linksem_relocatable (name, (typ, size, addr, (data, rels), _), writable) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
-  let addr = Address.of_linksem addr in
+  let addr = Address.of_linksem_relocatable addr in
   let data = { data; relocations = Relocations.of_linksem rels } in
   (* let addr = SMap.find section locs + Z.to_int offset in *)
   { name; other_names = []; typ; size; addr; data; writable }

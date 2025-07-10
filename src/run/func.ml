@@ -80,7 +80,7 @@ let get_state_tree ~elf:elfname ~name ?(dump = false) ?(entry = false) ?len ?(br
         List.map
           (fun x ->
             if String.starts_with ~prefix:"UND" x then (*HACK for undefined symbol*)
-              Elf.Address.{ section=x; offset=0 }
+              Elf.Address.{ section=Some x; offset=0 }
             else
               x |> Elf.SymTable.of_position_string elf.symbols |> Elf.SymTable.to_addr_offset
           )

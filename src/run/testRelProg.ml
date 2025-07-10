@@ -36,12 +36,12 @@ let rec process_tree ~pc ~ret ~ext (node:Block_lib.label State.Tree.t) =
       in
       let ret_exp = match pc_addr with
       | Some pc_addr ->
-        if pc_addr = Elf.Address.{ section="UND.abort"; offset=0 } then
+        if pc_addr = Elf.Address.{ section=Some "UND.abort"; offset=0 } then
           Result.error {
             msg=Printf.sprintf "abort called from %t" (Pp.tos Elf.Address.pp st.last_pc);
             asserts=st.asserts;
           }
-        else if pc_addr <> Elf.Address.{ section="UND.exit"; offset=0 } then
+        else if pc_addr <> Elf.Address.{ section=Some "UND.exit"; offset=0 } then
           Result.error {
             msg=Printf.sprintf "finished at weird address %t" (Pp.tos Elf.Address.pp pc_addr);
             asserts=st.asserts;

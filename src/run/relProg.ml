@@ -85,7 +85,7 @@ let eval_loc ?frame_value sz st (loc: Dw.Loc.t) : State.Exp.t option =
   | Const x ->
       Some (match x with
       | Absolute x -> x |> BitVec.of_z ~size:(8*sz) |> Exp.Typed.bits
-      | Offset (s, o) -> State.Exp.of_address ~size:(8*sz) Elf.Address.{section=s; offset=Z.to_int o}
+      | Offset (s, o) -> State.Exp.of_address ~size:(8*sz) Elf.Address.{section=Some s; offset=Z.to_int o}
       )
   | Dwarf _ops -> None
 

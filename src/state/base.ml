@@ -189,7 +189,7 @@ module Exp = struct
     | _ -> Raise.fail "Expected symbolic Section base"
     in
     let offset = BitVec.to_int conc in
-    Elf.Address.{ section; offset }
+    Elf.Address.{ section = Some section; offset }
   
   let of_section ~(size : int) (section : string) =
     Typed.extract ~last:(size-1) ~first:0
@@ -198,9 +198,10 @@ module Exp = struct
 
   let of_address ~(size : int) (addr : Elf.Address.t) =
     Typed.(
-      of_section ~size addr.section
-      +
-      bits_int ~size addr.offset
+      let offset = bits_int ~size addr.offset in
+      match addr.section with
+      | Some section -> of_section ~size section + offset
+      | None -> offset
     )
 end
 
@@ -433,8 +434,8 @@ module Mem = struct
       prov
   
   let get_section_provenance mem section =
-    Hashtbl.find_opt mem.sections section
-    |> Option.value ~default:Ctype.Main
+    let maybe_prov = Option.bind section (Hashtbl.find_opt mem.sections) in
+    Option.value maybe_prov ~default:Ctype.Main
 end
 
 type t = {
@@ -491,7 +492,7 @@ let make ?elf () =
       mem = Mem.empty ();
       elf;
       fenv = Fragment.Env.make ();
-      last_pc = Elf.Address.{ section = ".text"; offset = 0 }; (* TODO is this right? *)
+      last_pc = Elf.Address.{ section = Some ".text"; offset = 0 }; (* TODO is this right? *)
     }
   in
   next_id := id + 1;
@@ -576,13 +577,16 @@ let eval_address (s : t) (addr: Exp.t) : Elf.Address.t option =
     ConcreteEval.Symbolic -> None
   in
   let offset = offset_exp |> Value.expect_bv |> BitVec.to_int in
+  if ConcreteEval.is_concrete addr then
+    some @@ Elf.Address.absolute offset
+  else
   let sections = Hashtbl.create 10 in
   Ast.Manip.exp_iter_var (function Var.Section s -> Hashtbl.add sections s () | _ -> ()) addr;
 
   let hyps = load_relocation_asserts s in
   let size = addr |> Typed.get_type |> Typed.expect_bv in
   sections |> Hashtbl.to_seq_keys |> Seq.find_map (fun section ->
-    let address = Elf.Address.{ section; offset } in
+    let address = Elf.Address.{ section = Some section; offset } in
     let expression = Exp.of_address ~size address in
     if Z3St.check_full ~hyps Typed.(expression = addr) = Some true then
       Some address
@@ -612,7 +616,9 @@ let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option
       with Not_found ->
         let int_addr = sym_addr.offset in
         let open Option in
-        let* rodata = Elf.File.SMap.find_opt sym_addr.section elf.rodata in
+        (* TODO handle multiple rodata sections/segments in executable files *)
+        let rodata_section = Option.value sym_addr.section ~default:".rodata" in
+        let* rodata = Elf.File.SMap.find_opt rodata_section elf.rodata in
         if rodata.addr <= int_addr && int_addr + size <= rodata.addr + rodata.size then
           let data, relocations = rodata.data in
           let data = BytesSeq.sub data (int_addr - rodata.addr) size in
@@ -709,8 +715,9 @@ let set_pc ~(pc : Reg.t) (s : t) (pcval : int) =
   let ctyp = Ctype.of_frag (Ctype.Global ".text") ~offset:pcval ~constexpr:true in
   set_reg s pc @@ Tval.make ~ctyp exp
 
+(* TODO name is misleading *)
 let set_pc_sym ~(pc : Reg.t) (s : t) (pcval : Elf.Address.t) =
-  let exp = Typed.(var ~typ:(Ty_BitVec 64) (Var.Section pcval.section) + bits_int ~size:64 pcval.offset) in
+  let exp = Exp.of_address ~size:64 pcval in
   let ctyp = Ctype.of_frag (Ctype.Global ".text") ~offset:pcval.offset ~constexpr:true in
   set_reg s pc @@ Tval.make ~ctyp exp
   
@@ -805,7 +812,7 @@ let init_sections_symbolic ~sp ~addr_size state =
     push_section_constraints ~sp ~addr_size state elf.sections;
     Elf.SymTable.iter elf.symbols @@ fun sym ->
       if sym.typ = Elf.Symbol.OBJECT then
-        Hashtbl.replace state.mem.sections sym.addr.section Main
+        Option.iter (fun s -> Hashtbl.replace state.mem.sections s Main) sym.addr.section
   ) in
   lock state;
   state

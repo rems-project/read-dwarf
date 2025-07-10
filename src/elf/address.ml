@@ -1,13 +1,13 @@
 type t = {
-  section : string;
+  section : string option;
   offset: int;
 }
 
-let absolute x = { section = ""; offset = x }
+let absolute x = { section = None; offset = x }
 
-let pp addr = Pp.(!^(addr.section) ^^ !^"+" ^^ ptr addr.offset)
+let pp addr = Pp.(optional (fun s -> !^s ^^ !^"+") addr.section ^^ ptr addr.offset)
 
-let of_linksem (section, offset) = { section; offset = Z.to_int offset }
+let of_linksem_relocatable (section, offset) = { section = Some section; offset = Z.to_int offset }
 
 let (+) addr offset = { section = addr.section; offset = addr.offset + offset }
 
@@ -25,4 +25,7 @@ let (<=) = compare (<=)
 
 let (>=) = compare (>=)
 
-let to_sym {section; offset} = Sym_ocaml.Num.Offset (section, Z.of_int offset)
+let to_sym {section; offset} = 
+  match section with
+  | Some s -> Sym_ocaml.Num.Offset (s, Z.of_int offset)
+  | None -> Sym_ocaml.Num.Absolute (Z.of_int offset)

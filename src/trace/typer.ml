@@ -300,7 +300,7 @@ let fragment_at ~(dwarf : Dw.t) ~fenv ~size (frag : Ctype.fragment) at : Ctype.t
       let* (typ, off) = Fragment.at_off_opt frag at in
       Ctype.type_at ~env ~size typ off
   | Global s -> (
-      match Elf.SymTable.of_addr_with_offset_opt dwarf.elf.symbols Elf.Address.{ section = s; offset = at } with
+      match Elf.SymTable.of_addr_with_offset_opt dwarf.elf.symbols Elf.Address.{ section = Some s; offset = at } with
       | Some (sym, offset) -> (
           match Hashtbl.find_opt dwarf.vars sym.name with
           | Some v -> Ctype.type_at ~env ~size v.ctype offset
