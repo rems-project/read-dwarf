@@ -107,21 +107,7 @@ let _ =
 (** Throw an {!ElfError} *)
 let elferror fmt = Printf.ksprintf (fun s -> raise (ElfError s)) fmt
 
-(** Parse an ELF file to create an {!Elf.File.t} using Linksem.
-
-    May raise an {!ElfError}
-*)
-let of_file (filename : string) =
-  info "Loading ELF file %s" filename;
-  (* parse the ELF file using linksem *)
-  let bs = match Byte_sequence.acquire filename with
-    | Error.Fail s -> elferror "Linksem: Byte_sequence.acquire: %s" s
-    | Error.Success x -> x
-  in
-  let elf64_file = match Elf_file.read_elf64_file bs with
-    | Error.Fail s -> elferror "Linksem: read_elf64_file: %s" s
-    | Error.Success x -> x
-  in
+let of_relocatable_file (filename : string) elf64_file =
   let symbol_map = match LinksemRelocatable.get_elf64_file_global_symbol_init elf64_file with
     | Error.Fail s -> elferror "LinksemRelocatable: get_elf64_file_global_symbol_init: %s" s
     | Error.Success x -> x
@@ -253,3 +239,27 @@ let of_executable_file (filename : string) =
   info "ELF file %s has been loaded" filename;
   (* TODO should we include the section info here as well? *)
   { filename; symbols; entry; machine; linksem = elf_file; rodata=SMap.singleton ".rodata" rodata; sections = [] }
+
+
+(** Parse an ELF file to create an {!Elf.File.t} using Linksem.
+
+    May raise an {!ElfError}
+*)
+let of_file (filename : string) =
+  info "Loading ELF file %s" filename;
+  (* parse the ELF file using linksem *)
+  let bs = match Byte_sequence.acquire filename with
+    | Error.Fail s -> elferror "Linksem: Byte_sequence.acquire: %s" s
+    | Error.Success x -> x
+  in
+  let elf64_file = match Elf_file.read_elf64_file bs with
+    | Error.Fail s -> elferror "Linksem: read_elf64_file: %s" s
+    | Error.Success x -> x
+  in
+  if Elf_header.is_elf64_relocatable_file elf64_file.elf64_file_header then
+    of_relocatable_file filename elf64_file
+  else if Elf_header.is_elf64_executable_file elf64_file.elf64_file_header then
+    (* TODO currently this loads the file twice *)
+    of_executable_file filename
+  else
+    elferror "Linksem: of_file: not an ELF64 relocatable or executable file: %s" filename
