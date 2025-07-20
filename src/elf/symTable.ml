@@ -152,8 +152,11 @@ let sym_offset_of_string t s : sym_offset =
 let of_position_string t s : sym_offset =
   let s = String.trim s in
   if s = "" then raise Not_found;
-  if s.[0] = '0' then raise Not_found (* no absolute addresses *) (* TODO handle absolute addresses *)
-  else sym_offset_of_string t s
+
+  if s.[0] = '0' then
+    of_addr_with_offset t (Address.absolute (int_of_string s))
+  else
+    sym_offset_of_string t s
 
 let of_linksem_generic get_typ of_linksem linksem_map =
   let add_linksem_sym_to_map (map : t) lsym =
