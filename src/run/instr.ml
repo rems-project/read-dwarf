@@ -74,7 +74,7 @@ open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-type traces = IslaTraces of Isla.rtrc list | Traces of Trace.t list
+type traces = IslaTraces of Isla.rtrc list | Traces of Elf.Relocations.rel option * Trace.t list
 
 let instr =
   let doc = "Instruction to run(either directly on in sym+offset way. See --elf" in
@@ -123,7 +123,7 @@ let elf =
   in
   Arg.(value & opt (some non_dir_file) None & info ["e"; "elf"] ~doc)
 
-let get_instr arch instr elfopt : BytesSeq.t =
+let get_instr arch instr elfopt : Elf.Symbol.data =
   let (elfname, symname) =
     match elfopt with
     | None ->
@@ -140,7 +140,7 @@ let get_instr arch instr elfopt : BytesSeq.t =
   in
   debug "Got symbol:\n%t\n" (Pp.topi Elf.Symbol.pp_raw sym);
   let len = 4 (* TODO proper Instruction length system *) in
-  BytesSeq.sub sym.data.data off len (*TODO relocations*)
+  Elf.Symbol.sub sym off len
 
 let instr_term = Term.(CmdlinerHelper.func_options comopts get_instr $ arch $ instr $ elf)
 
@@ -148,15 +148,24 @@ let simp_trace_term = Term.(const ( || ) $ simp_trace $ simp)
 
 let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
-let get_traces _instr _isla_run _dump_types : traces =
-  Raise.todo()
-  (* Isla.Cache.start @@ Arch.get_isla_config ();
+let get_traces (instr: Elf.Symbol.data) isla_run dump_types : traces =
+  Isla.Cache.start @@ Arch.get_isla_config ();
   (* I call Init.init manually to print the register types *)
   Init.init () |> ignore;
-  let rtraces = Isla.Cache.get_traces (instr, None) in (* TODO relocs *)
+  let reloc = Elf.Relocations.IMap.find_opt 0 instr.relocations in
+  let reloc_typ = Option.map (fun (x: Elf.Relocations.rel) -> x.target) reloc in
+  let segments, rtraces = match Isla.Cache.get_traces (instr.data, reloc_typ) with
+  | Isla.Traces tr -> [], tr
+  | Isla.TracesWithSegments (Segments s, tr) -> s, tr
+  in
   List.iter (fun t -> Isla.Type.type_trc t |> ignore) rtraces;
   if dump_types then base "Register types:\n%t\n" (Pp.topi State.Reg.pp_index ());
-  if isla_run then IslaTraces rtraces else Traces (List.map Trace.of_isla rtraces) *)
+  if isla_run then (
+    if not @@ List.is_empty segments then
+      Raise.fail "Isla run doesn't support symbolic opcodes";
+    IslaTraces rtraces
+  ) else
+    Traces (reloc, List.map (Trace.of_isla segments) rtraces)
 
 let pre_traces_term = Term.(const get_traces $ instr_term $ isla_run $ reg_types)
 
@@ -164,9 +173,9 @@ let simp_traces simp_traces traces =
   if simp_traces then (
     match traces with
     | IslaTraces _ -> traces
-    | Traces trcs ->
+    | Traces (reloc, trcs) ->
         Z3.ensure_started ();
-        Traces (List.map Trace.simplify trcs)
+        Traces (reloc, List.map Trace.simplify trcs)
   )
   else traces
 
@@ -176,7 +185,7 @@ let dump_traces dump_traces traces =
       match traces with
       | IslaTraces trcs ->
           List.iteri (fun i trc -> base "Trace %d:\n%t\n" i (Pp.topi Isla.pp_trc trc)) trcs
-      | Traces trcs ->
+      | Traces (_reloc, trcs) ->
           List.iteri (fun i trc -> base "Trace %d:\n%t\n" i (Pp.topi Trace.pp trc)) trcs
   end;
   traces
@@ -192,7 +201,7 @@ let run_instr dump_init norun simp_state traces =
       match traces with
       | IslaTraces trcs ->
           List.map ((Isla.Run.trc [@ocaml.warning "-3"] (* deprecated *)) init_state) trcs
-      | Traces trcs -> List.map (Trace.Run.trace init_state) trcs
+      | Traces (relocation, trcs) -> List.map (Trace.Run.trace ?relocation init_state) trcs
     in
     let states =
       if simp_state then begin
