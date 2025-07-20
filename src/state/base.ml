@@ -245,9 +245,11 @@ module Relocation = struct
   }
 
   let rec exp_of_relocation_exp: Elf.Relocations.exp -> exp = 
+    (* Note: the expressions are on 64bit integers, which should be enough to avoid overflow
+       (address space is usally smaller than 64 bits). Could consider using 128bit just to be safe (TODO). *)
     let f = exp_of_relocation_exp in function
-    | Section s -> Exp.of_var (Var.Section s) (* TODO size? *)
-    | Const x -> Typed.bits (BitVec.of_int x ~size:64) (* TODO size? *)
+    | Section s -> Exp.of_var (Var.Section s)
+    | Const x -> Typed.bits (BitVec.of_int x ~size:64)
     | BinOp (a, Add, b) -> Typed.(f a + f b)
     | BinOp (a, Sub, b) -> Typed.(f a - f b)
     | BinOp (a, And, b) -> Typed.manyop (AstGen.Ott.Bvmanyarith AstGen.Ott.Bvand) [f a; f b]
