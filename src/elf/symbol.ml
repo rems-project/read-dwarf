@@ -52,10 +52,7 @@ type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
 
 type linksem_typ = Z.t
 
-type data = {
-  data: BytesSeq.t;
-  relocations: Relocations.t
-}
+type data = RelocBytesSeq.t
 
 type t = {
   name : string;
@@ -108,7 +105,7 @@ let of_linksem_relocatable (name, (typ, size, addr, (data, rels), _), writable) 
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
   let addr = Address.of_linksem_relocatable addr in
-  let data = { data; relocations = Relocations.of_linksem rels } in
+  let data : data = { data; relocations = Relocations.of_linksem rels } in
   (* let addr = SMap.find section locs + Z.to_int offset in *)
   { name; other_names = []; typ; size; addr; data; writable }
 
@@ -132,7 +129,7 @@ let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
 let is_interesting_linksem get_typ lsym = lsym |> get_typ |> typ_of_linksem |> is_interesting
 
-let sub sym off len = {
+let sub sym off len : data = {
   data = BytesSeq.sub sym.data.data off len;
   relocations = Relocations.sub sym.data.relocations off len;
 }

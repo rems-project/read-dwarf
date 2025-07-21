@@ -98,7 +98,7 @@ let load_sym runner (sym : Elf.Symbol.t) =
   let opcode_list = Arch.split_into_instrs sym.data in
   let addr = ref sym.addr in
   List.iter
-    (fun Elf.Symbol.{ data = code; relocations } ->
+    (fun Elf.RelocBytesSeq.{ data = code; relocations } ->
       let (addr, instr_len) =
         let result = !addr and len = BytesSeq.length code in
         addr := Elf.Address.(!addr + len);

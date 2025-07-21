@@ -324,7 +324,7 @@ let split_into_instrs (data: Elf.Symbol.data) =
       let (_, rel, rest) = IMap.split pos data.relocations in
       if Option.is_some @@ IMap.find_first_opt (fun i -> i < pos + 4) rest then
         Raise.fail "Misaligned relocation";      
-      Elf.Symbol.{
+      Elf.RelocBytesSeq.{
         data = bytes;
         relocations = rel |> Option.map (IMap.singleton 0) |> Option.value ~default:IMap.empty;
       }

@@ -55,10 +55,7 @@ type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
 
 type linksem_typ = Z.t
 
-type data = {
-  data: BytesSeq.t;
-  relocations: Relocations.t
-}
+type data = RelocBytesSeq.t
 
 (** The ELF symbol. This type guarantee the data exists contrary to linksem symbols
     (it may be all zeros though) *)
