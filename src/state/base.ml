@@ -495,7 +495,7 @@ let make ?elf () =
       mem = Mem.empty ();
       elf;
       fenv = Fragment.Env.make ();
-      last_pc = Elf.Address.{ section = Some ".text"; offset = 0 }; (* TODO is this right? *)
+      last_pc = Elf.Address.absolute 0
     }
   in
   next_id := id + 1;
