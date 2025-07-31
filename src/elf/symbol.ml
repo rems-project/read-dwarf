@@ -97,10 +97,6 @@ let _ =
         Some (Printf.sprintf "Symbol %s at 0x%x could not be loaded" name addr)
     | _ -> None)
 
-(* for debugging TODO remove *)
-(* module SMap = Map.Make (String)
-let locs = SMap.empty |> SMap.add ".text" 0 |> SMap.add ".data" 1000000 |> SMap.add ".eh_frame" 2000000 *)
-
 let of_linksem_relocatable (name, (typ, size, addr, data, _), writable) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
