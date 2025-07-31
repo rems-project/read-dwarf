@@ -713,7 +713,8 @@ let update_reg_exp (s : t) (reg : Reg.t) (f : exp -> exp) =
 
 let set_pc ~(pc : Reg.t) (s : t) (pcval : Elf.Address.t) =
   let exp = Exp.of_address pcval in
-  let ctyp = Ctype.of_frag (Ctype.Global pcval.section) ~offset:pcval.offset ~constexpr:true in
+  let constexpr = Option.is_none pcval.section in
+  let ctyp = Ctype.of_frag (Ctype.Global pcval.section) ~offset:pcval.offset ~constexpr in
   set_reg s pc @@ Tval.make ~ctyp exp
   
 

@@ -202,14 +202,18 @@ let manyop ~ctxt (m : Ast.manyop) (tvals : tval list) : Ctype.t option =
           match offset with
           | Somewhere -> Some ctyp
           | Const _ -> (
-              try
-                let new_int =
-                  constexpr_to_int ~ctxt (Typed.concat (List.map (fun t -> t.exp) tvals))
-                in
-                debug "concat hack: %x = %t" new_int
-                  (Pp.top Base.pp_exp (Typed.concat (List.map (fun t -> t.exp) tvals)));
-                Some (Ctype.ptr_set ctyp new_int)
-              with ConcreteEval.Symbolic -> Ctype.ptr_forget ctyp |> Option.some
+              if (List.for_all (fun t -> Option.exists (fun (typ:Ctype.t) -> typ.constexpr) t.ctyp) tvals) then
+                (* if all are constexpr *)
+                try
+                  let new_int =
+                    constexpr_to_int ~ctxt (Typed.concat (List.map (fun t -> t.exp) tvals))
+                  in
+                  debug "concat hack: %x = %t" new_int
+                    (Pp.top Base.pp_exp (Typed.concat (List.map (fun t -> t.exp) tvals)));
+                  Some (Ctype.ptr_set ctyp new_int)
+                with ConcreteEval.Symbolic -> Ctype.ptr_forget ctyp |> Option.some
+              else
+                Ctype.ptr_forget ctyp |> Option.some
             )
         )
       | _ -> None
