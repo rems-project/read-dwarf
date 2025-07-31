@@ -116,7 +116,6 @@ let of_linksem_executable segs (name, (typ, size, addr, data, _)) =
   let data =
     data
     |> Option.value_fun ~default:(fun () ->
-      (* TODO use some wrapper for byte sequences with relocations *)
       Segment.get_addr Fun.(RelocBytesSeq.expect_bs_no_relocations %> BytesSeq.getbs ~len:size) segment addr)
   in
   { name; other_names = []; typ; size; addr=Address.absolute addr; data=RelocBytesSeq.of_bytes_seq data; writable }
