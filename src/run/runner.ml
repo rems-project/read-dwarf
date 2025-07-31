@@ -98,16 +98,16 @@ let load_sym runner (sym : Elf.Symbol.t) =
   let opcode_list = Arch.split_into_instrs sym.data in
   let addr = ref sym.addr in
   List.iter
-    (fun Elf.RelocBytesSeq.{ data = code; relocations } ->
+    (fun code ->
       let (addr, instr_len) =
-        let result = !addr and len = BytesSeq.length code in
+        let result = !addr and len = Elf.RelocBytesSeq.length code in
         addr := Elf.Address.(!addr + len);
         (result, len)
       in
-      debug "Relocation at address %t: %t" (Pp.top Elf.Address.pp addr) (Pp.top Elf.Relocations.pp relocations);
+      debug "Relocation at address %t: %t" (Pp.top Elf.Address.pp addr) (Pp.top Elf.Relocations.pp code.relocations);
       try
-        let reloc = Elf.Relocations.IMap.find_opt 0 relocations in
-        let instr = Trace.Cache.get_instr (code, reloc) in
+        let opc = Elf.RelocBytesSeq.as_opcode code in
+        let instr = Trace.Cache.get_instr opc in
         if instr.traces = [] then begin
           debug "Instruction at %t in %s is loaded as special" (Pp.top Elf.Address.pp addr) sym.name;
           Hashtbl.add runner.instrs addr (Special instr_len)

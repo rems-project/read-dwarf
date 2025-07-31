@@ -148,13 +148,13 @@ let simp_trace_term = Term.(const ( || ) $ simp_trace $ simp)
 
 let simp_state_term = Term.(const ( || ) $ simp_state $ simp)
 
-let get_traces (instr: Elf.Symbol.data) isla_run dump_types : traces =
+let get_traces (instr: Elf.RelocBytesSeq.t) isla_run dump_types : traces =
   Isla.Cache.start @@ Arch.get_isla_config ();
   (* I call Init.init manually to print the register types *)
   Init.init () |> ignore;
-  let reloc = Elf.Relocations.IMap.find_opt 0 instr.relocations in
+  let (data, reloc) = Elf.RelocBytesSeq.as_opcode instr in
   let reloc_typ = Option.map (fun (x: Elf.Relocations.rel) -> x.target) reloc in
-  let segments, rtraces = match Isla.Cache.get_traces (instr.data, reloc_typ) with
+  let segments, rtraces = match Isla.Cache.get_traces (data, reloc_typ) with
   | Isla.Traces tr -> [], tr
   | Isla.TracesWithSegments (Segments s, tr) -> s, tr
   in

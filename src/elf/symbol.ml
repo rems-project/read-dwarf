@@ -101,11 +101,11 @@ let _ =
 (* module SMap = Map.Make (String)
 let locs = SMap.empty |> SMap.add ".text" 0 |> SMap.add ".data" 1000000 |> SMap.add ".eh_frame" 2000000 *)
 
-let of_linksem_relocatable (name, (typ, size, addr, (data, rels), _), writable) =
+let of_linksem_relocatable (name, (typ, size, addr, data, _), writable) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
   let addr = Address.of_linksem_relocatable addr in
-  let data : data = { data; relocations = Relocations.of_linksem rels } in
+  let data = RelocBytesSeq.of_linksem data in
   (* let addr = SMap.find section locs + Z.to_int offset in *)
   { name; other_names = []; typ; size; addr; data; writable }
 
@@ -123,16 +123,13 @@ let of_linksem_executable segs (name, (typ, size, addr, data, _)) =
       (* TODO use some wrapper for byte sequences with relocations *)
       Segment.get_addr (fun (bs, _) -> BytesSeq.getbs ~len:size bs) segment addr)
   in
-  { name; other_names = []; typ; size; addr=Address.absolute addr; data={data; relocations=Relocations.IMap.empty}; writable }
+  { name; other_names = []; typ; size; addr=Address.absolute addr; data=RelocBytesSeq.of_bytes_seq data; writable }
 
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
 let is_interesting_linksem get_typ lsym = lsym |> get_typ |> typ_of_linksem |> is_interesting
 
-let sub sym off len : data = {
-  data = BytesSeq.sub sym.data.data off len;
-  relocations = Relocations.sub sym.data.relocations off len;
-}
+let sub sym off len = RelocBytesSeq.sub sym.data off len
 
 let compare s1 s2 = compare s1.addr s2.addr
 
@@ -159,5 +156,5 @@ let pp_raw sym =
            (* ("addr", ptr sym.addr); *)
            ("size", ptr sym.size);
            ("writable", bool sym.writable);
-           ("data", pair (BytesSeq.ppby ~by:4) Relocations.pp (sym.data.data, sym.data.relocations));
+           ("data", RelocBytesSeq.pp sym.data);
          ])

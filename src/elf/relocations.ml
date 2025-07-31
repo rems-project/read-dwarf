@@ -90,3 +90,5 @@ let pp rels =
     Pp.empty
   else
     Pp.(mapping "relocations" @@ List.map (fun (i, r) -> (hex i, pp_rel r)) (IMap.to_list rels))
+
+let empty : t = IMap.empty
