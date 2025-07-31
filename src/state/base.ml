@@ -780,8 +780,9 @@ let init_sections ~sp ~addr_size state =
   let _ = Option.(
     let+ elf = state.elf in
     state.mem.allow_main <- false;
-    push_section_constraints ~sp ~addr_size state elf.sections;
-    List.iter (fun (x:Elf.File.section) -> Mem.create_section_frag ~addr_size state.mem x.name |> ignore) elf.sections;
+    push_section_constraints ~sp ~addr_size state elf.relocatable_sections;
+    List.iter (fun (x:Elf.File.section)
+      -> Mem.create_section_frag ~addr_size state.mem x.name |> ignore) elf.relocatable_sections;
     Elf.SymTable.iter elf.symbols @@ fun sym ->
       let len = List.find (fun x -> sym.size mod x = 0) [16;8;4;2;1] in
       if sym.typ = Elf.Symbol.OBJECT then
@@ -803,7 +804,7 @@ let init_sections_symbolic ~sp ~addr_size state =
   let state = copy_if_locked state in
   let _ = Option.(
     let+ elf = state.elf in
-    push_section_constraints ~sp ~addr_size state elf.sections;
+    push_section_constraints ~sp ~addr_size state elf.relocatable_sections;
     Elf.SymTable.iter elf.symbols @@ fun sym ->
       if sym.typ = Elf.Symbol.OBJECT then
         Option.iter (fun s -> Hashtbl.replace state.mem.sections s Main) sym.addr.section

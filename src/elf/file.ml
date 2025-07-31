@@ -93,7 +93,9 @@ type t = {
   linksem : Elf_file.elf_file;
       (** The original linksem structure for the file; only used in  [dw.ml] *)
   rodata : Segment.t SMap.t;  (** The read-only data sections *)
-  sections : section list;
+  relocatable_sections : section list;
+      (** Info about sections' size, alignment, ... constraints. Only used for symbolic execution
+      of relocatable files. *)
 }
 
 (** Error on Elf parsing *)
@@ -174,7 +176,7 @@ let of_relocatable_file (filename : string) elf64_file =
     ) elf64_file.elf64_file_interpreted_sections
   in
   info "ELF file %s has been loaded" filename;
-  { filename; symbols; entry; machine; linksem = elf_file; rodata; sections }
+  { filename; symbols; entry; machine; linksem = elf_file; rodata; relocatable_sections = sections }
 
 let of_executable_file (filename : string) =
   info "Loading ELF file %s" filename;
@@ -237,8 +239,7 @@ let of_executable_file (filename : string) =
       }
   in
   info "ELF file %s has been loaded" filename;
-  (* TODO should we include the section info here as well? *)
-  { filename; symbols; entry; machine; linksem = elf_file; rodata=SMap.singleton ".rodata" rodata; sections = [] }
+  { filename; symbols; entry; machine; linksem = elf_file; rodata=SMap.singleton ".rodata" rodata; relocatable_sections = [] }
 
 
 (** Parse an ELF file to create an {!Elf.File.t} using Linksem.
