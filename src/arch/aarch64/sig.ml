@@ -331,7 +331,7 @@ let get_abi api =
     State.set_reg_type state sp
       (Ctype.of_frag ~provenance:stack_provenance @@ DynFragment stack_frag_id);
     State.set_reg state r30
-      (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere (Ctype.Global ".text")) RetAddr); (* TODO doesn't have to be .text *)
+      (State.Tval.of_var ~ctyp:(Ctype.of_frag_somewhere (Ctype.Global None)) RetAddr);
     let sp_exp = State.Exp.of_reg state.id sp in
     (* Assert that Sp is 16 bytes aligned *)
     State.push_assert state Exp.Typed.(extract ~last:3 ~first:0 sp_exp = bits_int ~size:4 0);

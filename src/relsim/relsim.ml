@@ -70,9 +70,12 @@ let rec sem_type_of_type (typ: Ctype.t) : sem_type =
   | Ptr { fragment=Ctype.DynArray typ'; _ } -> Ptr (sem_type_of_type typ')
   | _ -> Raise.todo()
 
+let unknown_section_counter = Counter.make 0
+
 let value_rel_for_type: Ctype.unqualified -> value_relation = function
 | Ctype.Machine _ | Ctype.Cint _ | Ctype.Cbool | Ctype.Enum _ -> Eq
-| Ptr { fragment=Ctype.Global s; _ } -> EqSection s
+| Ptr { fragment=Ctype.Global Some s; _ } -> EqSection s
+| Ptr { fragment=Ctype.Global None; _ } -> EqSection ("Unknown_"^string_of_int (Counter.get unknown_section_counter))
 | Ptr { fragment=Ctype.DynFragment i; _ } -> EqSection ("Dyn_"^string_of_int i)
 | Ptr { fragment=Ctype.DynArray typ'; _ } -> Indirect (sem_type_of_type typ')
 | _ -> Raise.todo()
