@@ -24,3 +24,9 @@ let as_opcode seq =
   (seq.data, Relocations.IMap.find_opt 0 seq.relocations)
   
 let length seq = BytesSeq.length seq.data
+
+let expect_bs_no_relocations {data; relocations} =
+  if Relocations.IMap.is_empty relocations then
+    data
+  else
+    failwith "Byte sequence has relocations"

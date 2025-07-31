@@ -623,10 +623,8 @@ let read_from_rodata (s : t) ~(addr : Exp.t) ~(size : Mem.Size.t) : Exp.t option
         let rodata_section = Option.value sym_addr.section ~default:".rodata" in
         let* rodata = Elf.File.SMap.find_opt rodata_section elf.rodata in
         if rodata.addr <= int_addr && int_addr + size <= rodata.addr + rodata.size then
-          let data, relocations = rodata.data in
-          let data = BytesSeq.sub data (int_addr - rodata.addr) size in
-          let relocations = Elf.Relocations.sub relocations (int_addr - rodata.addr) size in
-          let value, asserts = Relocation.exp_of_data {data; relocations} in
+          let data = Elf.RelocBytesSeq.sub rodata.data (int_addr - rodata.addr) size in
+          let value, asserts = Relocation.exp_of_data data in
           
           if not @@ List.is_empty asserts then
             warn "Relocaiton assserts in .rodata ignored: %t" Pp.(top (list Exp.pp) asserts);

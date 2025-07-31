@@ -163,7 +163,7 @@ let of_relocatable_file (filename : string) elf64_file =
         sname,
         Segment.
         {
-          data = (data, relocations);
+          data = {data; relocations};
           addr = 0; (* Meaningless for relocatable files *)
           size = BytesSeq.length data;
           read = true;
@@ -228,7 +228,7 @@ let of_executable_file (filename : string) =
     in
     Segment.
       {
-        data=(data, Relocations.IMap.empty);
+        data=RelocBytesSeq.of_bytes_seq data;
         addr = Sym.to_int addr;
         size = BytesSeq.length data;
         read = true;
