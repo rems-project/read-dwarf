@@ -93,7 +93,7 @@ let len =
   in
   Arg.(value & opt (some int) None & info ["l"; "len"] ~doc)
 
-let get_code elfname symname len : BytesSeq.t =
+let get_code elfname symname len : Elf.RelocBytesSeq.t =
   let elf = Elf.File.of_file elfname in
   Arch.load_elf_arch elf;
   let (sym, off) =
@@ -101,7 +101,7 @@ let get_code elfname symname len : BytesSeq.t =
     with Not_found -> fail "The symbol %s cannot found in %s" symname elfname
   in
   let len = match len with Some i -> i | None -> sym.size - off in
-  (Elf.Symbol.sub sym off len).data (*TODO relocations*)
+  Elf.Symbol.sub sym off len
 
 let code_term = Term.(CmdlinerHelper.func_options comopts get_code $ elf $ sym $ len)
 

@@ -64,27 +64,30 @@ type t = { main : trc array }
     Also does the typing of traces for register discovery.
     TODO Support variable length instructions
 *)
-let from_binary (_code : BytesSeq.t) : t =
-  Raise.todo()
-  (* let num = BytesSeq.length code / 4 in
+let from_binary (code : Elf.RelocBytesSeq.t) : t =
   (* TODO fix fixed size instructions *)
-  if BytesSeq.length code != num * 4 then
+  (* TODO maybe this should be checked in Arch.split_into_instrs *)
+  if Elf.RelocBytesSeq.length code mod 4 <> 0 then
     failwith "BB.from_binary: The specified range cuts an instruction";
-  let process (code : BytesSeq.t) : trc =
-    let get_normal : Isla.rtrc list -> trc = function
+  let process (code : Elf.RelocBytesSeq.t) : trc =
+    let get_normal rtrcs =
+      let segs, rtrcs = Isla.trcs_to_list rtrcs in
+      match rtrcs with
       | [] -> failwith "BB.from_binary: no normal path"
       | [trc] ->
           Isla.Type.type_trc trc |> ignore;
-          Trace.of_isla trc
+          Trace.of_isla segs trc
       | _ ->
           failwith
             "BB.from_binary: Multiple path instruction.\n\
              If this is not a branching instruction, try `run-block --linear'."
     in
-    (code, None) |> Isla.Cache.get_traces |> get_normal (*TODO relocs *)
+    let (raw, reloc) = Elf.RelocBytesSeq.as_opcode code in
+    let reloc_typ = Option.map (fun (r : Elf.Relocations.rel) -> r.target) reloc in
+    (raw, reloc_typ) |> Isla.Cache.get_traces |> get_normal
   in
-  let main = code |> BytesSeq.to_listbs ~len:4 |> List.map process |> Array.of_list in
-  { main } *)
+  let main = code |> Arch.split_into_instrs |> List.map process |> Array.of_list in
+  { main }
 
 (* Sequence of the second test:
 mpool.c:116.6  (mpool_fini) 40012240:  37000049  tbnz

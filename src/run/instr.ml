@@ -154,10 +154,7 @@ let get_traces (instr: Elf.RelocBytesSeq.t) isla_run dump_types : traces =
   Init.init () |> ignore;
   let (data, reloc) = Elf.RelocBytesSeq.as_opcode instr in
   let reloc_typ = Option.map (fun (x: Elf.Relocations.rel) -> x.target) reloc in
-  let segments, rtraces = match Isla.Cache.get_traces (data, reloc_typ) with
-  | Isla.Traces tr -> [], tr
-  | Isla.TracesWithSegments (Segments s, tr) -> s, tr
-  in
+  let segments, rtraces = (data, reloc_typ) |> Isla.Cache.get_traces |> Isla.trcs_to_list in
   List.iter (fun t -> Isla.Type.type_trc t |> ignore) rtraces;
   if dump_types then base "Register types:\n%t\n" (Pp.topi State.Reg.pp_index ());
   if isla_run then (

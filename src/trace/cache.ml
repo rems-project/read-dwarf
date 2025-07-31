@@ -160,10 +160,7 @@ let get_traces (opcode : Isla.Server.opcode) : Base.t list =
   match TC.get_opt cache (Some opcode) with
   | Some trcs -> trcs
   | None ->
-      let segments, isla_traces = match Isla.Cache.get_traces opcode with
-      | Traces t -> [], t
-      | TracesWithSegments (Segments s, t) -> s, t
-      in 
+      let segments, isla_traces = opcode |> Isla.Cache.get_traces |> Isla.trcs_to_list in
       let traces = List.map (tee (Isla.Type.type_trc %> ignore) %> Base.of_isla segments) isla_traces in
       let straces = List.map Base.simplify traces in
       TC.add cache (Some opcode) straces;

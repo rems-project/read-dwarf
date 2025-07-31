@@ -211,6 +211,11 @@ let parse_segments_channel ?filename (c : in_channel) : instruction_segments =
     | exn -> assert_failure (Printf.sprintf "Thrown: %s" (Printexc.to_string exn))
 *)
 
+
+let trcs_to_list = function
+| Traces trcs -> [], trcs
+| TracesWithSegments (Segments s, trcs) -> s, trcs
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
