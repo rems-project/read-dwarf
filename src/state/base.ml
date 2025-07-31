@@ -192,16 +192,17 @@ module Exp = struct
     let offset = BitVec.to_int conc in
     Elf.Address.{ section = section; offset }
   
-  let of_section ~(size : int) (section : string) =
-    Typed.extract ~last:(size-1) ~first:0
-        (of_var @@ Var.Section section)
-
-
-  let of_address ~(size : int) (addr : Elf.Address.t) =
+  let of_section ?(size : int option) (section : string) =
+    let s = of_var @@ Var.Section section in
+    match size with
+    | None -> s
+    | Some size -> Typed.extract ~last:(size-1) ~first:0 s
+    
+  let of_address ?(size : int option) (addr : Elf.Address.t) =
     Typed.(
-      let offset = bits_int ~size addr.offset in
+      let offset = bits_int ~size:(Option.value ~default:64 size) addr.offset in
       match addr.section with
-      | Some section -> of_section ~size section + offset
+      | Some section -> of_section ?size section + offset
       | None -> offset
     )
 end
@@ -711,7 +712,7 @@ let update_reg_exp (s : t) (reg : Reg.t) (f : exp -> exp) =
   Reg.Map.get s.regs reg |> Tval.map_exp f |> Reg.Map.set s.regs reg
 
 let set_pc ~(pc : Reg.t) (s : t) (pcval : Elf.Address.t) =
-  let exp = Exp.of_address ~size:64 pcval in
+  let exp = Exp.of_address pcval in
   let ctyp = Ctype.of_frag (Ctype.Global pcval.section) ~offset:pcval.offset ~constexpr:true in
   set_reg s pc @@ Tval.make ~ctyp exp
   

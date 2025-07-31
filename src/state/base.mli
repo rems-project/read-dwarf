@@ -164,9 +164,9 @@ module Exp : sig
 
   val expect_address : t -> Elf.Address.t
 
-  val of_section : size:int -> string -> t
+  val of_section : ?size:int -> string -> t
 
-  val of_address : size:int -> Elf.Address.t -> t
+  val of_address : ?size:int -> Elf.Address.t -> t
 end
 
 type exp = Exp.t
