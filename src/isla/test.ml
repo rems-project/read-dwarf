@@ -153,11 +153,11 @@ let input_f2m file sym : imode Term.ret =
 let imode_term = Term.(ret (const input_f2m $ file $ sym))
 
 (** Input takes the imode and the main argument and returns the filename and input string *)
-let input imode (arg : string) : (string * string) Term.ret =
+let input imode (arg : string) : (string * string * Relocation.t option) Term.ret =
   match imode with
-  | CMD -> `Ok ("CLI input", arg)
+  | CMD -> `Ok ("CLI input", arg, None)
   | FILE -> (
-      try `Ok (arg, read_string arg) with e -> `Error (false, Printexc.to_string e)
+      try `Ok (arg, read_string arg, None) with e -> `Error (false, Printexc.to_string e)
     )
   | ELF s ->
       let filename = s ^ " in " ^ arg in
@@ -166,7 +166,12 @@ let input imode (arg : string) : (string * string) Term.ret =
         try Elf.SymTable.of_position_string elf.symbols s
         with Not_found -> fail "The position %s could not be found in %s" s arg
       in
-      `Ok (filename, BytesSeq.to_string (BytesSeq.sub sym.data.data off 4)) (* TODO relocations *)
+      let data, reloc = Elf.RelocBytesSeq.as_opcode @@ Elf.Symbol.sub sym off 4 in
+      let reloc_typ = Option.map (fun (r : Elf.Relocations.rel) ->
+        base "Instruction has a relocation, executing symbolically";
+        r.target
+      ) reloc in
+      `Ok (filename, BytesSeq.to_string data, reloc_typ)
 
 let input_term = Term.(ret (const input $ imode_term $ arg))
 
@@ -183,28 +188,30 @@ let isla_f2m direct hex bin sym : isla_mode Term.ret =
 let isla_mode_term =
   Term.(ret (CmdlinerHelper.func_option Logs.term isla_f2m $ direct $ hex $ bin $ sym))
 
-let isla_mode_to_request imode input =
+let isla_mode_to_request imode input reloc_typ =
   match imode with
-  | ASM -> Server.TEXT_ASM input
-  | HEX -> Server.ASM (BytesSeq.of_hex input, None) (* TODO? *)
-  | BIN -> Server.ASM (BytesSeq.of_string input, None)
+  | ASM ->
+      Option.iter (fun r -> warn "Relocation is ignored %t" (Pp.top Elf.Relocations.pp_target r)) reloc_typ;
+      Server.TEXT_ASM input
+  | HEX -> Server.ASM (BytesSeq.of_hex input, reloc_typ)
+  | BIN -> Server.ASM (BytesSeq.of_string input, reloc_typ)
   | _ -> assert false
 
 (** Run isla and return a text trace with a filename
     (if mode is RAW than just return the trace and filename without isla)
 
     If isla return multiple traces, just silently pick the first non-exceptional one *)
-let isla_run isla_mode arch (filename, input) : string * string * Server.config =
+let isla_run isla_mode arch (filename, input, reloc_typ) : string * (string option * string) * Server.config =
   match isla_mode with
-  | RAW -> (filename, input, Config.File.get_isla_config arch)
+  | RAW -> (filename, (None, input), Config.File.get_isla_config arch)
   | _ ->
       Server.(
         Random.self_init ();
         let config = ConfigFile.get_isla_config arch in
         start config;
-        let msg : string =
-          match request (isla_mode_to_request isla_mode input) with
-          | Traces (_, l) -> List.assoc true l (* TODO segments *)
+        let msg : string option * string =
+          match request (isla_mode_to_request isla_mode input reloc_typ) with
+          | Traces (segs, l) -> segs, List.assoc true l
           | _ -> failwith "isla did not send back traces"
         in
         stop ();
@@ -224,27 +231,36 @@ let processing_f2m noparse typer run simp =
 let pmode_term = Term.(const processing_f2m $ noparse $ typer $ run $ simp)
 
 (** Does the actual processing of the trace *)
-let processing preprocessing pmode (filename, input, (config : Server.config)) : unit =
+let processing preprocessing pmode (filename, (segments, input), (config : Server.config)) : unit =
   let parse input =
+    let segments =
+      Option.map Fun.(Base.parse_segments_string ~filename %> function Segments s -> s) segments
+      |> Option.value ~default:[]
+    in
+    let num_segments = List.length segments in
     let t = Base.parse_trc_string ~filename input in
     let t = Manip.remove_ignored config.ignored_regs t in
+    if num_segments <> 0 then
+      base "Instrction segments:\n%t\n" (Pp.top Base.pp_instruction_segments (Segments segments));
     if preprocessing then begin
-      let pre = Preprocess.simplify_trc t in
+      let pre = Preprocess.simplify_trc ~num_segments t in
       base "Preprocessed trace:\n%t\n" (Pp.topi Base.pp_trc pre);
-      pre
+      pre, segments
     end
     else begin
       base "Trace:\n%t\n" (Pp.topi Base.pp_trc t);
-      t
+      t, segments
     end
   in
-  let typer t =
+  let typer (t, s) =
     let c = Type.type_trc t in
     base "Isla vars typing context:\n%t\n" (Pp.topi Type.pp_tcontext c);
     base "Register types:\n%t\n" (Pp.topi State.Reg.pp_index ());
-    t
+    (t, s)
   in
-  let run trace =
+  let run (trace, s) =
+    if not (List.is_empty s) then
+      fail "Cannot run a trace with instruction segments";
     let init_state = State.make () in
     State.lock init_state;
     base "Initial state:\n%t\n" (Pp.topi State.pp init_state);
