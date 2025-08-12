@@ -452,19 +452,19 @@ AArch64:
  *)
 
 (* matej version *)
-(*
+
 let relocation_regexp_string = "[ \t][0-9a-fA-F]+:[ \t]\\([0-9A-Z_]+\\)\t\\(.*\\)"
 
 let objdump_line_regexp =
   Str.regexp (" *\\([0-9a-fA-F]+\\):[ \t]\\([0-9a-fA-F ]+\\)\t\\([^ \r\t\n]+\\)[ \t]*\\([^:]*\\)\\(" ^ relocation_regexp_string ^ "\\)?$")
-*)
-(* ps version *)
 
+(* ps version *)
+(* 
 let relocation_regexp_string = "%[ \t]+[0-9a-fA-F]+:[ \t]+\\([0-9A-Z_]+\\)[ \t]+\\(.*\\)"
 
 let objdump_line_regexp =
   Str.regexp (" *\\([0-9a-fA-F]+\\):[ \t]\\([0-9a-fA-F ]+\\)\t\\([^ \r\t\n]+\\)[ \t]*\\([^%]*\\)\\(" ^ relocation_regexp_string ^ "\\)?$")
-
+*)
 let section_start_line_regexp =
   Str.regexp "Disassembly of section \\(.*\\):$"
 
