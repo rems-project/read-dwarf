@@ -458,6 +458,8 @@ let relocation_regexp_string = "[ \t][0-9a-fA-F]+:[ \t]\\([0-9A-Z_]+\\)\t\\(.*\\
 let objdump_line_regexp =
   Str.regexp (" *\\([0-9a-fA-F]+\\):[ \t]\\([0-9a-fA-F ]+\\)\t\\([^ \r\t\n]+\\)[ \t]*\\([^:]*\\)\\(" ^ relocation_regexp_string ^ "\\)?$")
 
+let objdump_command = "aarch64-linux-gnu-objdump -d  --reloc -w"
+
 (* ps version *)
 (* 
 let relocation_regexp_string = "%[ \t]+[0-9a-fA-F]+:[ \t]+\\([0-9A-Z_]+\\)[ \t]+\\(.*\\)"
@@ -525,6 +527,10 @@ let parse_objdump_line (s : string) : raw_objdump_instruction option =
     end
   else None
 
+let looks_like_objdump_line (s : string) : bool =
+  let regex = Str.regexp "[ \t]*[0-9a-fA-F]+:.*$" in
+  Str.string_match regex s 0
+
 (* let parse_objdump_relocation (s : string) : (string * string) option =
   let parse_hex_int s' =
     try Scanf.sscanf s' "%x" (fun i -> i)
@@ -561,7 +567,10 @@ let rec parse_objdump_lines arch lines (next_index : int) (last_address : int64 
     let section = Option.fold ~none:section ~some:Option.some @@ parse_section_start lines.(next_index) in
     match parse_objdump_line lines.(next_index) with
     (* skip over unparseable lines *)
-    | None -> parse_objdump_lines arch lines (next_index + 1) last_address section
+    | None ->
+        if looks_like_objdump_line lines.(next_index) then
+          warn "Skipping unparseable objdump line %d: %s\nIf parsing aarch64 with relocations, generate objdump using: %s" next_index lines.(next_index) objdump_command;
+        parse_objdump_lines arch lines (next_index + 1) last_address section
     | Some ((addr, _opcode_bytes, _mnemonic, _operands, _relocation) as i) -> (
         let mki = with_symbolic_address (Option.get section) in
         match last_address with
