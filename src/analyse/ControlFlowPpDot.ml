@@ -134,6 +134,15 @@ type graph_cfg = {
   gc_subgraphs : (string (*subgraph name*) * string (*subgraph colour*) * graph_cfg) list;
 }
 
+
+(* debugging pp *)
+
+let ppraw_instruction i = 
+  pp_addr i.i_addr ^ " " ^ i.i_mnemonic
+
+
+
+
 (* the gc_edges_exiting have to be kept separate because if they are within the subgraph in the generated .dot, graphviz pulls the target node *within* the subgraph, even if it isn't *)
 
 let nesting_init (sso : Dwarf.sdt_subroutine option) =
@@ -551,6 +560,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
 
   (* need to track branch-visited edges because Hf loops back to a nop (abort.c) and a wfi (wait for interrupt)*)
   let rec next_non_start_node_name nesting visited k =
+(*Printf.printf "next_non_start_node_name k=%i  %s visited=%s\n" k (ppraw_instruction an.instructions.(k)) ("["^String.concat ";" (List.map string_of_int visited) ^"]"); flush stdout;*)
     let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_plain -> (
@@ -595,6 +605,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
   (* make the little piece of graph from a start node at k to its first non-start node *)
   let graphette_start _return_target (k, nesting) : graph_cfg * (index * nesting) list
       (* work_list_new *) =
+(*Printf.printf "graphette_start\n"; flush stdout;*)
     let i = an.instructions.(k) in
     let ss = an.elf_symbols.(k) in
     let (s, nn) =
@@ -617,8 +628,11 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
         nc_visited = is_visited k;
       }
     in
+(*Printf.printf "graphette_start after node\n";flush stdout;*)
     let (nn', k') = next_non_start_node_name nesting [] k in
+(*Printf.printf "graphette_start after next_not_start_node_name\n";flush stdout;*)
     let edge = (node.nc_name, nn', CFG_edge_flow) in
+(*Printf.printf "graphette_start return value\n";flush stdout;*)
     ( {
         gc_start_nodes = [node];
         gc_nodes = [];
@@ -637,7 +651,8 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
   let rec graphette_normal return_target (k, nesting) :
       graph_cfg * (index * nesting) list * (* work_list_new *)
       (index * nesting) list (* bl targets *) =
-    (*Printf.printf "gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
+    (*Printf.printf "graphette_normal gb k=%d\n a=%s" k (pp_addr (address_of_index k));flush stdout;*)
+(*    Printf.printf "graphette_normal gb k=%d\n" k ;flush stdout;*)
     let i = an.instructions.(k) in
     match i.i_control_flow with
     | C_no_instruction ->
@@ -738,7 +753,34 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
           },
           work_list_new,
           [] )
-    | C_branch_and_link (_, s) ->
+    | C_branch_and_link (a, s) ->
+(* 2025-09-27 ghastly hackery to ignore non-existent node for call to memset - which also ignores any subsequent code??? *)
+(*
+          match
+            List.filter_map
+              (function
+                | (T_branch_and_link_call, _, k', _) -> Some k'
+                | (T_branch_and_link_call_noreturn, _, k', _) -> Some k'
+                | _ -> None)
+              (discard_out_of_range_targets i.i_targets)
+          with
+          | [] ->
+        let node = mk_node nesting k CFG_node_branch_and_link s in
+              let edges = [] in
+              ( {
+                  gc_start_nodes = [];
+                  gc_nodes = [node];
+                  gc_edges = edges;
+                  gc_edges_exiting = [];
+                  gc_subgraphs = [];
+                },
+                [],
+                (*if recurse_flat then [(k_call, nesting_call)] else*) [] )
+
+
+          | [k_call] -> 
+*)
+(* end of ghastly hackery *)
         let k_call =
           match
             List.filter_map
@@ -749,7 +791,8 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               (discard_out_of_range_targets i.i_targets)
           with
           | [k_call] -> k_call
-          | _ -> fatal "non-unique k_call"
+          | [] -> fatal "non-existent k_call: %s %s" (pp_addr a) s
+          | _ -> fatal "non-unique k_call: %s %s" (pp_addr a) s
         in
         let nn_k_successor =
           match
@@ -894,19 +937,21 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
             [] )
   (* make pieces of graph, using graphette_start and/or graphette normal as appropriate, for each index in the work_list *)
   and mk_graph' return_target g_acc (visited : index list) (work_list : (index * nesting) list) =
+(*Printf.printf "mk_graph'\n";flush stdout;*)
     match work_list with
     | [] -> g_acc
     | (k, nesting) :: work_list' -> (
         if List.mem Int.equal k visited then mk_graph' return_target g_acc visited work_list'
         else
-          (* Printf.printf "mk_graph' working on %d %s %s\n" k
+           ((*Printf.printf "mk_graph' working on %d %s %s\n" k
                (pp_addr an.instructions.(k).i_addr)
                (String.concat "," an.elf_symbols.(k));
-             flush stdout;
-          *)
+             flush stdout;*)
+          
           match (is_graphette_start k, is_graph_non_start_node k) with
           | (true, true) ->
               (* graphette start, where the initial instruction is also a non-start node *)
+              (*Printf.printf "graphette start, where the initial instruction is also a non-start node\n";flush stdout;*)
               let (g1, _) = graphette_start return_target (k, nesting) in
               let (g2, work_list_new, bl_target_indices) =
                 graphette_normal return_target (k, nesting)
@@ -917,6 +962,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               mk_graph' return_target g_acc' visited' work_list'
           | (true, false) ->
               (* graphette start, where the initial instruction is not also a non-start node *)
+              (*Printf.printf "graphette start, where the initial instruction is not also a non-start node\n";flush stdout;*)
               let (g1, work_list_new) = graphette_start return_target (k, nesting) in
               let g_acc' = graph_cfg_union g1 g_acc in
               let visited' = k :: visited in
@@ -924,6 +970,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
               mk_graph' return_target g_acc' visited' work_list'
           | (false, true) ->
               (* non-graphette-start, non-start node*)
+              (*Printf.printf "non-graphette-start, non-start node\n";flush stdout;*)
               let (g2, work_list_new, bl_target_indices) =
                 graphette_normal return_target (k, nesting)
               in
@@ -939,8 +986,9 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
                 k
                 (pp_addr an.instructions.(k).i_addr);
               mk_graph' return_target g_acc visited work_list'
-      )
+      ))
   and mk_graph return_target (work_list : (index * nesting) list) =
+(*Printf.printf "mk_graph\n";flush stdout;*)
     mk_graph' return_target (graph_cfg_empty ()) [] work_list
   in
 
@@ -982,9 +1030,11 @@ let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
       | CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]"
       | _ -> ""
     in
+    let tooltip =  (html_escape (String.concat "\n" (node.nc_ppd_instruction @ pp_node_inlining node))) in
+    (*let _ = Printf.printf "\n pp_cfg tooltip: %s\n" tooltip in *)
     Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name node.nc_name)
       node.nc_label
-      (html_escape (String.concat "\n" (node.nc_ppd_instruction @ pp_node_inlining node)))
+      tooltip
       margin shape
       (pp_colour node.nc_colour node.nc_visited)
   in
@@ -992,7 +1042,6 @@ let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
   let c = open_out cfg_dot_file in
   Printf.fprintf c "digraph g {\n";
   Printf.fprintf c "rankdir=\"LR\";\n";
-
   let rec pp_cfg' graph_colour indent (g : graph_cfg) : unit =
     (* edges should really carry their colour, as nodes do, without this hackish passing of graph_colour *)
     List.iter

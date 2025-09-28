@@ -93,6 +93,25 @@ let pp_target_kind_short = function
   | T_smc_hvc_successor -> "smc-hvc-succ"
   | T_out_of_range _ -> "out-of-range"
 
+let pp_target_kind = function
+  | T_plain_successor               -> "T_plain_successor"
+  | T_branch                        -> "T_branch"
+  | T_branch_and_link_call          -> "T_branch_and_link_call"
+  | T_branch_and_link_call_noreturn -> "T_branch_and_link_call_noreturn"
+  | T_branch_and_link_successor     -> "T_branch_and_link_successor"
+  | T_branch_cond_branch            -> "T_branch_cond_branch"
+  | T_branch_cond_successor         -> "T_branch_cond_successor"
+  | T_branch_register               -> "T_branch_register"
+  | T_smc_hvc_successor             -> "T_smc_hvc_successor"
+  | T_out_of_range _                -> "T_out_of_range"
+
+let pp_target (tk,a,k,s) = pp_target_kind tk ^ " " ^ pp_addr a ^ " " ^ string_of_int k ^ " " ^ s
+
+let ppraw_instruction i =
+  Printf.sprintf "%s %s %s %s" (pp_addr i.i_addr) (i.i_mnemonic) (pp_control_flow_instruction i.i_control_flow) ("["^String.concat ";" (List.map pp_target i.i_targets) ^ "]")
+
+let ppraw_instructions (instructions:instruction array) = Array.iteri (function k -> function i -> Printf.printf "%i %s\n" k (ppraw_instruction i)) instructions 
+
 (*****************************************************************************)
 (**   find targets of each entry of a branch-table description file          *)
 
@@ -323,9 +342,10 @@ let parse_control_flow_instruction symbol_map base s mnemonic s' relocation : co
   let relocation_target = Option.bind relocation (fun (_typ, target) ->
     Option.map (fun a -> (a, target)) (parse_relocation_target symbol_map target)
   ) in
-  (*   Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic (String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic))) s';flush stdout;*)
+(*   Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic "" (*(String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic)))*)  s';flush stdout;*)
   let c =
     if List.mem String.equal mnemonic [".word"] then C_no_instruction
+    else if List.mem String.equal mnemonic ["missing"] then C_no_instruction  (* hacky - should handle missing instructions more coherently*)
     else if List.mem String.equal mnemonic ["ret"] then C_ret
     else if List.mem String.equal mnemonic ["eret"] then C_eret
     else if List.mem String.equal mnemonic ["br"] then C_branch_register mnemonic
@@ -573,14 +593,18 @@ let rec parse_objdump_lines arch lines (next_index : int) (last_address : int64 
         parse_objdump_lines arch lines (next_index + 1) last_address section
     | Some ((addr, _opcode_bytes, _mnemonic, _operands, _relocation) as i) -> (
         let mki = with_symbolic_address (Option.get section) in
-        match last_address with
+(*Printf.printf "objdump line %s %s\n" (pp_addr (let (a,_,_,_,_)= mki i in a)) (lines.(next_index));*)
+        match last_address with 
         | None -> mki i :: parse_objdump_lines arch lines (next_index + 1) (Some addr) section
         | Some last_address' ->
             let last_address'' = Int64.add last_address' (Int64.of_int 4) in
             if addr > last_address'' then
               (* fake up "missing" instructions for any gaps in the address space*)
               (*warn "gap in objdump instruction address sequence at %s" (pp_addr last_address'');*)
-              mki (last_address'', [], "missing", "", None)
+              (let x = mki (last_address'', [], "missing", "", None) in 
+(*Printf.printf "faked up objdump line %s %s\n" (pp_addr (let (a,_,_,_,_)= x in a)) (lines.(next_index));*)
+ x
+)
               :: parse_objdump_lines arch lines next_index (Some last_address'') section
             else mki i :: parse_objdump_lines arch lines (next_index + 1) (Some addr) section
       )
@@ -653,6 +677,8 @@ let mk_instructions test filename_objdump_d filename_branch_table_option :
             })
       objdump_instructions
   in
+
+(*  let _ = ppraw_instructions instructions in*)
 
   let address_of_index k = instructions.(k).i_addr in
 

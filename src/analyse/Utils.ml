@@ -62,6 +62,8 @@ let pp_addr (a : natural) =
   | Failure s -> let s' = "Failure: int64_of_big_int " ^ Sym.to_string a in (warn "pp_addr failure: %s" s); s'
   | e -> raise e
 
+
+
 (** index into instruction-indexed arrays *)
 type index = int
 
@@ -106,7 +108,11 @@ let html_escape s =
                   | '\'' -> Buffer.add_string buf "&apos"
                   | c -> Buffer.add_char buf c
                 )
-              | false -> Buffer.add_char buf c
+              | false -> (
+                  match c with 
+                  | '\"' -> Buffer.add_string buf "\\\"" (*TODO: this doesn't make dot generate the right svg *)
+                  | c -> Buffer.add_char buf c
+                )
             )
         ))
     s;

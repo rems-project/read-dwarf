@@ -76,6 +76,7 @@ type opcode = BytesSeq.t * Relocation.t option
     Also, right now the cache invalidation is based on
     this and not on the actual isla version, which may be dangerous.*)
 let required_version = "v0.1.0-113-g711f7b5"
+(*let required_version = "esop22-154-gf46d804" (* according to Matej email of 29 August 2025 *)*)
 
 let req_num = ref (-1)
 
