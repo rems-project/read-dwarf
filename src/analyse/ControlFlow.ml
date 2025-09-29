@@ -151,7 +151,8 @@ let branch_table_target_addresses test filename_branch_table_option : (addr * ad
 
   (* pull out .rodata section from ELF *)
   let ((_, rodata_addr, bs) as _rodata : Dwarf.p_context * Sym.t * BytesSeq.t) =
-    Dwarf.extract_section_body_without_relocations test.elf_file ".rodata" false
+    (*Dwarf.extract_section_body_without_relocations test.elf_file ".rodata" false*)
+    Dwarf.extract_section_body_without_relocations test.elf_file ".hyp.rodata" false
   in
   (* chop into bytes *)
   let rodata_bytes : char array = BytesSeq.to_array bs in
