@@ -89,6 +89,9 @@ val get_vec_until : 'a t -> int -> 'a Vec.t
 (** Map the function over the fullvec. Postcompose the map on the generator *)
 val map : ('a -> 'b) -> 'a t -> 'b t
 
+(** Same as {!map} but with the index *)
+val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
+
 (** Map the function over the fullvector by mutation. Postcompose the map on the generator.contents
     Warning, a lot of {!map_mut} may make the generator big and slow.
     Maybe try to use {!set_after} to reset it when required.*)

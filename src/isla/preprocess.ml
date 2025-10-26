@@ -68,7 +68,7 @@ let expect_processed = function
   | _ -> Raise.fail "Variables should be processed at this point"
 
 (** Preprocess a single trace *)
-let simplify_trc (Trace events : rtrc) : rtrc =
+let simplify_trc ?(num_segments = 0) (Trace events : rtrc) : rtrc =
   (* Phase 1: Discover which variable are actually used *)
   let used = HashVector.empty () in
   let process_used event =
@@ -90,7 +90,8 @@ let simplify_trc (Trace events : rtrc) : rtrc =
      not yet commited are inlined.
      Variables are also renumbered at the same time. *)
   let simplify_context = HashVector.empty () in
-  let new_variables = Counter.make 0 in
+  (* Segment variables should not be renamed (we assume that those are v0-v(num_segments-1)) *)
+  let new_variables = Counter.make num_segments in
   let res = ref [] in
   let push_event (d : revent) = res := d :: !res in
   let push_smt loc (d : rsmt) = push_event (Smt (d, loc)) in
@@ -100,13 +101,13 @@ let simplify_trc (Trace events : rtrc) : rtrc =
     match HashVector.get simplify_context i with
     | Declared { ty; loc } ->
         debug "Commiting declared variable %d" i;
-        let new_val = Counter.get new_variables in
+        let new_val = if i < num_segments then i else Counter.get new_variables in
         HashVector.set simplify_context i (Processed new_val);
         push_smt loc (DeclareConst (new_val, ty));
         new_val
     | Defined { exp; loc } ->
         debug "Commiting defined variable %d" i;
-        let new_val = Counter.get new_variables in
+        let new_val = if i < num_segments then i else Counter.get new_variables in
         HashVector.set simplify_context i (Processed new_val);
         debug "New id is %d" new_val;
         let new_exp = simplify_exp exp in
@@ -157,12 +158,24 @@ let simplify_trc (Trace events : rtrc) : rtrc =
     (1 + Counter.read new_variables);
   Trace (List.rev !res)
 
-let preprocess (config : Server.config) (trcs : (bool * rtrc) list) : rtrc list =
+let preprocess (config : Server.config) ((segs, trcs) : Server.trcs) : rtrcs =
+  let num_segments =
+    segs
+    |> Option.map (fun (Segments s) -> 
+      let x = List.length s in
+      assert (List.for_all (fun (Segment (_,_,v)) -> v < x) s);
+      x
+    )
+    |> Option.value ~default:0
+  in
   let preprocess_one (b, trc) =
     if not b then None
     else
       let trc = trc |> Manip.remove_init |> Manip.remove_ignored config.ignored_regs in
-      let trc = simplify_trc trc in
+      let trc = simplify_trc ~num_segments trc in
       Some trc
   in
-  List.filter_map preprocess_one trcs
+  let trcs = List.filter_map preprocess_one trcs in
+  match segs with
+  | None -> Traces (trcs)
+  | Some segs -> TracesWithSegments (segs, trcs)

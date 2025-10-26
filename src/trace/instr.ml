@@ -60,6 +60,8 @@ type trace_meta = {
   written : Reg.t list;
 }
 
+module SMap = Map.Make (String)
+
 (** A full instruction representation *)
 type t = {
   traces : trace_meta list;
@@ -67,6 +69,7 @@ type t = {
   read : Reg.t list;
   written : Reg.t list;
   opcode : BytesSeq.t;
+  relocation : Elf.Relocations.rel option;
 }
 
 let dedup_regs = List.sort_uniq State.Reg.compare
@@ -81,7 +84,7 @@ let trace_meta_of_trace trace =
   let jump = ref None in
   let process_var = function
     | Base.Var.Register reg -> read := reg :: !read
-    | Base.Var.(Read _ | NonDet _) -> ()
+    | Base.Var.(Read _ | NonDet _ | Segment _) -> ()
   in
   let process_exp : Base.exp -> unit = Ast.Manip.exp_iter_var process_var in
   let process_event : Base.event -> unit = function
@@ -99,16 +102,18 @@ let trace_meta_of_trace trace =
   { trace; jump_target = !jump; read = dedup_regs !read; written = dedup_regs !written }
 
 (** Generate full instruction data from a list of traces *)
-let of_traces opcode traces =
+let of_traces ((opcode: BytesSeq.t), (relocation: Elf.Relocations.rel option)) traces =
   let traces = List.map trace_meta_of_trace traces in
   let length = BytesSeq.length opcode in
   let read = dedup_regs @@ List.concat_map (fun (tr : trace_meta) -> tr.read) traces in
   let written = dedup_regs @@ List.concat_map (fun (tr : trace_meta) -> tr.written) traces in
-  { traces; length; read; written; opcode }
+
+  { traces; length; read; written; opcode; relocation }
 
 (** Pretty print the representation of an instruction *)
 let pp instr =
   let open Pp in
+  !^"Relocation" ^^ optional Elf.Relocations.pp_rel instr.relocation ^^ hardline ^^
   separate_mapi hardline
     (fun i trc -> prefix 4 1 (dprintf "Trace %d:" i) (Base.pp trc.trace))
     instr.traces

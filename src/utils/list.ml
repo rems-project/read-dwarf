@@ -298,3 +298,17 @@ let prod l1 l2 =
 
 (** Monadic merge. [let* x = xl and* y = yl in ... = let* x= xl in let* y = yl in ...] *)
 let ( and* ) = prod
+
+let hd_opt = function
+| [] -> None
+| h :: _ -> Some h
+
+let rec transpose ~defaults l =
+  let first = map hd_opt l in
+  let rest = map (drop 1) l in
+  if for_all Stdlib.Option.is_none first then
+    []
+  else
+    let t = transpose ~defaults rest in
+    let h = combine first defaults |> map (fun (value, default) -> Stdlib.Option.value ~default value) in
+    h :: t

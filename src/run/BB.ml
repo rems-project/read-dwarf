@@ -93,7 +93,7 @@ let len =
   in
   Arg.(value & opt (some int) None & info ["l"; "len"] ~doc)
 
-let get_code elfname symname len : BytesSeq.t =
+let get_code elfname symname len : Elf.RelocBytesSeq.t =
   let elf = Elf.File.of_file elfname in
   Arch.load_elf_arch elf;
   let (sym, off) =

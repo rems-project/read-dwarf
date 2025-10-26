@@ -1,0 +1,6 @@
+(library
+ (name relsim)
+ (public_name read-dwarf.relsim)
+ (flags
+  (:standard -open Utils))
+ (libraries utils ast state run z3))

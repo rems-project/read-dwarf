@@ -142,7 +142,7 @@ let process_file () : unit =
               (Array.find_all_indices (function ss -> ss <> []) an.elf_symbols)
           in
           let graph = mk_cfg test an visitedo "" false false start_indices in
-          Printf.printf "cfg branch nodes: %d\n" (count_branch_nodes graph);
+          Printf.printf "cfg branch nodes: %d\n" (count_branch_nodes graph); flush stdout;
           (*            let graph' = reachable_subgraph graph ["mpool_fini"] in*)
           pp_cfg graph cfg_dot_file true
       | None -> ()

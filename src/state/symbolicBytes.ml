@@ -126,6 +126,7 @@ module Make (Var : Exp.Var) : S with type var = Var.t = struct
     assert (pos + len <= elen);
     (Typed.extract ~last:((8 * (pos + len)) - 1) ~first:(8 * pos) e, len)
 
+  (* TODO should we care about endianness? *)
   (* Warning: This code is complicated because of all the indices. I tried to make diagrams
      to explain *)
   let sub ~pos ~len sb =
@@ -148,7 +149,7 @@ module Make (Var : Exp.Var) : S with type var = Var.t = struct
                        |<off_len>|
              *)
           let next = pos + off_len in
-          let* rest = sub_list ~pos:next ~len:(len - next) sb in
+          let* rest = sub_list ~pos:next ~len:(len - off_len) sb in
           let nexp = Typed.extract ~last:((8 * elen) - 1) ~first:(8 * off) e in
           Some (nexp :: rest)
         else
@@ -166,7 +167,7 @@ module Make (Var : Exp.Var) : S with type var = Var.t = struct
           Some [Typed.extract ~last:((8 * taken_len) - 1) ~first:(8 * off) e]
     in
     let+ list = sub_list ~pos ~len sb in
-    Typed.concat list
+    Typed.concat @@ List.rev list
 
   let blit_exp exp ~pos ~len sb =
     assert (len > 0);

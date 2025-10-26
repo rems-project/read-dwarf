@@ -55,26 +55,32 @@ type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
 
 type linksem_typ = Z.t
 
+type data = RelocBytesSeq.t
+
 (** The ELF symbol. This type guarantee the data exists contrary to linksem symbols
     (it may be all zeros though) *)
 type t = {
   name : string;
   other_names : string list;
   typ : typ;
-  addr : int;
+  addr : Address.t;
+  (* addr : int; *)
   size : int;
   writable : bool;
-  data : BytesSeq.t;
+  data : data;
 }
 
-(** The type of an ELF symbol in linksem. See {!of_linksem}*)
-type linksem_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
+(** The type of an ELF symbol in linksem (relocatable file). See {!of_linksem_relocatable}*)
+type linksem_relocatable_t = LinksemRelocatable.symbol
+
+(** The type of an ELF symbol in linksem (executable file). See {!of_linksem_executable}*)
+type linksem_executable_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
 
 (** Add a name to the other names list *)
 val push_name : string -> t -> t
 
 (** Check if an address is in a symbol *)
-val is_in : t -> int -> bool
+(* val is_in : t -> int -> bool *)
 
 (** For conformance with the {!Utils.RngMap.LenObject} module type *)
 val len : t -> int
@@ -82,27 +88,36 @@ val len : t -> int
 (** Convert the integer type into typ *)
 val typ_of_linksem : linksem_typ -> typ
 
-(** Get the type from the linksem symbol type *)
-val linksem_typ : linksem_t -> linksem_typ
+(** Get the type from the linksem symbol type (relocatable file) *)
+val linksem_relocatable_typ : linksem_relocatable_t -> linksem_typ
+
+(** Get the type from the linksem symbol type (executable file) *)
+val linksem_executable_typ : linksem_executable_t -> linksem_typ
 
 (** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded.*)
 exception LoadingError of string * int
 
-(** Convert a symbol from linksem to read-dwarf representation using the segment data
+(** Convert a symbol from linksem to read-dwarf representation (relocatable file).
+
+    May raise {!LoadingError} when the symbol has no data
+*)
+val of_linksem_relocatable : linksem_relocatable_t -> t
+
+(** Convert a symbol from linksem to read-dwarf representation using the segment data (executable file).
 
     May raise {!LoadingError} when the symbol has no data and the
     data cannot be found in the segments
 *)
-val of_linksem : Segment.t list -> linksem_t -> t
+val of_linksem_executable : Segment.t list -> linksem_executable_t -> t
 
 (** Tell if a symbol type is interesting for readDwarf purposes *)
 val is_interesting : typ -> bool
 
 (** Tell if a linksem symbol is interesting for readDwarf purposes *)
-val is_interesting_linksem : linksem_t -> bool
+val is_interesting_linksem : ('a -> linksem_typ) -> 'a -> bool
 
 (** Take the BytesSeq.t corresponding to the offset and length *)
-val sub : t -> int -> int -> BytesSeq.t
+val sub : t -> int -> int -> data
 
 (** Starting address comparison *)
 val compare : t -> t -> int

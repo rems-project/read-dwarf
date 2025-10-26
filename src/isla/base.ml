@@ -97,6 +97,8 @@ type rsmt = lrng smt
 (** The type of raw expressions out of the parser *)
 type rexp = lrng exp
 
+type rtrcs = lrng trcs
+
 (*****************************************************************************)
 (*****************************************************************************)
 (*****************************************************************************)
@@ -173,6 +175,24 @@ let parse_trc_string ?(filename = "default") (s : string) : rtrc =
 let parse_trc_channel ?(filename = "default") (c : in_channel) : rtrc =
   parse_trc ~filename @@ Lexing.from_channel ~with_positions:true c
 
+let parse_trcs = parse Parser.trcs_start
+
+let parse_trcs_string ?filename (s : string) : rtrcs =
+  parse_trcs ?filename @@ Lexing.from_string ~with_positions:true s
+
+let parse_trcs_channel ?filename (c : in_channel) : rtrcs =
+  parse_trcs ?filename @@ Lexing.from_channel ~with_positions:true c
+
+let parse_segments ?filename l = match parse_trcs ?filename l with
+| TracesWithSegments (s, []) -> s
+| _ -> raise (ParseError (l.lex_start_p, "Data is not SEGMENTS"))
+
+let parse_segments_string ?filename (s : string) : instruction_segments =
+  parse_segments ?filename @@ Lexing.from_string ~with_positions:true s
+
+let parse_segments_channel ?filename (c : in_channel) : instruction_segments =
+  parse_segments ?filename @@ Lexing.from_channel ~with_positions:true c
+
 (*$R
     try
       let exp = parse_exp_string ~filename:"test" "v42" in
@@ -190,6 +210,11 @@ let parse_trc_channel ?(filename = "default") (c : in_channel) : rtrc =
     with
     | exn -> assert_failure (Printf.sprintf "Thrown: %s" (Printexc.to_string exn))
 *)
+
+
+let trcs_to_list = function
+| Traces trcs -> [], trcs
+| TracesWithSegments (Segments s, trcs) -> s, trcs
 
 (*****************************************************************************)
 (*****************************************************************************)

@@ -113,6 +113,8 @@ module Var : sig
     | RetAddr  (** The return address: The address to which a "return" instruction would jump. *)
     | NonDet of int * Ast.Size.t
         (** Variable representing non-determinism in the spec. Can only be a bit-vector for now. *)
+    | Section of string
+    (** Symbolic base address of ELF section. Assume 64bit for now. *)
 
   (** Convert the variable to the string encoding. For parsing infrastructure reason,
       the encoding must always contain at least one [:]. *)
@@ -143,6 +145,9 @@ module Var : sig
 
   (** Get the type of a variable *)
   val ty : t -> Reg.ty
+
+  (** Get a fresh NonDet variable *)
+  val new_nondet : Ast.Size.t -> t
 end
 
 (** The type of variables *)
@@ -156,6 +161,12 @@ module Exp : sig
 
   (** Create an expression from an register and a state id *)
   val of_reg : id -> Reg.t -> t
+
+  val expect_address : t -> Elf.Address.t
+
+  val of_section : ?size:int -> string -> t
+
+  val of_address : ?size:int -> Elf.Address.t -> t
 end
 
 type exp = Exp.t
@@ -188,6 +199,18 @@ module Tval : sig
 end
 
 type tval = Tval.t
+
+module Relocation : sig
+    type t = {
+        value: Exp.t;
+        asserts: Exp.t list;
+        target: Elf.Relocations.target;
+    }
+
+    val of_elf : Elf.Relocations.rel -> t
+
+    val exp_of_data : Elf.Symbol.data -> (exp * exp list)
+end
 
 (** {1 State memory management } *)
 
@@ -236,6 +259,9 @@ module Mem : sig
 
   (** Get the main fragment of memory *)
   val get_main : t -> Fragment.t
+
+  (** Get fragment *)
+  val get_frag : t -> int -> Exp.t * Fragment.t 
 end
 
 (** {1 State type } *)
@@ -284,6 +310,7 @@ type t = private {
   mutable regs : Tval.t Reg.Map.t;  (** The values and types of registers *)
   read_vars : Tval.t Vec.t;  (** The results of reads made since base state *)
   mutable asserts : exp list;  (** Only asserts since base_state *)
+  mutable relocation_asserts : exp list;  (** Only asserts since base_state *)
   mem : Mem.t;
   elf : Elf.File.t option;
       (** Optionally an ELF file, this may be used when running instructions on
@@ -292,7 +319,7 @@ type t = private {
           However the symbolic execution should always be more concrete with
           it than without it *)
   fenv : Fragment.env;  (** The memory type environment. See {!Fragment.env} *)
-  mutable last_pc : int;
+  mutable last_pc : Elf.Address.t;
       (** The PC of the instruction that lead into this state. The state should be
           right after that instruction. This has no semantic meaning as part of the state.
           It's just for helping knowing what comes from where *)
@@ -381,10 +408,19 @@ val copy : ?elf:Elf.File.t -> t -> t
     The returned state is always unlocked *)
 val copy_if_locked : ?elf:Elf.File.t -> t -> t
 
+val init_sections : sp:(unit -> Reg.t) -> addr_size:int -> t -> t
+
+(** Assigns all sections with global objects to Main fragment *)
+val init_sections_symbolic : sp:(unit -> Reg.t) -> addr_size:int -> t -> t
+
+
 (** {1 State convenience manipulation } *)
 
 (** Add an assertion to a state *)
 val push_assert : t -> exp -> unit
+
+(** Add an assertion to a state *)
+val push_relocation_assert : t -> exp -> unit
 
 (** Set a state to be impossible (single [false] assert). *)
 val set_impossible : t -> unit
@@ -462,7 +498,7 @@ val update_reg_exp : t -> Reg.t -> (exp -> exp) -> unit
 (** {1 Pc manipulation } *)
 
 (** Set the PC to a concrete value and keep its type appropriate *)
-val set_pc : pc:Reg.t -> t -> int -> unit
+val set_pc : pc:Reg.t -> t -> Elf.Address.t -> unit
 
 (** Bump a concrete PC by a concrete bump (generally the size of a non-branching instruction *)
 val bump_pc : pc:Reg.t -> t -> int -> unit
@@ -471,7 +507,7 @@ val bump_pc : pc:Reg.t -> t -> int -> unit
 val concretize_pc : pc:Reg.t -> t -> unit
 
 (** Set the [last_pc] of the state *)
-val set_last_pc : t -> int -> unit
+val set_last_pc : t -> Elf.Address.t -> unit
 
 (** {1 Pretty printing } *)
 

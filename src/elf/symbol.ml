@@ -42,27 +42,36 @@
 (*                                                                                  *)
 (*==================================================================================*)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
 (* The documentation is in the mli file *)
 
 type typ = NOTYPE | OBJECT | FUNC | SECTION | FILE | UNKNOWN
 
 type linksem_typ = Z.t
 
+type data = RelocBytesSeq.t
+
 type t = {
   name : string;
   other_names : string list;
   typ : typ;
-  addr : int;
+  addr : Address.t;
+  (* addr : int; *)
   size : int;
   writable : bool;
-  data : BytesSeq.t;
+  data : data;
 }
 
-type linksem_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
+type linksem_relocatable_t = LinksemRelocatable.symbol
+
+type linksem_executable_t = string * (Z.t * Z.t * Z.t * BytesSeq.t option * Z.t)
 
 let push_name s t = { t with other_names = s :: t.other_names }
 
-let is_in t addr = t.addr <= addr && addr < t.addr + t.size
+(* let is_in t addr = t.addr <= addr && addr < t.addr + t.size *)
 
 let len t = t.size
 
@@ -75,7 +84,9 @@ let typ_of_linksem ltyp =
   | 4 -> FILE
   | _ -> UNKNOWN
 
-let linksem_typ (_name, (typ, _size, _addr, _data, _)) = typ
+let linksem_relocatable_typ (_name, (typ, _size, _addr, _data, _), _) = typ
+
+let linksem_executable_typ (_name, (typ, _size, _addr, _data, _)) = typ
 
 (** [LoadingError(name,addr)] means that symbol [name] at [addr] could not be loaded *)
 exception LoadingError of string * int
@@ -86,7 +97,15 @@ let _ =
         Some (Printf.sprintf "Symbol %s at 0x%x could not be loaded" name addr)
     | _ -> None)
 
-let of_linksem segs (name, (typ, size, addr, data, _)) =
+let of_linksem_relocatable (name, (typ, size, addr, data, _), writable) =
+  let typ = typ_of_linksem typ in
+  let size = Z.to_int size in
+  let addr = Address.of_linksem_relocatable addr in
+  let data = RelocBytesSeq.of_linksem data in
+  (* let addr = SMap.find section locs + Z.to_int offset in *)
+  { name; other_names = []; typ; size; addr; data; writable }
+
+let of_linksem_executable segs (name, (typ, size, addr, data, _)) =
   let typ = typ_of_linksem typ in
   let size = Z.to_int size in
   let addr = Z.to_int addr in
@@ -97,15 +116,15 @@ let of_linksem segs (name, (typ, size, addr, data, _)) =
   let data =
     data
     |> Option.value_fun ~default:(fun () ->
-           Segment.get_addr (BytesSeq.getbs ~len:size) segment addr)
+      Segment.get_addr Fun.(RelocBytesSeq.expect_bs_no_relocations %> BytesSeq.getbs ~len:size) segment addr)
   in
-  { name; other_names = []; typ; size; addr; data; writable }
+  { name; other_names = []; typ; size; addr=Address.absolute addr; data=RelocBytesSeq.of_bytes_seq data; writable }
 
 let is_interesting = function OBJECT | FUNC -> true | _ -> false
 
-let is_interesting_linksem lsym = lsym |> linksem_typ |> typ_of_linksem |> is_interesting
+let is_interesting_linksem get_typ lsym = lsym |> get_typ |> typ_of_linksem |> is_interesting
 
-let sub sym off len = BytesSeq.sub sym.data off len
+let sub sym off len = RelocBytesSeq.sub sym.data off len
 
 let compare s1 s2 = compare s1.addr s2.addr
 
@@ -128,8 +147,9 @@ let pp_raw sym =
            ("name", !^(sym.name));
            ("other names", separate nbspace (List.map string sym.other_names));
            ("typ", pp_typ sym.typ);
-           ("addr", ptr sym.addr);
+           ("addr", Address.pp sym.addr);
+           (* ("addr", ptr sym.addr); *)
            ("size", ptr sym.size);
            ("writable", bool sym.writable);
-           ("data", BytesSeq.ppby ~by:4 sym.data);
+           ("data", RelocBytesSeq.pp sym.data);
          ])

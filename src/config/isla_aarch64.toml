@@ -1,62 +1,27 @@
-#==================================================================================#
-#  BSD 2-Clause License                                                            #
-#                                                                                  #
-#  Copyright (c) 2020-2021 Thibaut Pérami                                          #
-#  Copyright (c) 2020-2021 Dhruv Makwana                                           #
-#  Copyright (c) 2019-2021 Peter Sewell                                            #
-#  All rights reserved.                                                            #
-#                                                                                  #
-#  This software was developed by the University of Cambridge Computer             #
-#  Laboratory as part of the Rigorous Engineering of Mainstream Systems            #
-#  (REMS) project.                                                                 #
-#                                                                                  #
-#  This project has been partly funded by EPSRC grant EP/K008528/1.                #
-#  This project has received funding from the European Research Council            #
-#  (ERC) under the European Union's Horizon 2020 research and innovation           #
-#  programme (grant agreement No 789108, ERC Advanced Grant ELVER).                #
-#  This project has been partly funded by an EPSRC Doctoral Training studentship.  #
-#  This project has been partly funded by Google.                                  #
-#                                                                                  #
-#  Redistribution and use in source and binary forms, with or without              #
-#  modification, are permitted provided that the following conditions              #
-#  are met:                                                                        #
-#  1. Redistributions of source code must retain the above copyright               #
-#     notice, this list of conditions and the following disclaimer.                #
-#  2. Redistributions in binary form must reproduce the above copyright            #
-#     notice, this list of conditions and the following disclaimer in              #
-#     the documentation and/or other materials provided with the                   #
-#     distribution.                                                                #
-#                                                                                  #
-#  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''              #
-#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED               #
-#  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A                 #
-#  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR             #
-#  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,                    #
-#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT                #
-#  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF                #
-#  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND             #
-#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,              #
-#  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT              #
-#  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF              #
-#  SUCH DAMAGE.                                                                    #
-#                                                                                  #
-#==================================================================================#
-
 # This is a config file for the Sail generated from ARM-ASL
-# It is copied from the Isla repo and should be synced periodically.
-# It probably contains a lot of stuff that's not needed for read-dwarf.
 
 pc = "_PC"
 
 ifetch = "Read_ifetch"
 
-read_exclusives = ["Read_exclusive", "Read_exclusive_acquire"]
-write_exclusives = ["Write_exclusive", "Write_exclusive_release"]
+in_program_order = ["sail_barrier"]
 
 # The assembler is used for assembling the code in litmus tests. We
 # assume it takes arguments like GNU as.
-assembler = "aarch64-linux-gnu-as -march=armv8.3-a" # read-dwarf
+[[toolchain]]
+name = "macos-aarch64"
+os = "macos"
+arch = "aarch64"
+assembler = "as --target=aarch64-unknown-linux-gnu"
+objdump = "/opt/homebrew/opt/llvm/bin/llvm-objdump"
+nm = "/opt/homebrew/opt/llvm/bin/llvm-nm"
+linker = "/opt/homebrew/opt/llvm/bin/ld.lld"
+
+[[toolchain]]
+name = "default"
+assembler = "aarch64-linux-gnu-as -march=armv8.1-a"
 objdump = "aarch64-linux-gnu-objdump"
+nm = "aarch64-linux-gnu-nm"
 linker = "aarch64-linux-gnu-ld"
 
 [mmu]
@@ -84,6 +49,8 @@ stride = "0x10"
 
 [registers]
 ignore = [
+  "_PC",
+  "__PC_changed",
   "SEE",
   "__unconditional",
   "__trickbox_enabled",
@@ -91,25 +58,15 @@ ignore = [
   "__v82_implemented",
   "__v83_implemented",
   "__v84_implemented",
-  "__v85_implemented",
-  "_GTEExtObsAccess",
-  "_GTEExtObsActive",
-  "_GTEExtObsAddress",
-  "_GTEExtObsCount",
-  "_GTEExtObsData",
-  "_GTEExtObsIndex",
-  "_GTEExtObsResult",
-  "_GTEExtObsResultIndex",
-  "_GTEExtObsResultIsAddress",
-  "_GTE_PPU_Access",
-  "_GTE_PPU_Address",
-  "_GTE_PPU_SizeEn"
+  "__v85_implemented"
 ]
 
 # These registers are set before any symbolic execution occurs
 [registers.defaults]
-"__isla_monomorphize_reads" = false
-"__isla_monomorphize_writes" = false
+"__isla_vector_gpr" = false
+"__isla_continue_on_see" = true
+"__monomorphize_reads" = false
+"__monomorphize_writes" = false
 "VBAR_EL1" = "0x0000000000000000"
 "VBAR_EL2" = "0x0000000000000000"
 # Causes CNTCV to be incremented every cycle if bit 0 is 1
@@ -117,6 +74,7 @@ ignore = [
 # SSAdvance?
 "MDSCR_EL1" = "0x00000000"
 "InGuardedPage" = false
+"__highest_el_aarch32" = false
 "__currentInstrLength" = 4
 "_PendingPhysicalSE" = false
 "__CNTControlBase" = "0x0000000000000"
@@ -129,19 +87,18 @@ ignore = [
 "CFG_RMR_AA64" = "0b1"
 "CFG_RVBAR" = "0x0000000010300000"
 "CFG_ID_AA64PFR0_EL1_MPAM" = "0x1"
-"CFG_ID_AA64PFR0_EL1_EL3" = "0x2"
-"CFG_ID_AA64PFR0_EL1_EL2" = "0x2"
-"CFG_ID_AA64PFR0_EL1_EL1" = "0x2"
-"CFG_ID_AA64PFR0_EL1_EL0" = "0x2"
+"CFG_ID_AA64PFR0_EL1_EL3" = "0x1"
+"CFG_ID_AA64PFR0_EL1_EL2" = "0x1"
+"CFG_ID_AA64PFR0_EL1_EL1" = "0x1"
+"CFG_ID_AA64PFR0_EL1_EL0" = "0x1"
 # Need to investigate BTI extension. Guard pages cause problems with
 # memory accesses.
 "__v81_implemented" = true
-"__v82_implemented" = true # read-dwarf
-"__v83_implemented" = true # read-dwarf
+"__v82_implemented" = false
+"__v83_implemented" = false
 "__v84_implemented" = false
 "__v85_implemented" = false
 "__unpred_tsize_aborts" = true
-"exclusive_never_fails" = true # read-dwarf
 # Trickbox has various features for debugging spec and running tests
 "__trickbox_enabled" = false
 "__tlb_enabled" = false
@@ -173,12 +130,20 @@ ignore = [
 "__crypto_sm3_implemented" = false
 "__crypto_sha512_implemented" = false
 "__crypto_sha3_implemented" = false
+"_GTEExtObsAccess" = "[0x0000; 256]"
+"_GTEExtObsAddress" = "[0x0000000000000000; 256]"
+"_GTEExtObsData" = "[0x0000000000000000; 256]"
+"_GTEExtObsResult" = "[0x0000000000000000; 256]"
+"_GTE_PPU_SizeEn" = "[0x00000000; 6]"
+"_GTE_PPU_Address" = "[0x0000000000000000; 6]"
+"_GTE_PPU_Access" = "[0x00000000; 6]"
 
 # These registers are set during symbolic execution by the special builtin "reset_registers"
 [registers.reset]
-# Bit 1 being set causes us to abort on unaligned accesses
+# Bit 1 being unset allows unaligned accesses
 # Bit 26 being set allows cache-maintenance ops in EL0
-"SCTLR_EL1" = "0x0000000004000002"
+"SCTLR_EL1" = "0x0000000004000000"
+"SCTLR_EL2" = "0x0000000004000000"
 
 # A map from register names that may appear in litmus files to Sail
 # register names
@@ -245,45 +210,3 @@ ignore = [
 "W28" = "R28"
 "W29" = "R29"
 "W30" = "R30"
-
-[reads]
-Read_acquire = "A"
-Read_exclusive_acquire = "A"
-
-[writes]
-Write_release = "L"
-Write_exclusive_release = "L"
-
-[cache_ops]
-Cache_op_D_CVAU = "DC"
-Cache_op_I_IVAU = "IC"
-Cache_op_I_IALLU = "IC"
-
-# A mapping from Sail barrier_kinds for the spec to the names in cat
-# memory models.
-[barriers]
-Barrier_DMB_SY = "DMB.SY"
-Barrier_DMB_ST = "DMB.ST"
-Barrier_DMB_LD = "DMB.LD"
-Barrier_DMB_ISH = "DMB.ISH"
-Barrier_DMB_ISHST = "DMB.ISHST"
-Barrier_DMB_ISHLD = "DMB.ISHLD"
-Barrier_DMB_NSH = "DMB.NSH"
-Barrier_DMB_NSHST = "DMB.NSHST"
-Barrier_DMB_NSHLD = "DMB.NSHLD"
-Barrier_DMB_OSH = "DMB.OSH"
-Barrier_DMB_OSHST = "DMB.OSHST"
-Barrier_DMB_OSHLD = "DMB.OSHLD"
-Barrier_DSB_SY = "DSB.SY"
-Barrier_DSB_ST = "DSB.ST"
-Barrier_DSB_LD = "DSB.LD"
-Barrier_DSB_ISH = "DSB.ISH"
-Barrier_DSB_ISHST = "DSB.ISHST"
-Barrier_DSB_ISHLD = "DSB.ISHLD"
-Barrier_DSB_NSH = "DSB.NSH"
-Barrier_DSB_NSHST = "DSB.NSHST"
-Barrier_DSB_NSHLD = "DSB.NSHLD"
-Barrier_DSB_OSH = "DSB.OSH"
-Barrier_DSB_OSHST = "DSB.OSHST"
-Barrier_DSB_OSHLD = "DSB.OSHLD"
-Barrier_ISB = "ISB"

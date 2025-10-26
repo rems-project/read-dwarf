@@ -48,33 +48,66 @@
     should be added here
 *)
 
+open Logs.Logger (struct
+  let str = __MODULE__
+end)
+
+module SMap = Map.Make (String)
+
 (** The context to run a trace *)
 type t = {
   reg_writes : (State.Reg.t * State.tval) Vec.t;  (** Stores the delayed register writes *)
   mem_reads : State.tval HashVector.t;  (** Stores the result of memory reads *)
+  nondets : State.var HashVector.t;  (** Stores the mapping of nondet variables *)
   state : State.t;
+  segments : State.exp SMap.t;
+  asserts: State.exp list;
   dwarf : Dw.t option;  (** Optionally DWARF information. If present, typing is enabled *)
 }
 
 (** Build a {!context} from a state *)
-let make_context ?dwarf state =
+let make_context ?dwarf ?relocation state =
   let reg_writes = Vec.empty () in
   let mem_reads = HashVector.empty () in
-  { state; reg_writes; mem_reads; dwarf }
+  let nondets = HashVector.empty () in
+
+  let segments, asserts = relocation
+    |> Option.map (fun relocation ->
+      let State.Relocation.{value;asserts;target} = State.Relocation.of_elf relocation in
+      List.iter (State.push_relocation_assert state) asserts;
+
+      (target
+      |> Isla.Relocation.segments_of_reloc
+      |> SMap.of_list
+      |> SMap.map (fun (first, last) -> Exp.Typed.extract ~first ~last value),
+      asserts)
+      )
+    |> Option.value ~default:(SMap.empty, [])
+  in
+  { state; reg_writes; mem_reads; nondets; dwarf; segments; asserts }
 
 (** Expand a Trace variable to a State expression, using the context *)
 let expand_var ~(ctxt : t) (v : Base.Var.t) (a : Ast.no Ast.ty) : State.exp =
   assert (Base.Var.ty v = a);
   match v with
   | Register reg -> State.get_reg_exp ctxt.state reg
-  | NonDet (i, _) | Read (i, _) -> (HashVector.get ctxt.mem_reads i).exp
-
-let map_var ~(ctxt : t) (v : Base.Var.t) (a : Ast.no Ast.ty) : State.var =
-  assert (Base.Var.ty v = a);
-  match v with
-  | Register reg -> State.Var.Register (ctxt.state.id, reg)
-  | NonDet (i, size) -> State.Var.NonDet (i, size)
-  | Read (i, size) -> State.Var.ReadVar (ctxt.state.id, i, size)
+  | NonDet (i, sz) -> HashVector.get_opt ctxt.nondets i
+    |> Option.value_fun ~default:(fun () -> 
+      Fun.tee (HashVector.add ctxt.nondets i) (State.Var.new_nondet sz)
+    )
+    |> State.Exp.of_var
+  | Read (i, _) -> (HashVector.get ctxt.mem_reads i).exp
+  | Segment (name, _) -> SMap.find name ctxt.segments
 
 (** Tell if typing should enabled with this context *)
 let typing_enabled ~(ctxt : t) = ctxt.dwarf <> None
+
+module Z3St = State.Simplify.Z3St
+
+let simplify ~(ctxt : t) (exp : State.exp) : State.exp =
+  debug "Before simplification: %t" (Pp.top State.Exp.pp exp);
+  debug "Before simplification: %t" (Pp.top State.Exp.pp (Z3St.simplify_full exp));
+  exp
+  |> Z3St.simplify_subterms_full ~hyps:ctxt.asserts
+  |> Z3St.simplify_full
+  |> Fun.tee (fun e -> debug "After simplification: %t" (Pp.top State.Exp.pp e))

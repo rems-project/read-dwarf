@@ -66,13 +66,17 @@ type config = Config.t
 
     It is a list of traces, each with a flag telling if they are normal traces (no
     processor exception/fault) or not *)
-type trcs = (bool * Base.rtrc) list
+type trcs = Base.instruction_segments option * (bool * Base.rtrc) list
+
+type opcode = BytesSeq.t * Relocation.t option
+
 
 (** Bump when updating isla.
     TODO: move the version checking to allow a range of version.
     Also, right now the cache invalidation is based on
     this and not on the actual isla version, which may be dangerous.*)
 let required_version = "v0.1.0-113-g711f7b5"
+(*let required_version = "esop22-154-gf46d804" (* according to Matej email of 29 August 2025 *)*)
 
 let req_num = ref (-1)
 
@@ -121,7 +125,7 @@ let raw_stop () =
   | None -> ()
 
 (** This should match exactly with the Answer type in isla-client code *)
-type basic_answer = Error | Version of string | StartTraces | Trace of bool * string | EndTraces
+type basic_answer = Error | Version of string | StartTraces | Trace of bool * string | EndTraces | Segments of string
 
 (** Read an answer from isla-client.
     This must match exactly [write_answer] in [client.rs] in [isla] *)
@@ -136,11 +140,12 @@ let read_basic_answer () =
       let s = Server.read_string serv in
       Trace (b, s)
   | 4 -> EndTraces
+  | 5 -> Segments (Server.read_string serv)
   | _ -> failwith "Unknown isla anwser"
 
 (** The interpreted answer. If the protocol is followed,
     then one request lead to exactly one answer of that type *)
-type answer = Version of string | Traces of (bool * string) list
+type answer = Version of string | Traces of (string option * (bool * string) list)
 
 (** Expect a version answer and fails if it is not the case *)
 let expect_version = function Version s -> s | _ -> failwith "expected version number from isla"
@@ -150,11 +155,15 @@ let expect_traces = function Traces tl -> tl | _ -> failwith "expected traces fr
 
 (** Expect isla traces and fails if it is not the case, additionally parse them *)
 let expect_parsed_traces a : trcs =
-  a |> expect_traces
-  |> List.mapi (fun i (b, t) ->
+  let rsegs, rtrcs = expect_traces a in
+  let filename = Printf.sprintf "Isla call %d" !req_num in
+  let trcs = List.mapi (fun i (b, t) ->
          ( b,
-           let filename = Printf.sprintf "Isla call %d, trace %d" !req_num i in
-           Base.parse_trc_string ~filename t ))
+           let filename = filename ^ Printf.sprintf ", trace %d" i in
+           Base.parse_trc_string ~filename t )) rtrcs
+  in
+  let segs = Option.map (Base.parse_segments_string ~filename) rsegs in
+  segs, trcs
 
 (** When isla encounter a non fatal error with that specific request.
     This error is recoverable and the sever can accept other requests *)
@@ -162,39 +171,47 @@ exception IslaError
 
 (** Read the answer from isla, block until full answer *)
 let read_answer () : answer =
+  let rec traces_seq () =
+    match read_basic_answer () with
+    | EndTraces -> Seq.Nil
+    | Trace (bool, s) -> Seq.Cons ((bool, s), traces_seq)
+    | Error -> raise IslaError
+    | _ -> failwith "isla protocol error: no EndTraces"
+  in
   match read_basic_answer () with
   | Error -> raise IslaError
   | Version s -> Version s
+  | Segments s -> (
+      match read_basic_answer () with
+      | StartTraces ->  Traces (Some s, List.of_seq traces_seq)
+      | _ -> failwith "segments not followed by traces"
+    )
   | StartTraces ->
-      let rec seq () =
-        match read_basic_answer () with
-        | EndTraces -> Seq.Nil
-        | Trace (bool, s) -> Seq.Cons ((bool, s), seq)
-        | Error -> raise IslaError
-        | _ -> failwith "isla protocol error: no EndTraces"
-      in
-      Traces (List.of_seq seq)
+      Traces (None, List.of_seq traces_seq)
   | _ -> failwith "isla protocol error: Traces element before StartTraces"
 
 (** Answer pretty printer *)
 let pp_answer = function
   | Version s -> Pp.(prefix 2 1 !^"isla-client version:" !^s)
-  | Traces l ->
-      l
-      |> List.map (fun (b, t) ->
-             Pp.(
-               let bdoc = if b then !^"norm:" else !^"ex:" in
-               prefix 2 1 bdoc (string t)))
-      |> Pp.(separate (hardline ^^ hardline))
+  | Traces (s, l) ->
+      Pp.(
+        optional string s
+        ^^ hardline 
+        ^^ hardline 
+        ^^ (l
+            |> List.map (fun (b, t) ->
+                let bdoc = if b then !^"norm:" else !^"ex:" in
+                prefix 2 1 bdoc (string t))
+            |> separate (hardline ^^ hardline)))
 
 (** The type of a request to isla *)
-type request = TEXT_ASM of string | ASM of BytesSeq.t | VERSION | STOP
+type request = TEXT_ASM of string | ASM of opcode | VERSION | STOP
 
 (** Convert a request into the string message expected by isla-client
     This should match the protocol *)
 let string_of_request = function
   | TEXT_ASM s -> Printf.sprintf "execute_asm %s" s
-  | ASM b -> Pp.(sprintc @@ !^"execute " ^^ BytesSeq.ppint b)
+  | ASM b -> Pp.(sprintc @@ !^"execute " ^^ Relocation.pp_opcode_with_segments b)
   | VERSION -> "version"
   | STOP -> "stop"
 
@@ -217,7 +234,7 @@ let request (req : request) : answer = req |> string_of_request |> string_reques
 
     This is the main entry point of this module.
 *)
-let request_bin_parsed (bin : BytesSeq.t) : trcs = ASM bin |> request |> expect_parsed_traces
+let request_bin_parsed (opcode : opcode) : trcs = ASM opcode |> request |> expect_parsed_traces
 
 (** Send a request without expecting any answer *)
 let send_request req = req |> string_of_request |> send_string_request

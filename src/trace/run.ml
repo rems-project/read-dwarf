@@ -64,16 +64,20 @@ type ctxt = Ctxt.t
 let expand ~(ctxt : ctxt) (exp : Base.exp) : State.exp =
   Ast.Manip.exp_var_subst (Ctxt.expand_var ~ctxt) exp
 
+let expand_simplify ~(ctxt : ctxt) (exp : Base.exp) : State.exp =
+  exp |> expand ~ctxt |> Context.simplify ~ctxt
+
 (** Expand a Trace expression to a typed State expression, using the context.
 
     If the context enables typing, the expression will actually be typed,
     otherwise the type will be [None] *)
 let expand_tval ~(ctxt : ctxt) (exp : Base.exp) : State.tval =
-  let sexp = expand ~ctxt exp in
+  let sexp = expand_simplify ~ctxt exp in
   if Ctxt.typing_enabled ~ctxt then
     let ctyp = Typer.expr ~ctxt exp in
     { ctyp; exp = sexp }
-  else { ctyp = None; exp = sexp }
+  else
+    { ctyp = None; exp = sexp }
 
 (** Run the event.
     The modified state is the one inside [ctxt]. *)
@@ -83,41 +87,49 @@ let event_mut ~(ctxt : ctxt) (event : Base.event) =
   match event with
   | WriteReg { reg; value } -> Vec.add_one ctxt.reg_writes (reg, expand_tval ~ctxt value)
   | ReadMem { addr; value; size } ->
-      let naddr = expand ~ctxt addr in
+      let naddr = expand_simplify ~ctxt addr in
+      debug "naddr: %t" (Pp.top State.Exp.pp naddr);
+      let ptrtype = Typer.expr ~ctxt addr in
+      debug "ptrtype: %t" Pp.(top (optional Ctype.pp) ptrtype);
       let tval =
         match ctxt.dwarf with
         | Some dwarf ->
-            let ptrtype = Typer.expr ~ctxt addr in
             Typer.read ~dwarf ctxt.state ?ptrtype ~addr:naddr ~size
-        | None -> State.read_noprov ctxt.state ~addr:naddr ~size |> State.Tval.of_exp
+        | None ->
+            State.read_noprov ctxt.state ~addr:naddr ~size |> State.Tval.of_exp
       in
+      debug "read value: %t" Pp.(top State.Tval.pp tval);
       HashVector.set ctxt.mem_reads value tval
   | WriteMem { addr; value; size } -> (
-      let naddr = expand ~ctxt addr in
+      let naddr = expand_simplify ~ctxt addr in
+      debug "naddr: %t" (Pp.top State.Exp.pp naddr);
+      let ptrtype = Typer.expr ~ctxt addr in
+      debug "ptrtype: %t" Pp.(top (optional Ctype.pp) ptrtype);
       match ctxt.dwarf with
       | Some dwarf ->
           let ptrtype = Typer.expr ~ctxt addr in
           debug "Typed write mem with ptr:%t" (Pp.top (Pp.opt Ctype.pp) ptrtype);
           let value = expand_tval ~ctxt value in
+          debug "written value: %t" Pp.(top State.Tval.pp value);
           Typer.write ~dwarf ctxt.state ?ptrtype ~addr:naddr ~size value
       | None ->
-          let value = expand ~ctxt value in
+          let value = expand_simplify ~ctxt value in
           State.write_noprov ctxt.state ~addr:naddr ~size value
     )
-  | Assert exp -> State.push_assert ctxt.state (expand ~ctxt exp)
+  | Assert exp -> State.push_assert ctxt.state (expand_simplify ~ctxt exp)
 
 (** Run a trace on the provided state by mutation. Enable typing if [dwarf] is provided *)
-let trace_mut ?dwarf (state : State.t) (events : Base.t) : unit =
+let trace_mut ?dwarf ?relocation (state : State.t) (events : Base.t) : unit =
   assert (not @@ State.is_locked state);
   info "Running trace with typing %s" (if dwarf <> None then "on" else "off");
-  let ctxt = Context.make_context ?dwarf state in
+  let ctxt = Context.make_context ?dwarf ?relocation state in
   List.iter (event_mut ~ctxt) events;
   Vec.iter (fun (reg, tval) -> State.Reg.Map.set state.regs reg tval) ctxt.reg_writes
 
 (** Run a trace on the provided state by returning an updated copy.*)
-let trace ?dwarf (start : State.t) (events : Base.t) : State.t =
+let trace ?dwarf ?relocation (start : State.t) (events : Base.t) : State.t =
   let state = State.copy start in
-  trace_mut ?dwarf state events;
+  trace_mut ?dwarf ?relocation state events;
   State.lock state;
   state
 
@@ -126,12 +138,12 @@ let trace ?dwarf (start : State.t) (events : Base.t) : State.t =
 
     Thus this function automatically handle moving the PC for fall-through instruction
 *)
-let trace_pc_mut ?dwarf ~(next : int) (state : State.t) (events : Base.t) : unit =
+let trace_pc_mut ?dwarf ?relocation ~(next : int) (state : State.t) (events : Base.t) : unit =
   let pc = Arch.pc () in
   let rec is_touching_pc : Base.t -> bool = function
     | [] -> false
     | WriteReg { reg; _ } :: _ when reg = pc -> true
     | _ :: l -> is_touching_pc l
   in
-  trace_mut ?dwarf state events;
+  trace_mut ?dwarf ?relocation state events;
   if is_touching_pc events then State.concretize_pc ~pc state else State.bump_pc ~pc state next

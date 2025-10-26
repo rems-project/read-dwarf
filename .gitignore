@@ -5,3 +5,4 @@ _build/*
 **/.merlin
 test_asm/build
 .rdcache
+.vscode

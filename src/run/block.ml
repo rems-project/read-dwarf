@@ -109,7 +109,7 @@ let gen_block ((elf : Elf.File.t), (symoffset : Elf.SymTable.sym_offset)) len br
     let open Option in
     unlift_pair
     @@ let+ l = len in
-       (start, start + l)
+       (start, Elf.Address.(start + l))
   in
   let endpred = Block_lib.gen_endpred ?min ?max ~brks () in
   Trace.Cache.start @@ Arch.get_isla_config ();

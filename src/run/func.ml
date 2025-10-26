@@ -46,13 +46,13 @@
 
 open Cmdliner
 open Config.CommonOpt
-open Fun
+(* open Fun *)
 
 open Logs.Logger (struct
   let str = __MODULE__
 end)
 
-let no_run_prep ~elf:elfname ~name ~entry =
+let no_run_prep ~elf:elfname ~name ~entry ?(init = State.init_sections_symbolic ~sp:Arch.sp ~addr_size:Arch.address_size) () =
   base "Running %s in %s" name elfname;
   let dwarf = Dw.of_file elfname in
   let elf = dwarf.elf in
@@ -66,26 +66,31 @@ let no_run_prep ~elf:elfname ~name ~entry =
   let abi = Arch.get_abi api in
   Trace.Cache.start @@ Arch.get_isla_config ();
   base "Computing entry state";
-  let start = Init.state () |> State.copy ~elf |> abi.init in
+  let start = Init.state () |> State.copy ~elf |> abi.init |> init in
   if entry then base "Entry state:\n%t" (Pp.topi State.pp start);
   (dwarf, elf, func, start)
 
 let get_state_tree ~elf:elfname ~name ?(dump = false) ?(entry = false) ?len ?(breakpoints = [])
-    ?loop ?tree_to_file () =
-  let (dwarf, elf, func, start) = no_run_prep ~elf:elfname ~name ~entry in
+    ?loop ?tree_to_file ?init ?every_instruction () =
+  let (dwarf, elf, func, start) = no_run_prep ~elf:elfname ~name ~entry ?init () in
   match func.sym with
   | None -> fail "Function %s exists in DWARF data but does not have any code" name
   | Some sym ->
       let brks =
         List.map
-          (Elf.SymTable.of_position_string elf.symbols %> Elf.SymTable.to_addr_offset)
+          (fun x ->
+            if String.starts_with ~prefix:"UND" x then (*HACK for undefined symbol*)
+              Elf.Address.{ section=Some x; offset=0 }
+            else
+              x |> Elf.SymTable.of_position_string elf.symbols |> Elf.SymTable.to_addr_offset
+          )
           breakpoints
       in
       let (min, max) =
         let open Option in
         unlift_pair
         @@ let+ l = len in
-           (sym.addr, sym.addr + l)
+           (sym.addr, Elf.Address.(sym.addr + l))
       in
       let endpred = Block_lib.gen_endpred ?min ?max ?loop ~brks () in
       let runner = Runner.of_dwarf dwarf in
@@ -96,7 +101,7 @@ let get_state_tree ~elf:elfname ~name ?(dump = false) ?(entry = false) ?len ?(br
         base "Instructions:\n%t\n" (Pp.topi Runner.pp_instr runner)
       end;
       base "Start running";
-      let tree = Block_lib.run block start in
+      let tree = Block_lib.run block start ?every_instruction in
       tree_to_file
       |> Option.iter (fun x ->
              Files.write_string x @@ Pp.tos (State.Tree.pp_all Block_lib.pp_label) tree ());
@@ -104,7 +109,7 @@ let get_state_tree ~elf:elfname ~name ?(dump = false) ?(entry = false) ?len ?(br
       tree
 
 let cmd_func elfname name dump no_run entry len breakpoints loop tree_to_file =
-  if no_run then ignore @@ no_run_prep ~elf:elfname ~name ~entry
+  if no_run then ignore @@ no_run_prep ~elf:elfname ~name ~entry ()
   else
     ignore
     @@ get_state_tree ~elf:elfname ~name ~dump ~entry ?len ~breakpoints ?loop ?tree_to_file ()

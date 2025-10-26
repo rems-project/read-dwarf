@@ -76,7 +76,7 @@ let pp_sdt_concise_variable_or_formal_parameter_main (level : int)
   ^ (match svfp.svfp_type with None -> "none" | Some t -> Dwarf.pp_type_info_deep t)
   ^ "  "
   (*^ indent ^ "const_value:"*)
-  ^ (match svfp.svfp_const_value with None -> "" | Some v -> "const:" ^ Nat_big_num.to_string v)
+  ^ (match svfp.svfp_const_value with None -> "" | Some v -> "const:" ^ Sym.to_string v)
   ^ "  "
 
 (*^ indent ^ "external:" ^  show svfp.svfp_external ^ "\n"*)
@@ -90,7 +90,7 @@ let pp_sdt_concise_variable_or_formal_parameter (level : int) (is_params : bool)
   ^
   match svfp.svfp_locations with
   | None -> "no locations\n"
-  | Some [loc] -> " " ^ Dwarf.pp_parsed_single_location_description (Nat_big_num.of_int 0) loc
+  | Some [loc] -> " " ^ Dwarf.pp_parsed_single_location_description (Z.of_int 0) loc
   | Some locs ->
       "\n"
       ^ String.concat ""
@@ -99,7 +99,7 @@ let pp_sdt_concise_variable_or_formal_parameter (level : int) (is_params : bool)
                | loc ->
                    "+"
                    ^ Dwarf.pp_parsed_single_location_description
-                       (Nat_big_num.of_int (level + 1))
+                       (Z.of_int (level + 1))
                        loc)
              locs)
 
@@ -150,14 +150,14 @@ let rec locals_subroutine context (ss : Dwarf.sdt_subroutine) =
     ^ (indent (*^ "name:"                   ^*) ^ (pp_sdt_maybe ss.ss_name (fun name1 -> name1 ^ "\n")
   (*  ^ indent ^ "cupdie:"                 ^ pp_cupdie3 ss.ss_cupdie ^ "\n"*)
   ^ (indent ^ ("kind:"                   ^ (((match ss.ss_kind with SSK_subprogram -> "subprogram" | SSK_inlined_subroutine -> "inlined subroutine" )) ^ ("\n"
-  ^ (indent ^ ("call site:"              ^ (pp_sdt_maybe ss.ss_call_site (fun ud -> "\n" ^ (indent_level true (Nat_big_num.add level(Nat_big_num.of_int 1)) ^ (pp_ud ud ^ "\n")))
-  ^ (indent ^ ("abstract origin:"        ^ (pp_sdt_maybe ss.ss_abstract_origin (fun s -> "\n" ^ locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1)) s)
+  ^ (indent ^ ("call site:"              ^ (pp_sdt_maybe ss.ss_call_site (fun ud -> "\n" ^ (indent_level true (Sym.add level(Sym.of_int 1)) ^ (pp_ud ud ^ "\n")))
+  ^ (indent ^ ("abstract origin:"        ^ (pp_sdt_maybe ss.ss_abstract_origin (fun s -> "\n" ^ locals__subroutine (Sym.add level(Sym.of_int 1)) s)
   (*  ^ indent ^ "type:"                   ^ pp_sdt_maybe ss.ss_type (fun typ -> pp_type_info_deep typ ^"\n" end)*)
-  ^ (indent ^ ("vars:"                   ^ (pp_sdt_list ss.ss_vars (pp_sdt_concise_variable_or_formal_parameter (Nat_big_num.add level(Nat_big_num.of_int 1)))
-  ^ (indent ^ ("unspecified_parameters:" ^ (pp_sdt_list ss.ss_unspecified_parameters (pp_sdt_unspecified_parameter (Nat_big_num.add level(Nat_big_num.of_int 1)))
+  ^ (indent ^ ("vars:"                   ^ (pp_sdt_list ss.ss_vars (pp_sdt_concise_variable_or_formal_parameter (Sym.add level(Sym.of_int 1)))
+  ^ (indent ^ ("unspecified_parameters:" ^ (pp_sdt_list ss.ss_unspecified_parameters (pp_sdt_unspecified_parameter (Sym.add level(Sym.of_int 1)))
   (*  ^ indent ^ "pc ranges:"              ^ pp_pc_ranges (level+1) ss.ss_pc_ranges*)
-  ^ (indent ^ ("subroutines:"            ^ (pp_sdt_list ss.ss_subroutines (locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1)))
-  ^ (indent ^ ("lexical_blocks:"         ^ (pp_sdt_list ss.ss_lexical_blocks (locals__lexical_block (Nat_big_num.add level(Nat_big_num.of_int 1)))
+  ^ (indent ^ ("subroutines:"            ^ (pp_sdt_list ss.ss_subroutines (locals__subroutine (Sym.add level(Sym.of_int 1)))
+  ^ (indent ^ ("lexical_blocks:"         ^ (pp_sdt_list ss.ss_lexical_blocks (locals__lexical_block (Sym.add level(Sym.of_int 1)))
   (*  ^ indent ^ "decl:"                   ^ pp_sdt_maybe ss.ss_decl (fun ((ufe,line) as ud) -> "\n" ^ indent_level true (level+1) ^ pp_ufe ufe ^ " " ^ show line ^ "\n" end)*)
   (*  ^ indent ^ "noreturn:"               ^ show ss.ss_noreturn ^ "\n"*)
   (*  ^ indent ^ "external:"               ^ show ss.ss_external ^"\n"*)
@@ -172,10 +172,10 @@ and locals_lexical_block context (lb : Dwarf.sdt_lexical_block) =
 (*
   ""
   (*  ^ indent ^ "cupdie:"         ^ pp_cupdie3 lb.slb_cupdie ^ "\n"*)
-  ^ (indent ^ ("vars:"           ^ (pp_sdt_list lb.slb_vars (pp_sdt_concise_variable_or_formal_parameter (Nat_big_num.add level(Nat_big_num.of_int 1)))
+  ^ (indent ^ ("vars:"           ^ (pp_sdt_list lb.slb_vars (pp_sdt_concise_variable_or_formal_parameter (Sym.add level(Sym.of_int 1)))
   (*  ^ indent ^ "pc ranges:"      ^ pp_pc_ranges (level+1) lb.slb_pc_ranges*)
-  ^ (indent ^ ("subroutines :"   ^ (pp_sdt_list lb.slb_subroutines (locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1)))
-  ^ (indent ^ ("lexical_blocks:" ^ (pp_sdt_list lb.slb_lexical_blocks (locals__lexical_block (Nat_big_num.add level(Nat_big_num.of_int 1)))
+  ^ (indent ^ ("subroutines :"   ^ (pp_sdt_list lb.slb_subroutines (locals__subroutine (Sym.add level(Sym.of_int 1)))
+  ^ (indent ^ ("lexical_blocks:" ^ (pp_sdt_list lb.slb_lexical_blocks (locals__lexical_block (Sym.add level(Sym.of_int 1)))
   ^ "\n"))))))))))
  *)
 
@@ -190,8 +190,8 @@ let locals_compilation_unit context (cu : Dwarf.sdt_compilation_unit) =
   ""
   ^ (indent (*^ "name:"         *) ^ (cu.scu_name ^ ("\n"
   (*  ^ indent ^ "cupdie:"       ^ pp_cupdie3 cu.scu_cupdie ^ "\n"*)
-  ^ (indent ^ ("vars:"         ^ (pp_sdt_list cu.scu_vars (pp_sdt_concise_variable_or_formal_parameter (Nat_big_num.add level(Nat_big_num.of_int 1)))
-  ^ (indent ^ ("subroutines :" ^ pp_sdt_list cu.scu_subroutines (locals__subroutine (Nat_big_num.add level(Nat_big_num.of_int 1))))))))))))
+  ^ (indent ^ ("vars:"         ^ (pp_sdt_list cu.scu_vars (pp_sdt_concise_variable_or_formal_parameter (Sym.add level(Sym.of_int 1)))
+  ^ (indent ^ ("subroutines :" ^ pp_sdt_list cu.scu_subroutines (locals__subroutine (Sym.add level(Sym.of_int 1))))))))))))
  *)
 let locals_dwarf (sdt_d : Dwarf.sdt_dwarf) :
     (Dwarf.sdt_variable_or_formal_parameter * string list) (*context*) list =
@@ -260,7 +260,7 @@ let pp_ranged_var (prefix : string) (var : ranged_var) : string =
 let pp_ranged_vars (prefix : string) (vars : ranged_var list) : string =
   String.concat "" (List.map (pp_ranged_var prefix) vars)
 
-let compare_pc_ranges ((n1, _, _), _) ((n1', _, _), _) = compare n1 n1'
+let compare_pc_ranges ((n1, _, _), _) ((n1', _, _), _) = Sym.Ordered.compare n1 n1'
 
 let local_by_pc_ranges (((svfp : Dwarf.sdt_variable_or_formal_parameter), _context) as var) :
     ranged_var list =
@@ -299,14 +299,14 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
     if k >= size then ()
     else
       let addr = instructions.(k).i_addr in
-      if not (Nat_big_num.less addr_prev addr) then
+      if not (Sym.Ordered.less addr_prev addr) then
         fatal "mk_ranged_vars_at_instructions found non-increasing address %s" (pp_addr addr);
       let (still_current, old) =
-        List.partition (function ((_, n2, _), _) -> Nat_big_num.less addr n2) prev
+        List.partition (function ((_, n2, _), _) -> Sym.Ordered.less addr n2) prev
       in
       let (new', remaining') =
         partition_first
-          (function ((n1, _n2, _ops), _var) as _rv -> Nat_big_num.greater_equal addr n1)
+          (function ((n1, _n2, _ops), _var) as _rv -> Sym.Ordered.greater_equal addr n1)
           remaining
       in
       (* TODO: do we need to drop any that have been totally skipped over? *)
@@ -317,7 +317,7 @@ let mk_ranged_vars_at_instructions (sdt_d : Dwarf.sdt_dwarf) instructions :
       rvai_remaining.(k) <- remaining';
       f addr current remaining' (k + 1)
   in
-  f (Nat_big_num.of_int (0 - 1)) [] locals_by_pc_ranges 0;
+  f (Sym.of_int (0 - 1)) [] locals_by_pc_ranges 0;
 
   {
     rvai_globals = globals_dwarf sdt_d;

@@ -93,6 +93,7 @@ module Var = struct
     | Register of Reg.t  (** The value of the register at the beginning of the trace *)
     | Read of int * Ast.Size.t  (** The result of that memory reading operation *)
     | NonDet of int * Ast.Size.t  (** Variable representing non-determinism in the spec *)
+    | Segment of string * int  (** Variable representing symbolic segment in the opcode *)
 
   (** Convert the variable to the string encoding. For parsing infractructure reason,
       the encoding must always contain at least one [:]. *)
@@ -104,6 +105,8 @@ module Var = struct
     | NonDet (num, size) ->
         if size = Ast.Size.B64 then Printf.sprintf "nondet:%i" num
         else Printf.sprintf "nondet:%i:%dbits" num (Ast.Size.to_bits size)
+    | Segment (name, bits) ->
+        Printf.sprintf "segment:%s:%dbits" name bits
 
   (** Inverse of {!to_string} *)
   let of_string s =
@@ -117,6 +120,9 @@ module Var = struct
     | ["nondet"; num; size] ->
         let size = Scanf.sscanf size "%dbits" Ast.Size.of_bits in
         NonDet (int_of_string num, size)
+    | ["segment"; name; bits] ->
+        let bits = Scanf.sscanf bits "%dbits" Fun.id in
+        Segment (name, bits)
     | _ -> Raise.inv_arg "%s is not a Base.Var.t" s
 
   (** Pretty prints the variable *)
@@ -130,6 +136,7 @@ module Var = struct
     | Register reg -> Reg.reg_type reg
     | Read (_, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
     | NonDet (_, size) -> Ast.Ty_BitVec (Ast.Size.to_bits size)
+    | Segment (_, bits) -> Ast.Ty_BitVec bits
 
   let of_reg reg = Register reg
 end
@@ -248,17 +255,27 @@ let write_to_valu vc valu exp =
   match valu with Isla.(RegVal_Base (Val_Symbolic i)) -> HashVector.set vc i exp | _ -> ()
 
 (** Convert an isla event to Trace events, most events are deleted *)
-let events_of_isla ~written_registers ~read_counter ~(vc : value_context) :
+let events_of_isla ~segments_map ~written_registers ~read_counter ~(vc : value_context) :
     Isla.revent -> event list = function
   | Smt (DeclareConst (i, ty), _) ->
-      ( try
-          match ty with
-          | Ty_BitVec ((8 | 16 | 32 | 64 | 128) as size) ->
-              HashVector.set vc i (Exp.of_var (Var.NonDet (i, Ast.Size.of_bits size)))
-          | Ty_BitVec _ | Ty_Bool | Ty_Enum _ | Ty_Array (_, _) ->
-              debug "Unimplemented: ignoring non-det variable %i of type %t" i
-                (Pp.top Isla.pp_ty ty)
-        with OfIslaError -> warn "not setting nondet:%d" i
+      ( match HashVector.get_opt segments_map i with
+        | Some (name, size) ->
+            let ty_match = match ty with
+            | Ty_BitVec sz -> size = sz
+            | _ -> false
+            in
+            if not ty_match then fatal "Variable type doesn't match instruction segment %t and %d" (Pp.top Isla.pp_ty ty) size
+            else
+              HashVector.set vc i (Exp.of_var (Var.Segment (name, size)))
+        | None ->
+            try
+              match ty with
+              | Ty_BitVec ((8 | 16 | 32 | 64 | 128) as size) ->
+                  HashVector.set vc i (Exp.of_var (Var.NonDet (i, Ast.Size.of_bits size)))
+              | Ty_BitVec _ | Ty_Bool | Ty_Enum _ | Ty_Array (_, _) ->
+                  debug "Unimplemented: ignoring non-det variable %i of type %t" i
+                    (Pp.top Isla.pp_ty ty)
+            with OfIslaError -> warn "not setting nondet:%d" i
       );
       []
   | Smt (DefineConst (i, e), _) ->
@@ -321,11 +338,15 @@ let events_of_isla ~written_registers ~read_counter ~(vc : value_context) :
   | AbstractPrimop _ -> []
 
 (** Top level function to convert an isla trace to one of this module *)
-let of_isla (Trace events : Isla.rtrc) : t =
+let of_isla (segments: Isla.segment list) (Trace events : Isla.rtrc) : t =
   let written_registers = Hashtbl.create 10 in
   let read_counter = Counter.make 0 in
   let vc = HashVector.empty () in
-  List.concat_map (events_of_isla ~written_registers ~read_counter ~vc) events
+  let segments_map = HashVector.empty () in
+  List.iter (fun (Isla.Segment (name, size, var)) -> 
+    HashVector.set segments_map var (name, size)
+  ) segments;
+  List.concat_map (events_of_isla ~segments_map  ~written_registers ~read_counter ~vc) events
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -345,7 +366,7 @@ let declare_non_det serv events =
   iter_var
     (function
       | Register _ | Read _ -> ()
-      | NonDet _ as var ->
+      | NonDet _ | Segment _ as var ->
           if not @@ VarTbl.mem declared @@ var then begin
             Z3Tr.declare_var_always serv var;
             VarTbl.add declared var ()

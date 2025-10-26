@@ -72,7 +72,11 @@ let commands =
     Run.Instr.command;
     Run.Block.command;
     Run.FuncRD.command;
+    Run.RelProg.command;
+    Run.TestRelProg.command;
     CopySourcesCmd.command;
+    Z3.Test.command;
+    Relsim.command;
   ]
 
 let _ = Printexc.record_backtrace Config.enable_backtrace

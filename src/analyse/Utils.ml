@@ -49,13 +49,20 @@ open Logs.Logger (struct
 end)
 
 (** TODO: Maybe just use Z.t everywhere (it's shorter) *)
-type natural = Nat_big_num.num
+type natural = Sym.t
 
 (** machine address *)
 type addr = natural
 
 (* hackishly mask out bigint conversion failure *)
-let pp_addr (a : natural) = try Ml_bindings.hex_string_of_big_int_pad8 a with Failure s -> let s' = "Failure: int64_of_big_int " ^ Nat_big_num.to_string a in (warn "pp_addr failure: %s" s); s'| e -> raise e
+let pp_addr (a : natural) = 
+  try
+    Sym_ocaml.Num.ppf Ml_bindings.hex_string_of_big_int_pad8 a
+  with
+  | Failure s -> let s' = "Failure: int64_of_big_int " ^ Sym.to_string a in (warn "pp_addr failure: %s" s); s'
+  | e -> raise e
+
+
 
 (** index into instruction-indexed arrays *)
 type index = int
@@ -101,7 +108,11 @@ let html_escape s =
                   | '\'' -> Buffer.add_string buf "&apos"
                   | c -> Buffer.add_char buf c
                 )
-              | false -> Buffer.add_char buf c
+              | false -> (
+                  match c with 
+                  | '\"' -> Buffer.add_string buf "\\\"" (*TODO: this doesn't make dot generate the right svg *)
+                  | c -> Buffer.add_char buf c
+                )
             )
         ))
     s;
@@ -114,3 +125,13 @@ let sys_command s =
   else
     let exit_code = Sys.command s in
     if exit_code <> 0 then fatal "sys_command %s failed with exit code %d" s exit_code else ()
+
+let read_html name =
+  let rec inter_p = function
+    | [] -> Error "not found"
+    | dir::dirs ->
+        let filename = Filename.concat dir name  in
+        if Sys.file_exists filename
+        then read_file_lines filename
+        else inter_p dirs
+  in inter_p (Htmlpaths.Sites.html)

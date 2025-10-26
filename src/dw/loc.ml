@@ -72,6 +72,7 @@ type t =
   | RegisterOffset of State.Reg.t * int  (** At register + offset address *)
   | StackFrame of int  (** On the stackFrame with offset *)
   | Global of Elf.SymTable.sym_offset  (** Global variable with an offset *)
+  | Const of Sym.t
   | Dwarf of dwop list  (** Uninterpreted dwarf location *)
 
 (** The type of a location in linksem format *)
@@ -83,49 +84,54 @@ type linksem_t = dwop list
 let vDW_OP_addr : int = 0x03
 
 (** The integer value of the DW_OP_reg0 constant in DWARF standard *)
-let vDW_OP_reg0 : int = Z.to_int Dwarf.vDW_OP_reg0
+let vDW_OP_reg0 : int = Sym.to_int Dwarf.vDW_OP_reg0
 
 (** The integer value of the DW_OP_breg0 constant in DWARF standard *)
-let vDW_OP_breg0 : int = Z.to_int Dwarf.vDW_OP_breg0
+let vDW_OP_breg0 : int = Sym.to_int Dwarf.vDW_OP_breg0
 
 (** Convert a linksem location description into a {!Loc.t}
 
     Very naive for now : If the list has a single element that we can translate
    directly, we do. Otherwise, we dump it into the {!t.Dwarf} constructor *)
 let of_linksem ?(amap = Arch.dwarf_reg_map ()) (elf : Elf.File.t) : linksem_t -> t =
-  let int_of_oav : Dwarf.operation_argument_value -> int = function
-    | OAV_natural n -> Z.to_int n
-    | OAV_integer i -> Z.to_int i
-    | _ -> failwith "Expected integer argument"
+  let sym_of_oav : Dwarf.operation_argument_value -> Sym.t = function
+  | OAV_natural n -> n
+  | OAV_integer i -> i
+  | _ -> failwith "Expected integer argument"
   in
+  let int_of_oav oav = oav |> sym_of_oav |> Sym.to_int in
   function
   (* Register *)
   | [({ op_semantics = OpSem_reg; _ } as op)] ->
-      let reg_num = Z.to_int op.op_code - vDW_OP_reg0 in
+      let reg_num = Sym.to_int op.op_code - vDW_OP_reg0 in
       if reg_num >= Array.length amap then
         failwith
           (Printf.sprintf "Loc.of_linksem: register number %d unknown, code %x, name %s" reg_num
-             (Z.to_int op.op_code) op.op_string)
+             (Sym.to_int op.op_code) op.op_string)
       else Register amap.(reg_num)
   (* RegisterOffset *)
   | [({ op_semantics = OpSem_breg; op_argument_values = [arg]; _ } as op)] ->
-      let reg_num = Z.to_int op.op_code - vDW_OP_breg0 in
+      let reg_num = Sym.to_int op.op_code - vDW_OP_breg0 in
       if reg_num >= Array.length amap then
         failwith
           (Printf.sprintf "Loc.of_linksem: register number %d unknown, code %x, name %s" reg_num
-             (Z.to_int op.op_code) op.op_string)
+             (Sym.to_int op.op_code) op.op_string)
       else RegisterOffset (amap.(reg_num), int_of_oav arg)
   (* StackFrame *)
   | [{ op_semantics = OpSem_fbreg; op_argument_values = [arg]; _ }] -> StackFrame (int_of_oav arg)
   (* Global *)
   | [{ op_semantics = OpSem_lit; op_code = code; op_argument_values = [arg]; _ }] as ops
-    when Z.to_int code = vDW_OP_addr -> (
-      try Global (Elf.SymTable.of_addr_with_offset elf.symbols @@ int_of_oav arg)
+    when Sym.to_int code = vDW_OP_addr -> (
+      let addr = Addr.of_sym @@ sym_of_oav arg in
+      try Global (Elf.SymTable.of_addr_with_offset elf.symbols @@ addr)
       with Not_found ->
-        warn "Symbol at 0x%x not found in Loc.of_linksem" (int_of_oav arg);
+        warn "Symbol at %t not found in Loc.of_linksem" (Pp.top Sym.pp (sym_of_oav arg));
         Dwarf ops
     )
   (* Other *)
+  | [{ op_semantics = OpSem_lit; op_argument_values = [arg]; _ }; { op_semantics = OpSem_stack_value; _ }] ->
+      let value = sym_of_oav arg in 
+      Const value
   | ops -> Dwarf ops
 
 (** Convert the location to a string. This is not reversible *)
@@ -134,6 +140,7 @@ let to_string = function
   | RegisterOffset (reg, off) -> Printf.sprintf "[%s+%x]" (State.Reg.to_string reg) off
   | StackFrame off -> Printf.sprintf "[frame+%x]" off
   | Global symoff -> Elf.SymTable.string_of_sym_offset symoff
+  | Const x -> Sym.to_string x
   | Dwarf ops -> Dwarf.pp_operations ops
 
 (** Compare two location. Loc.t is not compatible with polymorphic compare *)
@@ -152,6 +159,12 @@ let compare l1 l2 =
       Pair.compare ~fst:Elf.Symbol.compare (sym1, off1) (sym2, off2)
   | (Global (_, _), _) -> -1
   | (_, Global (_, _)) -> 1
+  | (Const (Absolute x), Const (Absolute y)) -> Z.compare x y
+  | (Const (Offset(s,x)), Const (Offset(t,y))) -> Pair.compare ~snd:Z.compare (s,x) (t,y)
+  | (Const (Absolute _), Const (Offset _)) -> -1
+  | (Const (Offset _), Const (Absolute _)) -> 1
+  | (Const _, _) -> -1
+  | (_, Const _) -> 1
   | (Dwarf ops1, Dwarf ops2) -> compare ops1 ops2
 
 (** Pretty-print the location *)

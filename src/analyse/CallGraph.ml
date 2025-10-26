@@ -60,7 +60,7 @@ type call_graph_node = addr * index * string list
 let mk_call_graph test (an : CollectedType.analysis) =
   let mask_addr x:natural =
     if !Globals.morello
-    then Nat_big_num.shift_left (Nat_big_num.shift_right x 1) 1
+    then Sym.shift_left (Sym.shift_right x 1) 1
     else x in
   (* take the nodes to be all the elf symbol addresses of stt_func
      symbol type (each with their list of elf symbol names) together
@@ -110,7 +110,7 @@ let mk_call_graph test (an : CollectedType.analysis) =
                        if
                          not
                            (List.exists
-                              (function (a'', _) -> Nat_big_num.equal a' a'')
+                              (function (a'', _) -> Sym.Ordered.equal a' a'')
                               elf_symbols)
                        then Some (a', ["FROM BL:" ^ s'])
                        else None)
@@ -122,7 +122,7 @@ let mk_call_graph test (an : CollectedType.analysis) =
     match axs with
     | [] -> acc
     | (a, x) :: axs' ->
-        if not (List.exists (function (a', _) -> Nat_big_num.equal a a') acc) then
+        if not (List.exists (function (a', _) -> Sym.Ordered.equal a a') acc) then
           dedup axs' ((a, x) :: acc)
         else dedup axs' acc
   in
@@ -133,7 +133,7 @@ let mk_call_graph test (an : CollectedType.analysis) =
     List.sort
       (function
         | (a, _) -> (
-            function (a', _) -> Nat_big_num.compare a a'
+            function (a', _) -> Sym.Ordered.compare a a'
           ))
       (elf_symbols @ extra_bl_targets)
   in

@@ -85,7 +85,7 @@ let of_elf (elf : Elf.File.t) =
   Arch.load_elf_arch elf;
   info "Extracting dwarf of %s" elf.filename;
   let ldwarf =
-    match Dwarf.extract_dwarf elf.linksem with
+    match Dwarf.extract_dwarf elf.linksem Abi_aarch64_symbolic_relocation.aarch64_data_relocation_interpreter with
     | Some d -> d
     | None -> dwarferror "Linksem extract_dwarf failed"
   in

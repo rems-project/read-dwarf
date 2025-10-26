@@ -140,7 +140,8 @@ let of_linksem (elf : Elf.File.t) (tenv : Ctype.env) (lfun : linksem_t) =
     | None -> (
         match lfun.ss_entry_address with
         | Some a -> (
-            match Elf.SymTable.of_addr_opt elf.symbols (Nat_big_num.to_int a) with
+            let addr = Addr.of_sym a in
+            match Elf.SymTable.of_addr_opt elf.symbols addr with
             | Some sym -> Some sym
             | None -> None
           )

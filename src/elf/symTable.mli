@@ -52,12 +52,12 @@
 
 type sym = Symbol.t
 
-type linksem_sym = Symbol.linksem_t
-
 (** The type of a symbol with offset *)
 type sym_offset = sym * int
 
-type linksem_t = Elf_file.global_symbol_init_info
+type linksem_relocatable_t = LinksemRelocatable.global_symbol_init_info
+
+type linksem_executable_t = Elf_file.global_symbol_init_info
 
 (** The type of a symbol table. *)
 type t
@@ -78,19 +78,19 @@ val of_name_opt : t -> string -> sym option
 
 (** Get the symbol owning that address. Not_found is raised if no symbol own that address.data
       See {!of_addr_opt} *)
-val of_addr : t -> int -> sym
+val of_addr : t -> Address.t -> sym
 
 (** Get the symbol owning that address. None if no symbol own that address. See {!of_addr} *)
-val of_addr_opt : t -> int -> sym option
+val of_addr_opt : t -> Address.t -> sym option
 
 (** Get a symbol with the offset that correspond to that address *)
-val of_addr_with_offset : t -> int -> sym_offset
+val of_addr_with_offset : t -> Address.t -> sym_offset
 
 (** Get a symbol with the offset that correspond to that address *)
-val of_addr_with_offset_opt : t -> int -> sym_offset option
+val of_addr_with_offset_opt : t -> Address.t -> sym_offset option
 
 (** Get back the raw address from a symbol+offset value *)
-val to_addr_offset : sym_offset -> int
+val to_addr_offset : sym_offset -> Address.t
 
 (** Transform a symbol + offset into the corresponding string *)
 val string_of_sym_offset : sym_offset -> string
@@ -107,10 +107,13 @@ val sym_offset_of_string : t -> string -> sym_offset
 *)
 val of_position_string : t -> string -> sym_offset
 
-(** Extract the symbol from the linksem symbol representation.
+(** Extract the symbol from the linksem symbol representation (relocatable file). *)
+val of_linksem_relocatable : linksem_relocatable_t -> t
+
+(** Extract the symbol from the linksem symbol representation (executable file).
 
     Need the segments for filling the missing symbol data *)
-val of_linksem : Segment.t list -> linksem_t -> t
+val of_linksem_executable : Segment.t list -> linksem_executable_t -> t
 
 (** Pretty print the table as a raw ocaml value *)
 val pp_raw : t -> Pp.document

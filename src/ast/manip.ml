@@ -350,3 +350,10 @@ let check_no_mem (e : ('a, 'v, 'b, 'm) exp) : bool =
 let expect_no_mem ?(handler = fun () -> failwith "Expected no mem") :
     ('a, 'v, 'b, 'm1) exp -> ('a, 'v, 'b, 'm2) exp =
  fun exp -> if check_no_mem exp then Obj.magic exp else handler ()
+
+
+let all_subterms e =
+  let rec recurse acc e =
+    e :: direct_exp_fold_left_exp recurse acc e
+  in
+  direct_exp_fold_left_exp recurse [] e

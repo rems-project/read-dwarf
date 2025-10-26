@@ -107,6 +107,11 @@ let map f fv =
   let gen = fv.gen %> f in
   { vec; gen }
 
+let mapi f fv =
+  let vec = Vec.mapi f fv.vec in
+  let gen = (fun i -> fv.gen i |> f i) in
+  { vec; gen }
+
 let map_mut f fv =
   Vec.map_mut f fv.vec;
   fv.gen <- fv.gen %> f

@@ -2,3 +2,5 @@
  (release
   (flags
    (:standard -short-paths))))
+
+(dirs :standard \ branchTable)

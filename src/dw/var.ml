@@ -45,21 +45,30 @@
 (** This module contain all the definition to handle local and global variables
     as defined in the DWARF information of the target file *)
 
+type range = Addr.t * Addr.t option
+
 (** Type of a DWARF variable *)
-type t = { name : string; param : bool; ctype : Ctype.t; locs : ((int * int) * Loc.t) list }
+type t = {
+  name : string;
+  param : bool;
+  ctype : Ctype.t;
+  locs : (range * Loc.t) list;
+  locs_frame_base : (range * Loc.t) list;
+}
 
 (** Type of a DWARF variable in linksem *)
 type linksem_t = Dwarf.sdt_variable_or_formal_parameter
 
 (** Merge contiguous location lists *)
 let rec loc_merge = function
-  | ((a1, b1), d1) :: ((a2, b2), d2) :: l when b1 = a2 && Loc.compare d1 d2 = 0 ->
+  | ((a1, b1), d1) :: ((a2, b2), d2) :: l when b1 = Some a2 && Loc.compare d1 d2 = 0 ->
       loc_merge (((a1, b2), d1) :: l)
   | a :: l -> a :: loc_merge l
   | [] -> []
 
-(** Convert from Z.t to int, if there is an overflow, returns Int.max_int instead of throwing *)
-let clamp_z z = try Z.to_int z with Z.Overflow when Z.compare z Z.zero > 0 -> Int.max_int
+let end_addr_of_sym = function
+| Sym_ocaml.Num.Absolute z when Z.compare z (Z.of_int Int.max_int) > 0 -> None
+| x -> Some (Addr.of_sym x)
 
 (** Create a DWARF variable from its linksem counterpart *)
 let of_linksem (elf : Elf.File.t) (env : Ctype.env) (lvar : linksem_t) : t =
@@ -72,10 +81,15 @@ let of_linksem (elf : Elf.File.t) (env : Ctype.env) (lvar : linksem_t) : t =
   in
   let locs =
     lvar.svfp_locations |> Option.value ~default:[]
-    |> List.map (fun (a, b, l) -> ((Z.to_int a, clamp_z b), Loc.of_linksem elf l))
+    |> List.map (fun (a, b, l) -> ((Addr.of_sym a, end_addr_of_sym b), Loc.of_linksem elf l))
     |> loc_merge
   in
-  { name; param; ctype; locs }
+  let locs_frame_base =
+    lvar.svfp_locations_frame_base |> Option.value ~default:[]
+    |> List.map (fun (a, b, l) -> ((Addr.of_sym a, end_addr_of_sym b), Loc.of_linksem elf l))
+    |> loc_merge
+  in
+  { name; param; ctype; locs; locs_frame_base }
 
 (** Pretty print a variable *)
 let pp_raw v =
@@ -85,5 +99,5 @@ let pp_raw v =
       [
         ("name", string v.name);
         ("ctype", Ctype.pp v.ctype);
-        ("locs", list (pair (pair ptr ptr) Loc.pp) v.locs);
+        ("locs", list (pair (pair Addr.pp (opt Addr.pp)) Loc.pp) v.locs);
       ])

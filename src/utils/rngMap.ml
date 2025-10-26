@@ -303,14 +303,20 @@ module Make (Obj : LenObject) : S with type obj = Obj.t = struct
   let clear_crop t ~pos ~len ~crop =
     assert (len >= 0);
     (* Crop an possible object starting before the start but ending after the start. *)
+    let endp = pos + len in
     let t =
       match prev t (pos - 1) with
       | Some (addr, obj) when addr + Obj.len obj > pos ->
+        let objend = addr + Obj.len obj in 
+        let t = if endp < objend then
+            IMap.add (pos + len) (crop ~pos:(endp - addr) ~len:(objend - endp) obj) t
+          else
+            t
+          in
           IMap.update addr (Option.map (crop ~pos:0 ~len:(pos - addr))) t
       | _ -> t
     in
     let seq = IMap.to_seq_from pos t in
-    let endp = pos + len in
     (* Remove all objects of the sequence from t until endp *)
     let rec remove_until t seq endp =
       match seq () with

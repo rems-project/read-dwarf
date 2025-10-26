@@ -216,6 +216,9 @@ module Map : sig
   (** Map the function all the registers (including future, not yet added ones) *)
   val map : ('a -> 'b) -> 'a t -> 'b t
 
+  (** Same as {!map} but with the index *)
+  val mapi : (reg -> 'a -> 'b) -> 'a t -> 'b t
+
   (** Map the function on all the register by mutation (including future ones) *)
   val map_mut : ('a -> 'a) -> 'a t -> unit
 
