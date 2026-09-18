@@ -583,8 +583,14 @@ let pp_instructions_ranged m test an (low, high) =
 (*  Printf.printf "pp_instructions_ranged size=%i low=%s  high=%s \n" (Array.length an.instructions) (pp_addr low)  (pp_addr high) ;
   Printf.printf "pp_instructions_ranged indices: low=%i  high=%i \n"   (an.index_of_address low)  (an.index_of_address high);
  *)
-  let index_low = an.index_of_address low in
-  let index_high = (an.index_of_address (Sym.sub high (Sym.of_int 4)))+1 in
+  (* Claude: a CU whose code was discarded (e.g. by ld -r with a linker
+     script) has an absolute pc range that matches no instruction; say so
+     rather than failing *)
+  match (an.index_option_of_address low, an.index_option_of_address (Sym.sub high (Sym.of_int 4))) with
+  | (None, _) | (_, None) ->
+      "(no instructions in range " ^ pp_addr low ^ " " ^ pp_addr high ^ ")\n"
+  | (Some index_low, Some index_high') ->
+  let index_high = index_high' + 1 in
   let rec subarray_map_to_list f a k k' =
     if k >= k' then [] else f k a.(k) :: subarray_map_to_list f a (k + 1) k'
   in
