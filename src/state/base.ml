@@ -476,7 +476,8 @@ let to_id (st : t) = st.id
 
 let lock state = state.locked <- true
 
-let unsafe_unlock state = state.locked <- false [@@deprecated "Stop unlocking states"]
+(* Claude: the [@@deprecated] attribute is on the interface only; OCaml 5 rejects it here (warning 53) *)
+let unsafe_unlock state = state.locked <- false
 
 let is_locked state = state.locked
 

@@ -80,14 +80,16 @@ let config =
     Printf.sprintf "Overrides the default location of the configuration file (%s)"
       Default.config_file
   in
-  let env = Cmd.Env.info "READ_DWARF_CONFIG" ~doc in
+  (* Claude: named [config_env] rather than [env] because inside [Term.( ... )]
+     the name [env] would be captured by cmdliner 2's [Term.env] *)
+  let config_env = Cmd.Env.info "READ_DWARF_CONFIG" ~doc in
   let doc = "Configuration file path" in
   Term.(
     const File.ensure_loaded
     $ Arg.(
         value
         & opt non_dir_file Default.config_file
-        & info ["c"; "config"] ~env ~docv:"CONFIG_TOML" ~doc))
+        & info ["c"; "config"] ~env:config_env ~docv:"CONFIG_TOML" ~doc))
 
 let arch_val _config archopt = Option.value_fun archopt ~default:File.get_arch_name
 
@@ -110,10 +112,10 @@ let isla_client_ref = ref "isla-client"
 
 let isla_client =
   let doc = "Overrides the default isla position (named isla-client)" in
-  let env = Cmd.Env.info "ISLA_CLIENT" ~doc in
+  let isla_env = Cmd.Env.info "ISLA_CLIENT" ~doc in
   let doc = "isla-client location" in
   setter isla_client_ref
-    Arg.(value & opt string "isla-client" & info ["isla"] ~env ~docv:"ISLA_CLIENT_PATH" ~doc)
+    Arg.(value & opt string "isla-client" & info ["isla"] ~env:isla_env ~docv:"ISLA_CLIENT_PATH" ~doc)
 
 (*****************************************************************************)
 (*****************************************************************************)
@@ -126,9 +128,9 @@ let z3_ref = ref "z3"
 (** The z3 option *)
 let z3 =
   let doc = "Overrides the default z3 position" in
-  let env = Cmd.Env.info "Z3_PATH" ~doc in
+  let z3_env = Cmd.Env.info "Z3_PATH" ~doc in
   let doc = "z3 location" in
-  setter z3_ref Arg.(value & opt string "z3" & info ["z3"] ~env ~docv:"Z3_PATH" ~doc)
+  setter z3_ref Arg.(value & opt string "z3" & info ["z3"] ~env:z3_env ~docv:"Z3_PATH" ~doc)
 
 (*****************************************************************************)
 (*****************************************************************************)

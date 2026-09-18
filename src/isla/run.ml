@@ -51,9 +51,12 @@
     It is for testing purpose only, otherwise use {!Trace.Run}. Typing does not work,
     and some other expected behavior may not work either.
 
-    This module can be considered deprecated/legacy.*)
+    This module can be considered deprecated/legacy.
 
-[@@@ocaml.deprecated "Should not be used by new modules"]
+    Claude: the floating [@@@ocaml.deprecated] attribute that used to follow
+    this comment is rejected by OCaml 5 (warning 53, misplaced attribute);
+    the deprecation is documented here instead.  Callers already suppress
+    warning 3 where they use this module. *)
 
 open Base
 
