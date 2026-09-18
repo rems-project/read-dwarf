@@ -70,6 +70,11 @@ let out_dir = ref (None : string option)
 
 let clip_binary = ref false
 
+(* Claude: whether to follow computed (register-indirect) branches, which needs
+   branch-table data and the .rodata section; false lets rd run on objects
+   where that is unavailable or has relocations *)
+let analyse_computed_branches = ref true
+
 let show_vars = ref true
 
 let show_cfa = ref true

@@ -69,6 +69,17 @@ let clip_binary =
   let doc = "clip binary to first 1000 instructions" in
   setter Analyse.Globals.clip_binary Arg.(value & flag & info ["clip-binary"] ~doc)
 
+let analyse_computed_branches =
+  let doc =
+    "Whether to try to follow computed (register-indirect) branches, using the branch-table \
+     data file and the ELF .rodata; with false they are treated as having no targets"
+  in
+  setter Analyse.Globals.analyse_computed_branches
+    Arg.(
+      value
+      & opt bool true
+      & info ["analyse-computed-branches"] ~docv:"BOOL" ~doc)
+
 let no_vars =
   let doc = "Do not print variable information at each instruction" in
   setter Analyse.Globals.show_vars Term.(const not $ Arg.(value & flag & info ["no-vars"] ~doc))
@@ -184,6 +195,7 @@ let options =
     branch_tables2;
     qemu_log;
     clip_binary;
+    analyse_computed_branches;
     out_file;
     out_dir;
     cfg_dot_file;

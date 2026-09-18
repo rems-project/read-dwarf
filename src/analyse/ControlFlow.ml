@@ -118,6 +118,11 @@ let ppraw_instructions (instructions:instruction array) = Array.iteri (function 
 (*****************************************************************************)
 
 let branch_table_target_addresses test filename_branch_table_option : (addr * addr list) list =
+  (* Claude: with --analyse-computed-branches=false, skip this entirely: it
+     reads the rodata section, which fails on objects where that section
+     has relocations *)
+  if not !Globals.analyse_computed_branches then []
+  else
   (* read in and parse branch-table description file *)
   let branch_data :
       (natural (*a_br*) * (natural (*a_table*) * natural (*size*) * string (*shift*) * natural))
@@ -412,6 +417,9 @@ let targets_of_control_flow_insn_without_index branch_table_targets (addr : natu
           [(T_branch_and_link_call, a, s); (T_branch_and_link_successor, succ_addr, "<return>")]
     | C_branch_cond (_is, a, s) ->
         [(T_branch_cond_branch, a, s); (T_branch_cond_successor, succ_addr, "<fallthrough>")]
+    | C_branch_register _ when not !Globals.analyse_computed_branches ->
+        (* Claude: computed branches are not followed; no targets, as for C_ret *)
+        []
     | C_branch_register _ ->
         let addresses =
           try List.assoc addr branch_table_targets

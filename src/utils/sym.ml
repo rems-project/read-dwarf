@@ -47,12 +47,22 @@ let in_range first last x = match (first, last, x) with
 | (Sym_ocaml.Num.Absolute f, Sym_ocaml.Num.Absolute l, Sym_ocaml.Num.Absolute x) -> Nat_big_num.less_equal f x && Nat_big_num.less_equal x l
 | (Sym_ocaml.Num.Offset (s1, f), Sym_ocaml.Num.Offset (s2, l), Sym_ocaml.Num.Offset (s, x)) when s1 = s2 ->
   s1 = s && Nat_big_num.less_equal f x && Nat_big_num.less_equal x l (* TODO kinda hacky *)
+(* Claude: an absolute range never contains a section-relative address, nor vice versa *)
+| (Sym_ocaml.Num.Absolute _, Sym_ocaml.Num.Absolute _, Sym_ocaml.Num.Offset _)
+| (Sym_ocaml.Num.Offset _, Sym_ocaml.Num.Offset _, Sym_ocaml.Num.Absolute _) -> false
 | _ -> Raise.fail "Can't determine if %t is in range [%t,%t]" (Pp.tos pp x) (Pp.tos pp first) (Pp.tos pp last)
 
+(* Claude: a total order on symbolic values: lexicographic on the section name
+   and then the offset, with absolute values treated as having the empty
+   section name, so that they sort before all section-relative values *)
 module Ordered = struct
   let compare x y = match (x, y) with
-  | (Sym_ocaml.Num.Offset (s1, _x), Sym_ocaml.Num.Offset (s2, _y)) when s1 <> s2 -> String.compare s1 s2
-  | (x, y) -> compare x y
+  | (Sym_ocaml.Num.Absolute x, Sym_ocaml.Num.Absolute y) -> Nat_big_num.compare x y
+  | (Sym_ocaml.Num.Absolute _, Sym_ocaml.Num.Offset _) -> -1
+  | (Sym_ocaml.Num.Offset _, Sym_ocaml.Num.Absolute _) -> 1
+  | (Sym_ocaml.Num.Offset (s1, x), Sym_ocaml.Num.Offset (s2, y)) ->
+      let c = String.compare s1 s2 in
+      if c <> 0 then c else Nat_big_num.compare x y
 
   let less_equal x y = compare x y <= 0
   let less x y = compare x y < 0
