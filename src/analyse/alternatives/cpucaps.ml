@@ -3,16 +3,16 @@
 (*  BSD 2-Clause License, as for the rest of read-dwarf.                            *)
 (*==================================================================================*)
 
-(** Names for arm64 cpucap numbers, from a file taken from the kernel build
-    that produced the object being analysed.  Two formats are accepted:
+(** Names for arm64 cpucap numbers, from a file taken from the kernel build that produced the
+    object being analysed. Two formats are accepted:
 
-    - the generated header [arch/arm64/include/generated/asm/cpucap-defs.h],
-      with lines [#define ARM64_<NAME> <n>] (the [ARM64_NCAPS] line is skipped);
-    - the source list [arch/arm64/tools/cpucaps], where the n-th non-blank,
-      non-comment line names cap n (this is what gen-cpucaps.awk does).
+    - the generated header [arch/arm64/include/generated/asm/cpucap-defs.h], with lines
+      [#define ARM64_<NAME> <n>] (the [ARM64_NCAPS] line is skipped);
+    - the source list [arch/arm64/tools/cpucaps], where the n-th non-blank, non-comment line names
+      cap n (this is what gen-cpucaps.awk does).
 
-    The numbering is per kernel tree and configuration, so the file must come
-    from the same build as the object. *)
+    The numbering is per kernel tree and configuration, so the file must come from the same build
+    as the object. *)
 
 open Utils
 
@@ -31,7 +31,11 @@ let is_blank_or_comment (s : string) =
 
 (* Claude: "#define ARM64_FOO<whitespace>17" -> Some ("ARM64_FOO", 17) *)
 let parse_define_line (s : string) : (string * int) option =
-  match List.filter (fun w -> w <> "") (String.split_on_char ' ' (String.map (fun c -> if c = '\t' then ' ' else c) s)) with
+  match
+    List.filter
+      (fun w -> w <> "")
+      (String.split_on_char ' ' (String.map (fun c -> if c = '\t' then ' ' else c) s))
+  with
   | ["#define"; name; num] -> (
       match int_of_string_opt num with Some n -> Some (name, n) | None -> None
     )
@@ -48,10 +52,17 @@ let load (filename : string) : t =
         let max_n = List.fold_left (fun m (_, n) -> max m n) (-1) defines in
         let t = Array.make (max_n + 1) "" in
         List.iter (fun (name, n) -> if n >= 0 then t.(n) <- name) defines;
-        Array.iteri (fun n name -> if name = "" then warn "cpucaps file %s: no name for cpucap %d" filename n) t;
+        Array.iteri
+          (fun n name ->
+            if name = "" then warn "cpucaps file %s: no name for cpucap %d" filename n
+          )
+          t;
         t
       end
       else
         (* Claude: the raw list; names in the header carry an ARM64_ prefix, so add it here too *)
         Array.of_list
-          (List.map (fun s -> "ARM64_" ^ String.trim s) (List.filter (fun s -> not (is_blank_or_comment s)) lines))
+          (List.map
+             (fun s -> "ARM64_" ^ String.trim s)
+             (List.filter (fun s -> not (is_blank_or_comment s)) lines)
+          )

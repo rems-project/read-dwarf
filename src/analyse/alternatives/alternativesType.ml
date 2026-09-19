@@ -3,10 +3,9 @@
 (*  BSD 2-Clause License, as for the rest of read-dwarf.                            *)
 (*==================================================================================*)
 
-(** Types for Linux arm64 "alternatives": the runtime instruction-patching
-    entries found in an ELF section (normally [.altinstructions]).  The raw
-    record mirrors [struct alt_instr] in the kernel's
-    [arch/arm64/include/asm/alternative.h]; the rest is the resolved form. *)
+(** Types for Linux arm64 "alternatives": the runtime instruction-patching entries found in an ELF
+    section (normally [.altinstructions]). The raw record mirrors [struct alt_instr] in the
+    kernel's [arch/arm64/include/asm/alternative.h]; the rest is the resolved form. *)
 
 open Utils
 
@@ -29,9 +28,7 @@ type alt_instr = {
 }
 
 let arm64_cb_bit = 0x8000
-
 let alt_instr_size = 12
-
 let aarch64_insn_size = 4
 
 type cpucap = {
@@ -60,6 +57,7 @@ type entry = {
 type table = {
   section_name : string;
   entries : entry array;
-  by_orig : entry list SymMap.t;  (** entries indexed by the base address of their original code *)
+  by_orig : entry list SymMap.t;
+      (** entries indexed by the base address of their original code *)
   table_problems : string list;  (** problems with the section as a whole *)
 }

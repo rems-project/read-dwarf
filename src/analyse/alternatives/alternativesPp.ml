@@ -3,9 +3,8 @@
 (*  BSD 2-Clause License, as for the rest of read-dwarf.                            *)
 (*==================================================================================*)
 
-(** Pretty-printing of alternatives entries: the condition under which an
-    entry is applied, and a one-line-per-entry dump of a whole table for
-    cross-checking against readelf. *)
+(** Pretty-printing of alternatives entries: the condition under which an entry is applied, and a
+    one-line-per-entry dump of a whole table for cross-checking against readelf. *)
 
 open Utils
 open AlternativesType
@@ -34,21 +33,24 @@ let pp_action_ref (a : action_ref) : string =
   | Callback name -> "callback " ^ name
   | Unresolved why -> "unresolved: " ^ why
 
-let pp_orig (e : entry) : string = match e.orig with Some a -> pp_addr a | None -> "<unresolved>"
+let pp_orig (e : entry) : string =
+  match e.orig with Some a -> pp_addr a | None -> "<unresolved>"
 
 let pp_len (e : entry) : string =
-  Printf.sprintf "%d bytes (%d instruction%s)" e.raw.orig_len e.nr_inst (if e.nr_inst = 1 then "" else "s")
+  Printf.sprintf "%d bytes (%d instruction%s)" e.raw.orig_len e.nr_inst
+    (if e.nr_inst = 1 then "" else "s")
 
-(** The condition and action of an entry, in words, one clause per line, with
-    any problems as [!!] lines. *)
+(** The condition and action of an entry, in words, one clause per line, with any problems as [!!]
+    lines. *)
 let pp_condition (e : entry) : string =
   let main =
     match e.action with
     | Callback name ->
-        Printf.sprintf "%s: callback %s rewrites %s at %s" (pp_condition_clause e.cap) name (pp_len e) (pp_orig e)
+        Printf.sprintf "%s: callback %s rewrites %s at %s" (pp_condition_clause e.cap) name
+          (pp_len e) (pp_orig e)
     | Replacement a ->
-        Printf.sprintf "%s: replace %s at %s with the code at %s" (pp_condition_clause e.cap) (pp_len e) (pp_orig e)
-          (pp_addr a)
+        Printf.sprintf "%s: replace %s at %s with the code at %s" (pp_condition_clause e.cap)
+          (pp_len e) (pp_orig e) (pp_addr a)
     | Unresolved why ->
         Printf.sprintf "%s: %s at %s; action unresolved: %s" (pp_condition_clause e.cap)
           (if e.is_callback then "callback" else "replacement")
@@ -56,11 +58,13 @@ let pp_condition (e : entry) : string =
   in
   String.concat "\n" (main :: List.map (fun p -> "!! " ^ p) e.problems)
 
-(** One line per entry, readelf-like: index, entry address, raw fields, resolved original and action. *)
+(** One line per entry, readelf-like: index, entry address, raw fields, resolved original and
+    action. *)
 let pp_entry (e : entry) : string =
-  Printf.sprintf "%5d %s  orig_offset=%+d alt_offset=%+d cpucap=0x%04x orig_len=%d alt_len=%d  orig=%s  %s%s%s"
-    e.index (pp_addr e.entry_addr) e.raw.orig_offset e.raw.alt_offset e.raw.cpucap e.raw.orig_len e.raw.alt_len
-    (pp_orig e)
+  Printf.sprintf
+    "%5d %s  orig_offset=%+d alt_offset=%+d cpucap=0x%04x orig_len=%d alt_len=%d  orig=%s  %s%s%s"
+    e.index (pp_addr e.entry_addr) e.raw.orig_offset e.raw.alt_offset e.raw.cpucap e.raw.orig_len
+    e.raw.alt_len (pp_orig e)
     (if e.is_callback then "CB " else "")
     (pp_action_ref e.action)
     (match e.problems with [] -> "" | ps -> "  !! " ^ String.concat "; " ps)
