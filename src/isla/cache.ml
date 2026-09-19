@@ -89,6 +89,7 @@ module Opcode (*: Cache.Key *) = struct
   | Some (Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.LDST b) -> assert (b < 5); 6 + b
   | Some (Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.CONDBR) -> 11
   | Some (Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.B) -> 12
+  | Some (Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.TSTBR) -> 13
 
   let reloc_of_id: int -> Relocation.t option = function
   | 0 -> None

@@ -369,7 +369,19 @@ let pp_instruction_line m test an rendered_control_flow_common_prefix_end k i =
                       | (_, a', _, s) -> pp_target_addr_wrt addr i.i_control_flow a' ^ "" ^ s ^ "")
                     i.i_targets)
              ^ " "
-         | _ -> ""
+         | _ -> (
+             (* Claude: targets with no instruction here to carry a come-from: branches to
+                symbols undefined in this object, and to addresses outside the objdump *)
+             match
+               List.filter_map
+                 (function
+                   | (T_external _, _, _, s) -> Some (s ^ "(external)")
+                   | (T_out_of_range a', _, _, s) -> Some (pp_addr a' ^ s ^ "(out-of-range)")
+                   | _ -> None)
+                 i.i_targets
+             with
+             | [] -> ""
+             | ts -> " -> " ^ String.concat "," ts ^ " " )
        end
       (* any control flow to this instruction *)
       ^ pp_come_froms addr come_froms'

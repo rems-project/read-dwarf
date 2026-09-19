@@ -39,6 +39,11 @@ let pp_opcode_with_segments (b, r) =
         | Abi_aarch64_symbolic_relocation.B -> 
             BitVec.pp_smt (BitVec.extract 26 31 bits)  
             ^^ !^" x0:26 "
+        | Abi_aarch64_symbolic_relocation.TSTBR ->
+            (* Claude: tbz/tbnz: imm14 in bits 18:5 *)
+            BitVec.pp_smt (BitVec.extract 19 31 bits)
+            ^^ !^" x0:14 "
+            ^^ BitVec.pp_smt (BitVec.extract 0 4 bits)
       )
 
 (* for interpreting the segments *)
@@ -51,3 +56,4 @@ let segments_of_reloc: t -> segment list = function
 | Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.CALL -> ["x0", (0, 25)]
 | Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.CONDBR -> ["x0", (0, 18)]
 | Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.B -> ["x0", (0, 25)]
+| Elf.Relocations.AArch64 Abi_aarch64_symbolic_relocation.TSTBR -> ["x0", (0, 13)]

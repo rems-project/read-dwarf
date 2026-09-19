@@ -61,6 +61,8 @@ let mk_come_froms instructions : come_from list array =
           | i ->
               List.iter
                 (function
+                  (* Claude: these have no target instruction (their index is a dummy) *)
+                  | (T_out_of_range _, _, _, _) | (T_external _, _, _, _) -> ()
                   | (tk, _, k', s) ->
                       let come_from =
                         {

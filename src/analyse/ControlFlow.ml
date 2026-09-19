@@ -92,6 +92,7 @@ let pp_target_kind_short = function
   | T_branch_register -> "br"
   | T_smc_hvc_successor -> "smc-hvc-succ"
   | T_out_of_range _ -> "out-of-range"
+  | T_external _ -> "external"
 
 let pp_target_kind = function
   | T_plain_successor               -> "T_plain_successor"
@@ -104,6 +105,7 @@ let pp_target_kind = function
   | T_branch_register               -> "T_branch_register"
   | T_smc_hvc_successor             -> "T_smc_hvc_successor"
   | T_out_of_range _                -> "T_out_of_range"
+  | T_external _                    -> "T_external"
 
 let pp_target (tk,a,k,s) = pp_target_kind tk ^ " " ^ pp_addr a ^ " " ^ string_of_int k ^ " " ^ s
 
@@ -344,10 +346,62 @@ let parse_relocation_target symbol_map s =
   let addr = List.find_map (fun (name, (_,_,addr,_,_)) -> if name = s then Some addr else None) symbol_map in
   Option.map (Sym.add (Sym.of_int offset)) addr
 
-let parse_control_flow_instruction symbol_map base s mnemonic s' relocation : control_flow_insn =
-  let relocation_target = Option.bind relocation (fun (_typ, target) ->
-    Option.map (fun a -> (a, target)) (parse_relocation_target symbol_map target)
-  ) in
+(* Claude: the branch target given by the ELF relocation, if any, on the
+   instruction at [addr] (relocatable files only).  The target is S + A from
+   the relocation itself: for a defined symbol a section-relative address,
+   named by the objdump's relocation text if available (it carries the
+   symbol name and addend exactly) or else by a symbol at that address; for
+   an undefined symbol the external address UND.<name>+addend.  Falls back
+   to objdump's text if the ELF has no relocation where objdump shows one *)
+let relocation_branch_target test symbol_map (addr : addr) (relocation : (string * string) option) :
+    (addr * string) option =
+  let from_objdump_text () =
+    Option.bind relocation (fun (_typ, target) ->
+        Option.map (fun a -> (a, target)) (parse_relocation_target symbol_map target))
+  in
+  match (test.elf_file, addr) with
+  | (Elf_file.ELF_File_64 f64, Sym_ocaml.Num.Offset (section, off)) -> (
+      match SymbolicReloc.section_relocations f64 section with
+      | None -> from_objdump_text ()
+      | Some rels -> (
+          let off = Z.to_int off in
+          match Hashtbl.find_opt rels off with
+          | Some (rel : SymbolicReloc.relocation)
+            when (match rel.rel_desc_target with
+                 | Abi_aarch64_symbolic_relocation.B | CALL | CONDBR | TSTBR -> true
+                 | _ -> false) -> (
+              match SymbolicReloc.resolve_pc_relative ~here:section ~p:off rel.rel_desc_value with
+              | Ok (SymbolicReloc.Target_addr a) ->
+                  let name =
+                    match relocation with
+                    | Some (_typ, target) -> "<" ^ target ^ ">"
+                    | None -> (
+                        match
+                          List.find_map
+                            (fun (name, (_, _, a', _, _)) ->
+                              if a' = a && name <> "" && name.[0] <> '$' then Some name else None)
+                            symbol_map
+                        with
+                        | Some name -> "<" ^ name ^ ">"
+                        | None -> "" )
+                  in
+                  Some (a, name)
+              | Ok (SymbolicReloc.Target_undef (name, addend)) ->
+                  let s = if addend = 0 then name else Printf.sprintf "%s+0x%x" name addend in
+                  Some (SymbolicReloc.external_address name addend, "<" ^ s ^ ">")
+              | Error e ->
+                  warn "branch relocation at %s: %s" (pp_addr addr) e;
+                  from_objdump_text () )
+          | _ ->
+              ( match relocation with
+              | Some (typ, target)
+                when Stdlib.List.mem typ ["R_AARCH64_JUMP26"; "R_AARCH64_CALL26"; "R_AARCH64_CONDBR19"; "R_AARCH64_TSTBR14"] ->
+                  warn "objdump shows relocation %s %s at %s but the ELF has no branch relocation there" typ target (pp_addr addr)
+              | _ -> () );
+              from_objdump_text () ) )
+  | _ -> from_objdump_text ()
+
+let parse_control_flow_instruction ~(relocation_target : (addr * string) option) base s mnemonic s' : control_flow_insn =
 (*   Printf.printf "s=\"%s\" mnemonic=\"%s\"  mnemonic chars=\"%s\" s'=\"%s\"   "s mnemonic "" (*(String.concat "," (List.map (function c -> string_of_int (Char.code c)) (char_list_of_string mnemonic)))*)  s';flush stdout;*)
   let c =
     if List.mem String.equal mnemonic [".word"] then C_no_instruction
@@ -454,9 +508,14 @@ let targets_of_control_flow_insn index_option_of_address branch_table_targets (a
     (function
       | (tk, a'', s'') -> (
           (*       Printf.printf "%s" ("foo " ^ pp_addr addr ^ " " ^ pp_control_flow_instruction c ^ " " ^ pp_target_kind_short tk ^ " " ^ pp_addr a'' ^ " " ^ s'' ^ "\n");*)
-          match index_option_of_address a'' with
-          | Some i -> (tk, a'', i, s'')
-          | None -> (T_out_of_range a'', a'', 0 (*dummy*), s'')
+          (* Claude: external and out-of-range targets have no instruction index; the 0 is a
+             dummy that consumers must not use (see mk_come_froms) *)
+          match SymbolicReloc.external_symbol_of_address a'' with
+          | Some name -> (T_external name, a'', 0 (*dummy*), s'')
+          | None -> (
+              match index_option_of_address a'' with
+              | Some i -> (tk, a'', i, s'')
+              | None -> (T_out_of_range a'', a'', 0 (*dummy*), s'') )
         ))
     (targets_of_control_flow_insn_without_index branch_table_targets addr opcode_bytes c)
 
@@ -667,8 +726,9 @@ let mk_instructions test filename_objdump_d filename_branch_table_option :
             | Sym_ocaml.Num.Offset(s,_) -> Sym_ocaml.Num.section s
             | Sym_ocaml.Num.Absolute(_) -> Sym.of_int 0
             in
+            let relocation_target = relocation_branch_target test test.symbol_map addr relocation in
             let c : control_flow_insn =
-              parse_control_flow_instruction test.symbol_map base ("objdump line " ^ pp_addr addr) mnemonic operands relocation
+              parse_control_flow_instruction ~relocation_target base ("objdump line " ^ pp_addr addr) mnemonic operands
             in
 
             let targets =

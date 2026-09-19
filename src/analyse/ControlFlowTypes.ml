@@ -73,6 +73,9 @@ type target_kind =
   | T_branch_register
   | T_smc_hvc_successor
   | T_out_of_range of addr
+  | T_external of string
+      (** Claude: a branch to a symbol undefined in this object (resolved only at link time);
+          its addr is [UND.<symbol>+addend], see SymbolicReloc.external_address *)
 
 type target = target_kind * addr * index * string
 

@@ -524,6 +524,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
     | T_branch_register -> false
     | T_smc_hvc_successor -> false
     | T_out_of_range _ -> false
+    | T_external _ -> false
   in
 
   let is_graphette_start k =
@@ -644,7 +645,7 @@ let mk_cfg test an visitedo node_name_prefix (recurse_flat : bool) (_inline_all 
   in
 
   let discard_out_of_range_targets targets =
-    List.filter (function (T_out_of_range _, _, _, _) -> false | _ -> true) targets
+    List.filter (function (T_out_of_range _, _, _, _) | (T_external _, _, _, _) -> false | _ -> true) targets
   in
 
   (* make the piece of graph from a non-start node onwards, following fall-through control flow and branch-and-link successors, up to the first interesting control flow - including the outgoing edges, but not their target nodes. Recurse (via mk_graph) at bl instructions that are inlined  *)

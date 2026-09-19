@@ -44,56 +44,8 @@ let read_alt_instr bs o : alt_instr =
     alt_len = read_u8 bs (o + 11);
   }
 
-(*****************************************************************************)
-(*  symbolic relocation values (relocatable files)                           *)
-(*****************************************************************************)
-
-(* Claude: the resolved value of a relocation of the form S + A - P *)
-type prel_target =
-  | Target_addr of addr  (** S + A, as section + offset *)
-  | Target_undef of string * int  (** undefined symbol name, and the addend *)
-
-exception Unsupported_expression
-
-(* Claude: flatten a sum/difference of Section and Const terms into
-   (positive sections, negative sections, constant); anything else is
-   unsupported *)
-let rec collect sign (e : Elf_symbolic.symbolic_expression) ((pos, neg, c) as acc) =
-  match e with
-  | Elf_symbolic.Section s -> if sign then (s :: pos, neg, c) else (pos, s :: neg, c)
-  | Elf_symbolic.Const x ->
-      let x = Z.to_int x in
-      (pos, neg, if sign then c + x else c - x)
-  | Elf_symbolic.BinOp (a, Elf_symbolic.Add, b) -> collect sign b (collect sign a acc)
-  | Elf_symbolic.BinOp (a, Elf_symbolic.Sub, b) -> collect (not sign) b (collect sign a acc)
-  | Elf_symbolic.BinOp (_, Elf_symbolic.And, _) | Elf_symbolic.UnOp _ ->
-      raise Unsupported_expression
-
-let undef_prefix = "UND."
-
-(* Claude: interpret the value of a PREL32 relocation at offset [p] of section
-   [here], expecting exactly one positive section term (the symbol's
-   section, or "UND.name" for an undefined symbol) and [here] as the only
-   negative one *)
-let resolve_prel32 ~here ~p (e : Elf_symbolic.symbolic_expression) : (prel_target, string) result
-    =
-  let unsupported () =
-    Error ("unsupported relocation expression " ^ Elf_symbolic.pp_sym_expr e)
-  in
-  match collect true e ([], [], 0) with
-  | exception Unsupported_expression -> unsupported ()
-  | ([s], [h], c) when h = here ->
-      let value = c + p in
-      if String.starts_with ~prefix:undef_prefix s then
-        Ok
-          (Target_undef
-             ( String.sub s (String.length undef_prefix)
-                 (String.length s - String.length undef_prefix),
-               value
-             )
-          )
-      else Ok (Target_addr (Sym_ocaml.Num.Offset (s, Z.of_int value)))
-  | _ -> unsupported ()
+(* Claude: the S + A - P relocation values are resolved by SymbolicReloc *)
+open SymbolicReloc
 
 (*****************************************************************************)
 (*  section and symbol lookups                                               *)
@@ -221,13 +173,13 @@ let parse ?cpucaps (f64 : Elf_file.elf64_file) (section_name : string) : table o
       let symbol_names = if relocatable then Hashtbl.create 1 else symbol_names_by_value f64 in
       (* Claude: resolve the field at section offset [p] to a target, given
          the literal field value [v] and a description for error messages *)
-      let resolve_field p v : (prel_target, string) result =
+      let resolve_field p v : (pc_relative_target, string) result =
         match relocs with
         | Some m -> (
             match Pmap.lookup (Z.of_int p) m with
             | None -> Error (Printf.sprintf "no relocation at offset 0x%x" p)
             | Some (rel : _ Elf_symbolic.universal_relocation) -> (
-                match resolve_prel32 ~here:section_name ~p rel.rel_desc_value with
+                match resolve_pc_relative ~here:section_name ~p rel.rel_desc_value with
                 | Error e -> Error e
                 | Ok t ->
                     if v <> 0 then
