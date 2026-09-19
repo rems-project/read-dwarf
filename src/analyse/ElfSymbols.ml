@@ -57,8 +57,17 @@ let elf_symbols_of_address (test : test) (addr : natural) : string list =
       if address = addr then Some name else None)
     test.symbol_map
 
+(* Claude: index the symbol map by address once, keeping the symbol map's
+   order for the names at each address, rather than scanning all the symbols
+   for every instruction (which took 4 s of a 29 s run on kvm_nvhe.o) *)
 let mk_elf_symbols test instructions : string list array =
-  Array.map (function i -> elf_symbols_of_address test i.i_addr) instructions
+  let tbl : (addr, string list) Hashtbl.t = Hashtbl.create 4096 in
+  List.iter
+    (fun (name, (_typ, _size, address, _mb, _binding)) ->
+      let old = try Hashtbl.find tbl address with Not_found -> [] in
+      Hashtbl.replace tbl address (name :: old))
+    test.symbol_map;
+  Array.map (function i -> List.rev (try Hashtbl.find tbl i.i_addr with Not_found -> [])) instructions
 
 let address_of_elf_symbol test (s : string) : addr option =
   List.find_map

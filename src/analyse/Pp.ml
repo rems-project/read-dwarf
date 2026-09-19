@@ -623,40 +623,57 @@ links:
 
    *)
 
-let skylight () =
-  match !Globals.comp_dir with
-  | None -> (warn "skylight: no --comp_dir"; "skylight: no --comp_dir")
-  | Some comp_dir -> (
-      match !Globals.out_dir with
-      | None -> fatal "skylight: no --out_dir"
-      | Some out_dir -> (
-          let filename = out_dir ^ ".files" in
-          sys_command
-            ("find " ^ comp_dir ^ " -type f | while read f; do echo ${f} ; done > " ^ filename);
-          match read_file_lines filename with
-          | Error s -> fatal "skylight: %s" s
-          | Ok files ->
-              let links =
-                List.map
-                  (function
-                    | file ->
-                        (* Claude: link to the highlighted copy with --skylight, else to the file itself relative to --out-dir *)
-                        let target =
-                          if !Globals.skylight then Filename.basename file ^ ".html"
-                          else relative_path ~from:out_dir file
-                        in
-                        if !Globals.skylight then
-                          sys_command
-                            ("skylighting -n " ^ file ^ " > " ^ Filename.concat out_dir target)
-                        else ();
-                        let link = html_escape_toggle ^ "<a href=\"" ^ target ^ "\">" ^ file ^ "</a>" ^ html_escape_toggle ^ "\n" in
-                        link)
-                  (Array.to_list files)
-              in
-              let chunk_body = String.concat "" links in
-              chunk_body
-        )
-    )
+(* Claude: the source files referenced by the line-number information of
+   the instructions, as the paths the source lines are read from (the DWARF
+   directory with --comp-dir substituted), deduplicated and sorted by path.
+   Formerly the sources page listed every file under --comp-dir, found with
+   `find`: 96k files and a 14 MB page for a kernel tree *)
+let referenced_source_files an : ((string option * string option * string) * string) list =
+  let tbl = Hashtbl.create 256 in
+  Array.iter
+    (fun elifis ->
+      List.iter
+        (fun elifi ->
+          let lnh = elifi.elifi_entry.elie_lnh in
+          let lnr = elifi.elifi_entry.elie_lnr in
+          let ufe = Dwarf.unpack_file_entry lnh lnr.lnr_file in
+          if not (Hashtbl.mem tbl ufe) then begin
+            let (_directory_original, directory_replacement) = actual_directories !Globals.comp_dir ufe in
+            let (_, _, file) = ufe in
+            (* Claude: tidy the "/./" that DWARF directory names such as "./arch/..." leave *)
+            let path = Filename.concat directory_replacement file in
+            let path = Str.global_replace (Str.regexp_string "/./") "/" path in
+            Hashtbl.replace tbl ufe path
+          end)
+        elifis)
+    an.line_info;
+  List.sort (fun (_, p1) (_, p2) -> compare p1 p2) (Hashtbl.fold (fun k v acc -> (k, v) :: acc) tbl [])
+
+(* Claude: the sources page: a link per referenced source file, to the file
+   itself (relative to --out-dir, as for the source-line links) or, with
+   --skylight, to a highlighted copy made here; also writes the list of
+   paths to <out-dir>.files *)
+let skylight an =
+  match !Globals.out_dir with
+  | None -> fatal "sources page: no --out-dir"
+  | Some out_dir ->
+      let files = referenced_source_files an in
+      let c = open_out (out_dir ^ ".files") in
+      List.iter (fun (_, path) -> Printf.fprintf c "%s\n" path) files;
+      close_out c;
+      String.concat ""
+        (List.map
+           (fun (ufe, path) ->
+             let target =
+               if !Globals.skylight then begin
+                 let target = Filename.basename path ^ ".html" in
+                 sys_command ("skylighting -n " ^ Filename.quote path ^ " > " ^ Filename.quote (Filename.concat out_dir target));
+                 target
+               end
+               else source_href ufe
+             in
+             html_escape_toggle ^ "<a href=\"" ^ target ^ "\">" ^ path ^ "</a>" ^ html_escape_toggle ^ "\n")
+           files)
 
 let chunk_filename_whole m _filename_stem chunk_name : string (*path*) * string (*file*) =
   ( "",
@@ -699,7 +716,7 @@ let whole_file_chunks m test an filename_stem cu_files =
   pr "1";
   let iss = analyse_inlined_subroutines_sdt_dwarf an.sdt in
   pr "2";
-  let sources_chunk_body = skylight () in
+  let sources_chunk_body = skylight an in
   pr "3";
   let cu_index_body =
     String.concat ""
