@@ -88,7 +88,18 @@ let read_file_lines (name : string) : (string array, string) result =
   | exception Sys_error s -> Error (Printf.sprintf "read_file_lines Sys_error \"%s\"\n" s)
 
 (** escape HTML *)
-let html_escape s =
+(* Claude: the toggle character that switches escaping off and on (so that
+   raw html links can be embedded in otherwise escaped text) is the single
+   byte 0xA3, Latin-1 pound sign, chosen because it does not occur in
+   DWARF-derived text.  It used to be '@', which linksem's struct/union
+   member printer emits, corrupting the types page. *)
+let html_escape_toggle_char = '\xa3'
+let html_escape_toggle = String.make 1 html_escape_toggle_char
+
+(* Claude: [dot] is for text embedded in a double-quoted graphviz attribute
+   string, where a raw quote must be backslash-escaped; in html output the
+   raw text (the embedded links) is passed through unchanged. *)
+let html_escape ?(dot=false) s =
   let escaping = ref true in
   let buf = Buffer.create (String.length s) in
   String.iter
@@ -96,21 +107,21 @@ let html_escape s =
       | c -> (
           match c with
           (* truly horrible hackery *)
-          | c when c = '@' -> escaping := not !escaping
+          | c when c = html_escape_toggle_char -> escaping := not !escaping
           | c -> (
               match !escaping with
               | true -> (
                   match c with
-                  | '&' -> Buffer.add_string buf "&amp"
-                  | '<' -> Buffer.add_string buf "&lt"
-                  | '>' -> Buffer.add_string buf "&gt"
-                  | '\"' -> Buffer.add_string buf "&quot"
-                  | '\'' -> Buffer.add_string buf "&apos"
+                  | '&' -> Buffer.add_string buf "&amp;"
+                  | '<' -> Buffer.add_string buf "&lt;"
+                  | '>' -> Buffer.add_string buf "&gt;"
+                  | '\"' -> Buffer.add_string buf "&quot;"
+                  | '\'' -> Buffer.add_string buf "&apos;"
                   | c -> Buffer.add_char buf c
                 )
               | false -> (
                   match c with 
-                  | '\"' -> Buffer.add_string buf "\\\"" (*TODO: this doesn't make dot generate the right svg *)
+                  | '\"' when dot -> Buffer.add_string buf "\\\"" (*TODO: this doesn't make dot generate the right svg *)
                   | c -> Buffer.add_char buf c
                 )
             )

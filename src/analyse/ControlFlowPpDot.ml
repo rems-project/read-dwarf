@@ -1030,7 +1030,7 @@ let pp_cfg (g : graph_cfg) cfg_dot_file rankmin : unit =
       | CFG_node_branch_and_link | CFG_node_smc_hvc -> "[shape=\"box\"]"
       | _ -> ""
     in
-    let tooltip =  (html_escape (String.concat "\n" (node.nc_ppd_instruction @ pp_node_inlining node))) in
+    let tooltip =  (html_escape ~dot:true (String.concat "\n" (node.nc_ppd_instruction @ pp_node_inlining node))) in
     (*let _ = Printf.printf "\n pp_cfg tooltip: %s\n" tooltip in *)
     Printf.sprintf "%s [label=\"%s\"][tooltip=\"%s\"]%s%s%s;\n" (pp_node_name node.nc_name)
       node.nc_label

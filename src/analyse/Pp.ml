@@ -447,7 +447,7 @@ let skylight () =
                           sys_command
                             ("skylighting -n " ^ file ^ " > " ^ Filename.concat out_dir target)
                         else ();
-                        let link = "@<a href=\"" ^ target ^ "\">" ^ file ^ "</a>@\n" in
+                        let link = html_escape_toggle ^ "<a href=\"" ^ target ^ "\">" ^ file ^ "</a>" ^ html_escape_toggle ^ "\n" in
                         link)
                   (Array.to_list files)
               in

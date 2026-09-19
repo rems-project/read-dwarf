@@ -443,9 +443,9 @@ let pp_dwarf_source_file_lines' m (ds : Dwarf.dwarf_static) (pp_actual_line : bo
     match m with
     | Ascii -> s
     | Html ->
-        "@<a class=\"link-inst\" href=\"" ^ "" ^ file ^ ".html#"
+        html_escape_toggle ^ "<a class=\"link-inst\" href=\"" ^ "" ^ file ^ ".html#"
         ^ Sym.to_string lnr.lnr_line
-        ^ "\">" ^ s ^ "</a>@ "
+        ^ "\">" ^ s ^ "</a>" ^ html_escape_toggle ^ " "
   in
   wrap_link m
     (subprogram_name ^ ":"
