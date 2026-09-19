@@ -78,4 +78,6 @@ type analysis = {
   rendered_control_flow : glyph array array;
   rendered_control_flow_inbetweens : glyph array array;
   rendered_control_flow_width : int;
+  (* Claude: Linux alternatives entries, None iff the file has no alternatives section *)
+  alternatives : AlternativesType.table option;
 }

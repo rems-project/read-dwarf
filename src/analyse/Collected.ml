@@ -74,6 +74,21 @@ open ControlFlowPpText
 open DwarfVarInfo
 open DwarfInliningInfo
 
+(* Claude: parse the alternatives section named by --alternatives-section, if
+   the file has one; print the table if --dump-alternatives *)
+let mk_alternatives (test : test) (section_name : string) : AlternativesType.table option =
+  match test.elf_file with
+  | Elf_file.ELF_File_32 _ -> None
+  | Elf_file.ELF_File_64 f64 ->
+      let cpucaps = Option.map Cpucaps.load !Globals.cpucaps_file in
+      let t = AlternativesParse.parse ?cpucaps f64 section_name in
+      ( match t with
+      | Some t when !Globals.dump_alternatives ->
+          print_string (AlternativesPp.pp_table t);
+          flush stdout
+      | _ -> () );
+      t
+
 let mk_analysis test filename_objdump_d filename_branch_table_option =
   (* compute the basic control-flow data *)
   let (instructions, index_of_address, index_option_of_address, address_of_index) =
@@ -107,6 +122,12 @@ let mk_analysis test filename_objdump_d filename_branch_table_option =
     time "mk_inlining" (mk_inlining test sdt) instructions
   in
 
+  let alternatives =
+    match !Globals.alternatives_section with
+    | None -> None
+    | Some section_name -> time "mk_alternatives" (mk_alternatives test) section_name
+  in
+
   let acf_width = 60 in
   let max_branch_distance = None (* Some instruction_count, or None for unlimited *) in
   let (rendered_control_flow, rendered_control_flow_inbetweens, rendered_control_flow_width) =
@@ -134,6 +155,7 @@ let mk_analysis test filename_objdump_d filename_branch_table_option =
       rendered_control_flow;
       rendered_control_flow_inbetweens;
       rendered_control_flow_width;
+      alternatives;
     }
   in
 

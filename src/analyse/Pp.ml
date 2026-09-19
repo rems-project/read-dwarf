@@ -75,6 +75,7 @@ type render_kind =
   | Render_inlining
   | Render_ctrlflow
   | Render_relocation
+  | Render_alternative
 
 let render_colour = function
   | Render_symbol_star -> "gold"
@@ -88,6 +89,7 @@ let render_colour = function
   | Render_inlining -> "red"
   | Render_ctrlflow -> "white"
   | Render_relocation -> "purple"
+  | Render_alternative -> "yellowgreen"
 
 let render_class_name = function
   | Render_symbol_star -> "symbol-star"
@@ -101,6 +103,7 @@ let render_class_name = function
   | Render_inlining -> "inlining"
   | Render_ctrlflow -> "ctrlflow"
   | Render_relocation -> "relocation"
+  | Render_alternative -> "alternative"
 
 type html_idiom = HI_span | HI_pre | HI_classless_span | HI_font
 
@@ -154,7 +157,7 @@ let pp_instruction_init () =
   last_var_info := ([] : string list);
   last_source_info := ""
 
-let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
+let pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i =
   (* the come_froms for this instruction, calculated first to determine whether this is the start of a basic block *)
   let addr = i.i_addr in
   let come_froms' =
@@ -368,6 +371,61 @@ let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
       css m Render_vars_old (pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1))
     else ""
   else ""
+
+(* Claude: the minimal address/opcode/disassembly form of an instruction, as
+   in pp_instruction_plain but without any DWARF or control-flow decoration;
+   used for the replacement instructions of an alternative *)
+let pp_instruction_bare test (a, io) =
+  match io with
+  | None -> pp_addr a ^ ":  <no instruction at this address in the objdump>"
+  | Some i ->
+      pp_addr i.i_addr ^ ":  " ^ pp_opcode_bytes test.arch i.i_opcode ^ "  " ^ i.i_mnemonic ^ "\t" ^ i.i_operands
+      ^ (match i.i_relocation with None -> "" | Some (typ, targ) -> "\t" ^ typ ^ " " ^ targ)
+
+(* Claude: the action of an alternative, for after the "---" marker *)
+let pp_alternative_action test (e : AlternativesType.entry) (act : instruction AlternativesAction.action) =
+  let continuation =
+    if e.nr_inst > 1 then
+      Printf.sprintf "(the default sequence continues for %d more instruction%s after ---end---)\n" (e.nr_inst - 1)
+        (if e.nr_inst = 2 then "" else "s")
+    else ""
+  in
+  match act with
+  | AlternativesAction.Act_callback { callback; _ } -> "callback " ^ callback ^ "\n" ^ continuation
+  | AlternativesAction.Act_replace { replacement_addr; replacement; _ } ->
+      Printf.sprintf "replacement, as assembled at %s (PC-relative operands not rebased):\n" (pp_addr replacement_addr)
+      ^ String.concat "" (List.map (fun ai -> pp_instruction_bare test ai ^ "\n") replacement)
+      ^ continuation
+  | AlternativesAction.Act_unresolved { why; _ } -> "unresolved action: " ^ why ^ "\n"
+
+(* Claude: very conservatively, for now: if this instruction is the base
+   address of one or more alternatives entries, wrap its normal rendering in
+   a header giving the conditions and a footer giving the replacements or
+   callbacks; the other instructions of the footprint are rendered as usual *)
+let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
+  let body = pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i in
+  let entries =
+    match an.alternatives with
+    | None -> []
+    | Some t -> ( try AlternativesType.SymMap.find i.i_addr t.by_orig with Not_found -> [] )
+  in
+  match entries with
+  | [] -> body
+  | _ ->
+      let fetch a = Option.map (fun k -> an.instructions.(k)) (an.index_option_of_address a) in
+      let header =
+        String.concat ""
+          (List.map (fun e -> css m Render_alternative ("---alternative---\n" ^ AlternativesPp.pp_condition e ^ "\n")) entries)
+      in
+      let footer =
+        String.concat ""
+          (List.map
+             (fun e ->
+               css m Render_alternative ("---\n" ^ pp_alternative_action test e (AlternativesAction.action_of_entry ~fetch e)))
+             entries)
+        ^ css m Render_alternative "---end---\n"
+      in
+      header ^ body ^ footer
 
 (*****************************************************************************)
 (**       pretty-print test analysis                                         *)
