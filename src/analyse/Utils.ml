@@ -67,6 +67,29 @@ let pp_addr (a : natural) =
 (** index into instruction-indexed arrays *)
 type index = int
 
+(* Claude: the relative path from directory [from] to [target].  Both are
+   made absolute with respect to the current directory if they are relative,
+   and normalised lexically ("." and ".." components removed, no symlink
+   resolution), so the result depends only on the two names as given *)
+let relative_path ~(from : string) (target : string) : string =
+  let absolute p = if Filename.is_relative p then Filename.concat (Sys.getcwd ()) p else p in
+  let normalise p =
+    let rec go acc = function
+      | [] -> List.rev acc
+      | ("" | ".") :: rest -> go acc rest
+      | ".." :: rest -> ( match acc with _ :: acc' -> go acc' rest | [] -> go acc rest )
+      | x :: rest -> go (x :: acc) rest
+    in
+    go [] (String.split_on_char '/' p)
+  in
+  let rec strip_common a b =
+    match (a, b) with (x :: a', y :: b') when x = y -> strip_common a' b' | _ -> (a, b)
+  in
+  let (from_rest, target_rest) = strip_common (normalise (absolute from)) (normalise (absolute target)) in
+  match List.map (fun _ -> "..") from_rest @ target_rest with
+  | [] -> "."
+  | parts -> String.concat "/" parts
+
 let measure_time = false
 
 (** Print the time this function call took. The string is just for the printed message *)

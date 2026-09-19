@@ -628,7 +628,11 @@ let skylight () =
                 List.map
                   (function
                     | file ->
-                        let target = Filename.basename file ^ ".html" in
+                        (* Claude: link to the highlighted copy with --skylight, else to the file itself relative to --out-dir *)
+                        let target =
+                          if !Globals.skylight then Filename.basename file ^ ".html"
+                          else relative_path ~from:out_dir file
+                        in
                         if !Globals.skylight then
                           sys_command
                             ("skylighting -n " ^ file ^ " > " ^ Filename.concat out_dir target)

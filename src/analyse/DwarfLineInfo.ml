@@ -325,6 +325,10 @@ let mk_line_info (eli : Dwarf.evaluated_line_info) instructions :
 let source_file_cache =
   ref ([] : ((string option * string option * string) * string array option) list)
 
+(* Claude: actual_directories is now called both when reading a source file
+   and when building the html link to it; warn about a directory only once *)
+let warned_not_has_comp_dir_prefix : (string * string * string, unit) Hashtbl.t = Hashtbl.create 16
+
 let actual_directories replacement (comp_diro, dir, file) : string (*directory_original*) * string
     (*directory_replacement*) =
   let ppo a = match a with None -> "none" | Some s -> s in
@@ -363,7 +367,10 @@ let actual_directories replacement (comp_diro, dir, file) : string (*directory_o
           | true ->
               String.sub d (String.length comp_dir) (String.length d - String.length comp_dir)
           | false ->
-              warn "not has_comp_dir_prefix for %s %s %s" comp_dir d file;
+              if not (Hashtbl.mem warned_not_has_comp_dir_prefix (comp_dir, d, file)) then begin
+                Hashtbl.replace warned_not_has_comp_dir_prefix (comp_dir, d, file) ();
+                warn "not has_comp_dir_prefix for %s %s %s" comp_dir d file
+              end;
               d
         in
 
@@ -431,6 +438,31 @@ let mk_subprogram_name (ds : Dwarf.dwarf_static) elifi : string =
   in
   subprogram_name
 
+(* Claude: the href for a link to a source file from the html pages.  With
+   --skylight it is the highlighted copy written next to the pages, as
+   before; otherwise it is the source file itself, by the path relative to
+   --out-dir (where the pages are written) of the file that source_line
+   reads, so the html tree and the source tree can be moved together.
+   Memoised per file, also so that actual_directories' warning is not
+   repeated for every line *)
+let source_href_cache : ((string option * string option * string), string) Hashtbl.t = Hashtbl.create 64
+
+let source_href (comp_diro, dir, file) : string =
+  match Hashtbl.find_opt source_href_cache (comp_diro, dir, file) with
+  | Some href -> href
+  | None ->
+      let href =
+        match !Globals.out_dir with
+        | Some out_dir when not !Globals.skylight ->
+            let (_directory_original, directory_replacement) =
+              actual_directories !Globals.comp_dir (comp_diro, dir, file)
+            in
+            relative_path ~from:out_dir (Filename.concat directory_replacement file)
+        | _ -> file ^ ".html"
+      in
+      Hashtbl.replace source_href_cache (comp_diro, dir, file) href;
+      href
+
 let pp_dwarf_source_file_lines' m (ds : Dwarf.dwarf_static) (pp_actual_line : bool) multiple elifi
     : string =
   let lnh = elifi.elifi_entry.elie_lnh in
@@ -443,7 +475,7 @@ let pp_dwarf_source_file_lines' m (ds : Dwarf.dwarf_static) (pp_actual_line : bo
     match m with
     | Ascii -> s
     | Html ->
-        html_escape_toggle ^ "<a class=\"link-inst\" href=\"" ^ "" ^ file ^ ".html#"
+        html_escape_toggle ^ "<a class=\"link-inst\" href=\"" ^ source_href (comp_dir, dir, file) ^ "#"
         ^ Sym.to_string lnr.lnr_line
         ^ "\">" ^ s ^ "</a>" ^ html_escape_toggle ^ " "
   in
