@@ -135,7 +135,10 @@ let qemu_log =
     Arg.(value & opt (some non_dir_file) None & info ["qemu-log"] ~docv:"QEMU_LOG_FILE" ~doc)
 
 let out_file =
-  let doc = "file for single-file output (optional)" in
+  let doc =
+    "file for the single whole-file output (optional); without it, ascii output goes to stdout \
+     and in html mode the whole-file html is not produced at all"
+  in
   setter Analyse.Globals.out_file
     Arg.(value & opt (some string) None & info ["o"; "out"] ~docv:"OUT_FILE" ~doc)
 

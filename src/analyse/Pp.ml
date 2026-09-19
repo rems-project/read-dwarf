@@ -808,7 +808,11 @@ let output_per_cu_files m test an filename_stem re_ranged_compilation_units =
             chunks)
     re_ranged_compilation_units
 
-let pp_test_analysis m test an =
+(* Claude: the multi-file output (per-compilation-unit pages and the
+   whole-file chunk pages), written to --out-dir if given; separate from the
+   single whole-file rendering of pp_test_analysis so that the latter can be
+   skipped when nobody wants it *)
+let output_multi_file_analysis m test an =
   (* pick address ranges for each compilation unit.  In pkvm all compilation units currently have exactly one range, the lowest-address range starts at the start of the code, and they happen to be in address order (though I don't want to depend on that). But these ranges are not contiguous, so instead we'll use the range from the start of one to the start of the next, except for the last *)
   ( match !Globals.out_dir with
   | None -> ()
@@ -890,7 +894,10 @@ let pp_test_analysis m test an =
 
          re_ranged_compilation_units)
  *)
-  );
+  )
+
+(* Claude: the single whole-file rendering, as a string *)
+let pp_test_analysis m test an =
   match m with
   | Ascii ->
       "* ************* instruction count *****************\n"

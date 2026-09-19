@@ -148,8 +148,23 @@ let process_file () : unit =
       | None -> ()
       );
 
-      (* output annotated objdump *)
-      let c = match filename_out_file_option with Some f -> open_out f | None -> stdout in
+      (* the per-compilation-unit and chunk pages, if --out-dir was given *)
+      time "output_multi_file_analysis" (output_multi_file_analysis m test) an;
+
+      (* output annotated objdump: the single whole-file rendering.  Claude:
+         this goes to the -o file if given; otherwise to stdout in ascii mode,
+         and in html mode it is not produced at all (the html pages in
+         --out-dir are normally what is wanted, and the whole-file html is
+         large and slow to render) *)
+      let c_option =
+        match (m, filename_out_file_option) with
+        | (_, Some f) -> Some (open_out f)
+        | (Ascii, None) -> Some stdout
+        | (Html, None) -> None
+      in
+      match c_option with
+      | None -> ()
+      | Some c ->
 
       (* copy emacs syntax highlighting blob to output. todo: sometime de-hard-code the filename*)
       begin
