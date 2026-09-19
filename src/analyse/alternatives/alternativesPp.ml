@@ -40,23 +40,27 @@ let pp_len (e : entry) : string =
   Printf.sprintf "%d bytes (%d instruction%s)" e.raw.orig_len e.nr_inst
     (if e.nr_inst = 1 then "" else "s")
 
+(* Claude: the condition and action of an entry in words, optionally with
+   the addresses of the original and replacement code; the same text serves
+   the per-instruction blocks (with addresses) and the "alternative kinds"
+   summary (without) *)
+let pp_condition_gen ~(with_addresses : bool) (e : entry) : string =
+  let at = if with_addresses then " at " ^ pp_orig e else "" in
+  match e.action with
+  | Callback name ->
+      Printf.sprintf "%s: callback %s rewrites %s%s" (pp_condition_clause e.cap) name (pp_len e) at
+  | Replacement a ->
+      Printf.sprintf "%s: replace %s%s with %s" (pp_condition_clause e.cap) (pp_len e) at
+        (if with_addresses then "the code at " ^ pp_addr a else "replacement code")
+  | Unresolved why ->
+      Printf.sprintf "%s: %s%s; action unresolved: %s" (pp_condition_clause e.cap)
+        (if e.is_callback then "callback" else "replacement")
+        at why
+
 (** The condition and action of an entry, in words, one clause per line, with any problems as [!!]
     lines. *)
 let pp_condition (e : entry) : string =
-  let main =
-    match e.action with
-    | Callback name ->
-        Printf.sprintf "%s: callback %s rewrites %s at %s" (pp_condition_clause e.cap) name
-          (pp_len e) (pp_orig e)
-    | Replacement a ->
-        Printf.sprintf "%s: replace %s at %s with the code at %s" (pp_condition_clause e.cap)
-          (pp_len e) (pp_orig e) (pp_addr a)
-    | Unresolved why ->
-        Printf.sprintf "%s: %s at %s; action unresolved: %s" (pp_condition_clause e.cap)
-          (if e.is_callback then "callback" else "replacement")
-          (pp_orig e) why
-  in
-  String.concat "\n" (main :: List.map (fun p -> "!! " ^ p) e.problems)
+  String.concat "\n" (pp_condition_gen ~with_addresses:true e :: List.map (fun p -> "!! " ^ p) e.problems)
 
 (* Claude: what the callbacks used by the arm64 hyp code write, from
    arch/arm64/kvm/va_layout.c, arch/arm64/kernel/alternative.c and
@@ -86,6 +90,31 @@ let describe_callback (name : string) : string option =
   | "smccc_patch_fw_mitigation_conduit" -> Some "nop becomes hvc #0 or smc #0 according to the SMCCC conduit"
   | "spectre_v4_patch_fw_mitigation_enable" -> Some "the branch becomes nop if the Spectre-v4 firmware mitigation is dynamic and SSBS is absent"
   | _ -> None
+
+(** The kind of an alternative entry: its condition and action, including which callback and
+    what it writes, but no addresses and no instructions. *)
+let pp_alternative_kind (e : entry) : string =
+  pp_condition_gen ~with_addresses:false e
+  ^
+  match e.action with
+  | Callback name -> ( match describe_callback name with Some d -> "\n        " ^ d | None -> "" )
+  | Replacement _ | Unresolved _ -> ""
+
+(** The kinds of alternative occurring among [entries], each with its number of occurrences, most
+    frequent first. *)
+let pp_alternative_kinds (entries : entry list) : string =
+  let counts = Hashtbl.create 64 in
+  List.iter
+    (fun e ->
+      let k = pp_alternative_kind e in
+      Hashtbl.replace counts k (1 + try Hashtbl.find counts k with Not_found -> 0))
+    entries;
+  let kinds = Hashtbl.fold (fun k n acc -> (n, k) :: acc) counts [] in
+  let kinds =
+    List.sort (fun (n1, k1) (n2, k2) -> if n1 <> n2 then compare n2 n1 else compare k1 k2) kinds
+  in
+  Printf.sprintf "%d alternatives entries, %d kinds\n\n" (List.length entries) (List.length kinds)
+  ^ String.concat "" (List.map (fun (n, k) -> Printf.sprintf "%6d  %s\n" n k) kinds)
 
 (** One line per entry, readelf-like: index, entry address, raw fields, resolved original and
     action. *)

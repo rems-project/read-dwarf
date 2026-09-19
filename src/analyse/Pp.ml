@@ -749,6 +749,12 @@ let whole_file_chunks m test an filename_stem cu_files =
             [ (ps "_call_graph", "call graph", call_graph);
               (ps "_call_graph_trans", "transitive call graph", transitive_call_graph) ]
           )
+        (* Claude: the kinds of alternatives in the whole object, if it has alternatives data *)
+        @ ( match an.alternatives with
+          | None -> []
+          | Some t ->
+              [ (ps "_alternative_kinds", "alternative kinds",
+                 AlternativesPp.pp_alternative_kinds (Array.to_list t.AlternativesType.entries)) ] )
         @  [(ps "_count", "instruction count", string_of_int (Array.length an.instructions)) ]
       )
   in
@@ -826,7 +832,7 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   let title = "Compilation unit " ^ pp_addr low ^ " " ^ pp_addr high ^ " " ^ cu.Dwarf.scu_name in
   let chunks0 =
     wrap_chunks m
-      [
+      ( [
         (* chunk name, title, body *)
         ("header", "header", pp_compilation_unit_header cu'.cu_header);
         ( "die_abbrev",
@@ -855,6 +861,26 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
           "inlined subroutine info by range",
           pp_inlined_subroutines_by_range ds (analyse_inlined_subroutines_by_range iss) );
       ]
+      (* Claude: the kinds of alternatives whose original code is in this compilation unit's
+         range, if the object has alternatives data *)
+      @ ( match an.alternatives with
+        | None -> []
+        | Some t ->
+            let in_range (e : AlternativesType.entry) =
+              match Option.bind e.orig an.index_option_of_address with
+              | None -> false
+              | Some k -> (
+                  match
+                    (an.index_option_of_address low, an.index_option_of_address (Sym.sub high (Sym.of_int 4)))
+                  with
+                  | (Some index_low, Some index_high') -> k >= index_low && k <= index_high'
+                  | _ -> false )
+            in
+            [ ( "alternative_kinds",
+                "alternative kinds",
+                AlternativesPp.pp_alternative_kinds
+                  (List.filter in_range (Array.to_list t.AlternativesType.entries)) ) ] )
+    )
   in
   let index_body =
     String.concat ""
