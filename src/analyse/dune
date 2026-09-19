@@ -1,3 +1,6 @@
+; Claude: src/analyse/alternatives/ holds plain sources compiled into this library
+(include_subdirs unqualified)
+
 (library
  (name analyse)
  (public_name read-dwarf.analyse)
