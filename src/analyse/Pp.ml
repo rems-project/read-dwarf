@@ -157,12 +157,16 @@ let pp_instruction_init () =
   last_var_info := ([] : string list);
   last_source_info := ""
 
-let pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i =
-  (* the come_froms for this instruction, calculated first to determine whether this is the start of a basic block *)
+(* the come_froms for an instruction, other than plain fallthrough, which determine whether it is the start of a basic block *)
+let come_froms_of an k = List.filter (function cf -> cf.cf_target_kind <> T_plain_successor) an.come_froms.(k)
+
+(* Claude: pp_instruction_plain is now split into a prefix (symbols, source,
+   frame and variable information before the instruction), the instruction
+   line itself, and a suffix (variables going out of scope), so that the
+   alternatives rendering can put the footprint of an entry together *)
+let pp_instruction_prefix m test an rendered_control_flow_common_prefix_end k i =
   let addr = i.i_addr in
-  let come_froms' =
-    List.filter (function cf -> cf.cf_target_kind <> T_plain_successor) an.come_froms.(k)
-  in
+  let come_froms' = come_froms_of an k in
 
   (* the inlining for this instruction *)
   let (ppd_labels, ppd_new_inlining, _) = an.inlining.(k) in
@@ -321,8 +325,14 @@ let pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i =
         (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
       else ""
     end
+
+
+let pp_instruction_line m test an rendered_control_flow_common_prefix_end k i =
+  let addr = i.i_addr in
+  let come_froms' = come_froms_of an k in
+  let (ppd_labels, _, _) = an.inlining.(k) in
   (* the inlining label prefix *)
-  ^ css m Render_inlining
+  css m Render_inlining
       ("~"
       ^
       let s = an.pp_inlining_label_prefix ppd_labels in
@@ -365,67 +375,185 @@ let pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i =
       ^ pp_come_froms addr come_froms'
       ^ "\n"
       )
-  ^
+
+let pp_instruction_suffix m an k =
   if (*true*) !Globals.show_vars then
     if k < Array.length an.instructions - 1 then
       css m Render_vars_old (pp_ranged_vars "-" an.ranged_vars_at_instructions.rvai_old.(k + 1))
     else ""
   else ""
 
-(* Claude: the minimal address/opcode/disassembly form of an instruction, as
-   in pp_instruction_plain but without any DWARF or control-flow decoration;
-   used for the replacement instructions of an alternative *)
-let pp_instruction_bare test (a, io) =
-  match io with
-  | None -> pp_addr a ^ ":  <no instruction at this address in the objdump>"
-  | Some i ->
-      pp_addr i.i_addr ^ ":  " ^ pp_opcode_bytes test.arch i.i_opcode ^ "  " ^ i.i_mnemonic ^ "\t" ^ i.i_operands
-      ^ (match i.i_relocation with None -> "" | Some (typ, targ) -> "\t" ^ typ ^ " " ^ targ)
+let pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i =
+  pp_instruction_prefix m test an rendered_control_flow_common_prefix_end k i
+  ^ pp_instruction_line m test an rendered_control_flow_common_prefix_end k i
+  ^ pp_instruction_suffix m an k
 
-(* Claude: the action of an alternative, for after the "---" marker *)
-let pp_alternative_action test (e : AlternativesType.entry) (act : instruction AlternativesAction.action) =
-  let continuation =
-    if e.nr_inst > 1 then
-      Printf.sprintf "(the default sequence continues for %d more instruction%s after ---end---)\n" (e.nr_inst - 1)
-        (if e.nr_inst = 2 then "" else "s")
-    else ""
+(* Claude: other commands (run-func-rd, rel-prog) render single instructions
+   by index; they get the plain rendering, without alternatives *)
+let pp_instruction = pp_instruction_plain
+
+(*****************************************************************************)
+(**       pretty-print alternatives groups                                   *)
+
+(*****************************************************************************)
+
+(* Claude: alternatives entries based at this instruction that are not
+   rendered as a block (empty footprint, footprint not contiguous in the
+   objdump, or base inside the footprint of the block being rendered), as
+   !! lines before the instruction *)
+let pp_ungrouped_alternatives m an ~(in_group : AlternativesType.entry list) (i : instruction) =
+  match an.alternatives with
+  | None -> ""
+  | Some t ->
+      let here = try AlternativesType.SymMap.find i.i_addr t.by_orig with Not_found -> [] in
+      let others = List.filter (fun e -> not (List.memq e in_group)) here in
+      String.concat ""
+        (List.map
+           (fun (e : AlternativesType.entry) ->
+             let reason =
+               if e.nr_inst = 0 then "empty footprint"
+               else if in_group <> [] then "its base is inside the enclosing alternative"
+               else "footprint not contiguous in the objdump"
+             in
+             css m Render_alternative
+               ("!! alternative not rendered as a block (" ^ reason ^ "): " ^ AlternativesPp.pp_condition e ^ "\n"))
+           others)
+
+(* Claude: a replacement instruction as it would be after patch_alternative()
+   in arch/arm64/kernel/alternative.c copied it to the original site: the
+   same disassembly at the original address, with an immediate branch whose
+   target lies inside the replacement block moving with the block (the
+   kernel leaves its immediate alone) and any other PC-relative target kept
+   (the kernel re-encodes the immediate).  The opcode bytes shown are those
+   assembled at the replacement address, so for re-encoded branches and adrp
+   they are not the bytes that are patched in.  Returns the rebased
+   instruction and a note *)
+let rebase_replacement_instruction (e : AlternativesType.entry) ~(orig : addr) ~(alt : addr) (r : instruction) :
+    instruction * string =
+  let inside t =
+    Sym.Ordered.less_equal alt t && Sym.Ordered.less_equal t (Sym.add alt (Sym.of_int e.raw.alt_len))
   in
-  match act with
-  | AlternativesAction.Act_callback { callback; _ } -> "callback " ^ callback ^ "\n" ^ continuation
+  let shift t = Sym.add orig (Sym.sub t alt) in
+  let moves t = "branch within the block: target moves to " ^ pp_addr (shift t) in
+  let (c, note) =
+    match r.i_control_flow with
+    | C_branch (t, s) when inside t -> (C_branch (shift t, s), moves t)
+    | C_branch_and_link (t, s) when inside t -> (C_branch_and_link (shift t, s), moves t)
+    | C_branch_cond (mn, t, s) when inside t -> (C_branch_cond (mn, shift t, s), moves t)
+    | C_branch _ | C_branch_and_link _ | C_branch_cond _ ->
+        (r.i_control_flow, "branch out of the block: target kept, immediate re-encoded")
+    | _ ->
+        let literal =
+          Stdlib.List.mem r.i_mnemonic ["ldr"; "ldrsw"; "prfm"] && not (String.contains r.i_operands '[')
+        in
+        if r.i_mnemonic = "adrp" then (r.i_control_flow, "adrp: immediate re-encoded for the new page")
+        else if r.i_mnemonic = "adr" || literal then
+          (r.i_control_flow, "!! PC-relative literal: the kernel would BUG() patching this")
+        else (r.i_control_flow, "")
+  in
+  ({ r with i_addr = shift r.i_addr; i_control_flow = c; i_targets = [] }, note)
+
+(* Claude: one replacement instruction, in the layout of pp_instruction_line
+   but with blank inlining and control-flow columns (of the same width as
+   those of the default instruction at index k_ref) *)
+let pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref (r : instruction) (note : string) =
+  let blank_glyphs = Array.make (Array.length an.rendered_control_flow.(k_ref)) Gnone in
+  css m Render_inlining
+    ("~"
+    ^
+    let s = an.pp_inlining_label_prefix "" in
+    String.sub s 1 (String.length s - 1)
+    )
+  ^ css m Render_ctrlflow (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end blank_glyphs)
+  ^ css m Render_alternative
+      (pp_addr r.i_addr ^ ":  " ^ pp_opcode_bytes test.arch r.i_opcode ^ "  " ^ r.i_mnemonic ^ "\t" ^ r.i_operands)
+  ^ css m Render_relocation (match r.i_relocation with None -> "" | Some (typ, targ) -> "\t" ^ typ ^ " " ^ targ)
+  ^ css m Render_alternative ((if note = "" then "" else "  [" ^ note ^ "]") ^ "\n")
+
+(* Claude: the "---" part of a block: what one entry does when applied *)
+let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks : int list) (e : AlternativesType.entry) =
+  let fetch a = Option.map (fun k -> an.instructions.(k)) (an.index_option_of_address a) in
+  let k_ref = List.hd ks in
+  css m Render_alternative "---\n"
+  ^
+  match AlternativesAction.action_of_entry ~fetch e with
+  | AlternativesAction.Act_callback { callback; _ } ->
+      css m Render_alternative
+        ("callback " ^ callback
+        ^ (match AlternativesPp.describe_callback callback with Some d -> ": " ^ d | None -> "")
+        ^ "\n")
+  | AlternativesAction.Act_unresolved { why; _ } -> css m Render_alternative ("unresolved action: " ^ why ^ "\n")
   | AlternativesAction.Act_replace { replacement_addr; replacement; _ } ->
-      Printf.sprintf "replacement, as assembled at %s (PC-relative operands not rebased):\n" (pp_addr replacement_addr)
-      ^ String.concat "" (List.map (fun ai -> pp_instruction_bare test ai ^ "\n") replacement)
-      ^ continuation
-  | AlternativesAction.Act_unresolved { why; _ } -> "unresolved action: " ^ why ^ "\n"
-
-(* Claude: very conservatively, for now: if this instruction is the base
-   address of one or more alternatives entries, wrap its normal rendering in
-   a header giving the conditions and a footer giving the replacements or
-   callbacks; the other instructions of the footprint are rendered as usual *)
-let pp_instruction m test an rendered_control_flow_common_prefix_end k i =
-  let body = pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i in
-  let entries =
-    match an.alternatives with
-    | None -> []
-    | Some t -> ( try AlternativesType.SymMap.find i.i_addr t.by_orig with Not_found -> [] )
-  in
-  match entries with
-  | [] -> body
-  | _ ->
-      let fetch a = Option.map (fun k -> an.instructions.(k)) (an.index_option_of_address a) in
-      let header =
-        String.concat ""
-          (List.map (fun e -> css m Render_alternative ("---alternative---\n" ^ AlternativesPp.pp_condition e ^ "\n")) entries)
-      in
-      let footer =
-        String.concat ""
+      let orig = Option.get e.orig in
+      css m Render_alternative
+        (Printf.sprintf "replacement (assembled at %s, shown as patched in at %s):\n" (pp_addr replacement_addr)
+           (pp_addr orig))
+      ^ String.concat ""
           (List.map
-             (fun e ->
-               css m Render_alternative ("---\n" ^ pp_alternative_action test e (AlternativesAction.action_of_entry ~fetch e)))
-             entries)
-        ^ css m Render_alternative "---end---\n"
-      in
-      header ^ body ^ footer
+             (fun (a, ro) ->
+               match ro with
+               | None -> css m Render_alternative (pp_addr a ^ ":  <no instruction at this address in the objdump>\n")
+               | Some r ->
+                   let (r', note) = rebase_replacement_instruction e ~orig ~alt:replacement_addr r in
+                   pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref r' note)
+             replacement)
+
+(* Claude: render one instruction group: a single instruction as before, or
+   an alternatives footprint as a block: header with the conditions, the
+   default instructions rendered as usual, then for each entry a "---" part
+   with its replacement or callback, then a footer *)
+let pp_group m test an rendered_control_flow_common_prefix_end (g : instruction_group) =
+  match g with
+  | G_single k ->
+      let i = an.instructions.(k) in
+      pp_ungrouped_alternatives m an ~in_group:[] i ^ pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i
+  | G_alternative (es, ks) ->
+      css m Render_alternative
+        ("---alternative---\n" ^ String.concat "" (List.map (fun e -> AlternativesPp.pp_condition e ^ "\n") es))
+      ^ String.concat ""
+          (List.map
+             (fun k ->
+               let i = an.instructions.(k) in
+               pp_ungrouped_alternatives m an ~in_group:es i
+               ^ pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i)
+             ks)
+      ^ String.concat "" (List.map (pp_alternative_action m test an rendered_control_flow_common_prefix_end ks) es)
+      ^ css m Render_alternative "---end---\n"
+
+(* Claude: render the groups covering instruction indices [index_low, index_high).
+   A footprint that starts before index_low was rendered as a block with the
+   range containing its base; here its instructions in range are rendered
+   plainly, after a note.  A footprint that starts in range but extends past
+   index_high is rendered whole *)
+let pp_groups_ranged m test an rendered_control_flow_common_prefix_end index_low index_high =
+  if index_high <= index_low then ""
+  else
+    let g_lo = an.group_of_index.(index_low) and g_hi = an.group_of_index.(index_high - 1) in
+    let rec loop g =
+      if g > g_hi then []
+      else
+        ( match an.instruction_groups.(g) with
+        | G_single _ as gr -> pp_group m test an rendered_control_flow_common_prefix_end gr
+        | G_alternative (_, ks) as gr ->
+            if List.hd ks >= index_low then pp_group m test an rendered_control_flow_common_prefix_end gr
+            else
+              css m Render_alternative
+                ("(continuation of the alternative footprint starting at "
+                ^ pp_addr an.instructions.(List.hd ks).i_addr
+                ^ ", rendered there)\n")
+              ^ String.concat ""
+                  (List.filter_map
+                     (fun k ->
+                       if k >= index_low && k < index_high then
+                         Some (pp_instruction_plain m test an rendered_control_flow_common_prefix_end k an.instructions.(k))
+                       else None)
+                     ks) )
+        :: loop (g + 1)
+    in
+    String.concat "" (loop g_lo)
+
+let pp_groups_all m test an =
+  String.concat "" (Array.to_list (Array.map (pp_group m test an 0) an.instruction_groups))
 
 (*****************************************************************************)
 (**       pretty-print test analysis                                         *)
@@ -670,10 +798,7 @@ let pp_instructions_ranged m test an (low, high) =
   in
 
   pp_instruction_init ();
-  String.concat ""
-    (subarray_map_to_list
-       (pp_instruction m test an rendered_control_flow_common_prefix_end)
-       an.instructions index_low index_high)
+  pp_groups_ranged m test an rendered_control_flow_common_prefix_end index_low index_high
 
 let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
   let open Dwarf in
@@ -909,8 +1034,7 @@ let pp_test_analysis m test an =
       *)
       ^ "\n* ************* instructions *****************\n"
       ^ ( pp_instruction_init ();
-          String.concat ""
-            (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions))
+          pp_groups_all m test an
         )
       ^ "* ************* struct/union/enum type definitions *****************\n"
       ^ (let d = test.dwarf_static.ds_dwarf in
@@ -930,4 +1054,4 @@ let pp_test_analysis m test an =
   | Html ->
      "\n* ************* instructions *****************\n"
      ^ (pp_instruction_init ();
-      String.concat "" (Array.to_list (Array.mapi (pp_instruction m test an 0) an.instructions)))
+      pp_groups_all m test an)

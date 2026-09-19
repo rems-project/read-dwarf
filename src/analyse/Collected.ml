@@ -89,6 +89,62 @@ let mk_alternatives (test : test) (section_name : string) : AlternativesType.tab
       | _ -> () );
       t
 
+(* Claude: group the instructions (in address order) into the footprints of
+   alternatives entries and single instructions.  An entry forms a group iff
+   its footprint is non-empty and its addresses are exactly the next nr_inst
+   instructions of the array; several entries with the same base may share a
+   group, which then spans the longest footprint.  Entries that do not fit
+   (empty footprint, footprint not contiguous in the objdump, or base inside
+   an earlier group's footprint) are left to be reported inline by the
+   pretty-printer *)
+let mk_instruction_groups (alternatives : AlternativesType.table option)
+    (instructions : ControlFlowTypes.instruction array) (index_option_of_address : addr -> int option) :
+    instruction_group array * int array =
+  let n = Array.length instructions in
+  let group_of_index = Array.make n (-1) in
+  let groups = ref [] in
+  let ngroups = ref 0 in
+  let emit g ks =
+    List.iter (fun k -> group_of_index.(k) <- !ngroups) ks;
+    groups := g :: !groups;
+    incr ngroups
+  in
+  let fits k (e : AlternativesType.entry) =
+    e.nr_inst >= 1
+    &&
+    match e.orig with
+    | None -> false
+    | Some base ->
+        List.for_all
+          (fun j ->
+            index_option_of_address (Sym.add base (Sym.of_int (AlternativesType.aarch64_insn_size * j)))
+            = Some (k + j))
+          (List.init e.nr_inst Fun.id)
+  in
+  let rec walk k =
+    if k < n then begin
+      let candidates =
+        match alternatives with
+        | None -> []
+        | Some t -> ( try AlternativesType.SymMap.find instructions.(k).i_addr t.by_orig with Not_found -> [] )
+      in
+      match List.filter (fits k) candidates with
+      | [] ->
+          emit (G_single k) [k];
+          walk (k + 1)
+      | fitting ->
+          let sorted =
+            List.stable_sort (fun (a : AlternativesType.entry) (b : AlternativesType.entry) -> compare b.nr_inst a.nr_inst) fitting
+          in
+          let longest = (List.hd sorted).nr_inst in
+          let ks = List.init longest (fun j -> k + j) in
+          emit (G_alternative (sorted, ks)) ks;
+          walk (k + longest)
+    end
+  in
+  walk 0;
+  (Array.of_list (List.rev !groups), group_of_index)
+
 let mk_analysis test filename_objdump_d filename_branch_table_option =
   (* compute the basic control-flow data *)
   let (instructions, index_of_address, index_option_of_address, address_of_index) =
@@ -128,6 +184,10 @@ let mk_analysis test filename_objdump_d filename_branch_table_option =
     | Some section_name -> time "mk_alternatives" (mk_alternatives test) section_name
   in
 
+  let (instruction_groups, group_of_index) =
+    time "mk_instruction_groups" (mk_instruction_groups alternatives instructions) index_option_of_address
+  in
+
   let acf_width = 60 in
   let max_branch_distance = None (* Some instruction_count, or None for unlimited *) in
   let (rendered_control_flow, rendered_control_flow_inbetweens, rendered_control_flow_width) =
@@ -156,6 +216,8 @@ let mk_analysis test filename_objdump_d filename_branch_table_option =
       rendered_control_flow_inbetweens;
       rendered_control_flow_width;
       alternatives;
+      instruction_groups;
+      group_of_index;
     }
   in
 

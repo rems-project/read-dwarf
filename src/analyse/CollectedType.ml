@@ -54,6 +54,14 @@ open DwarfLineInfo
 open ControlFlowTypes
 open RangedVarType
 
+(* Claude: the instructions grouped for rendering: either a single
+   instruction with no alternative applying to it, or the footprint of one or
+   more alternatives entries with the same base address (the longest first),
+   as the indices of its instructions in address order *)
+type instruction_group =
+  | G_single of int
+  | G_alternative of AlternativesType.entry list * int list
+
 type analysis = {
   index_of_address : addr -> int;
   index_option_of_address : addr -> int option;
@@ -80,4 +88,6 @@ type analysis = {
   rendered_control_flow_width : int;
   (* Claude: Linux alternatives entries, None iff the file has no alternatives section *)
   alternatives : AlternativesType.table option;
+  instruction_groups : instruction_group array;
+  group_of_index : int array;  (** instruction index -> index into instruction_groups *)
 }
