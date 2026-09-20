@@ -156,18 +156,30 @@ let branch_table_target_addresses test filename_branch_table_option : (addr * ad
       )
   in
 
-  (* pull out .rodata section from ELF *)
-  let ((_, rodata_addr, bs) as _rodata : Dwarf.p_context * Sym.t * BytesSeq.t) =
-    (*Dwarf.extract_section_body_without_relocations test.elf_file ".rodata" false*)
-    Dwarf.extract_section_body_without_relocations test.elf_file ".hyp.rodata" false
+  (* pull out .rodata section from ELF.  Claude: with its relocations
+     (a relocatable object's rodata has them, e.g. for pointer tables), via
+     linksem's symbolic byte sequence; the concrete bytes are the file's, i.e.
+     zero where a relocation applies *)
+  let ((_, rodata_addr, sym_bs) : Dwarf.p_context * Sym.t * Dwarf_byte_sequence.sym_byte_sequence) =
+    (*Dwarf.extract_section_body test.elf_file ... ".rodata" false*)
+    Dwarf.extract_section_body test.elf_file
+      Abi_aarch64_symbolic_relocation.aarch64_data_relocation_interpreter ".hyp.rodata" false
   in
+  let bs : BytesSeq.t = sym_bs.Dwarf_byte_sequence.sbs_bytes in
   (* chop into bytes *)
   let rodata_bytes : char array = BytesSeq.to_array bs in
 
-  (* chop into 4-byte words - as needed for branch offset tables,
-     though not for all other things in .rodata *)
+  (* chop into 4-byte little-endian words - as needed for branch offset
+     tables, though not for all other things in .rodata.  Claude: computed
+     here from the concrete bytes rather than by linksem's
+     words_of_sym_byte_sequence, which raises on the first relocated word;
+     a word under a relocation reads as the file's bytes, i.e. zero *)
   let rodata_words : (natural * natural) list =
-    Dwarf.words_of_sym_byte_sequence rodata_addr (Dwarf_byte_sequence.sym_bs_construct bs (Pmap.empty Nat_big_num.compare)) [] in (*HACK*)
+    List.init (Array.length rodata_bytes / 4) (fun i ->
+        let b k = Char.code rodata_bytes.((4 * i) + k) in
+        ( Sym.add rodata_addr (Sym.of_int (4 * i)),
+          Sym.of_int (b 0 + (256 * b 1) + (65536 * b 2) + (16777216 * b 3)) ))
+  in
 
   let read_rodata_b addr =
     Dwarf.sym_natural_of_byte

@@ -658,6 +658,7 @@ let skylight an =
   | None -> fatal "sources page: no --out-dir"
   | Some out_dir ->
       let files = referenced_source_files an in
+      let skylight = !Globals.skylight in
       let c = open_out (out_dir ^ ".files") in
       List.iter (fun (_, path) -> Printf.fprintf c "%s\n" path) files;
       close_out c;
@@ -665,7 +666,7 @@ let skylight an =
         (List.map
            (fun (ufe, path) ->
              let target =
-               if !Globals.skylight then begin
+               if skylight then begin
                  let target = Filename.basename path ^ ".html" in
                  sys_command ("skylighting -n " ^ Filename.quote path ^ " > " ^ Filename.quote (Filename.concat out_dir target));
                  target
@@ -996,7 +997,17 @@ let output_per_cu_files m test an filename_stem re_ranged_compilation_units =
    whole-file chunk pages), written to --out-dir if given; separate from the
    single whole-file rendering of pp_test_analysis so that the latter can be
    skipped when nobody wants it *)
+(* Claude: --skylight needs the skylighting program; if it is not installed,
+   say so once and turn the option off, so that both the source-line links
+   and the sources page fall back to plain links to the source files *)
+let check_skylight_available () =
+  if !Globals.skylight && Sys.command "command -v skylighting > /dev/null 2>&1" <> 0 then begin
+    warn "--skylight given but the skylighting program is not installed; linking to the source files instead";
+    Globals.skylight := false
+  end
+
 let output_multi_file_analysis m test an =
+  check_skylight_available ();
   (* pick address ranges for each compilation unit.  In pkvm all compilation units currently have exactly one range, the lowest-address range starts at the start of the code, and they happen to be in address order (though I don't want to depend on that). But these ranges are not contiguous, so instead we'll use the range from the start of one to the start of the next, except for the last *)
   ( match !Globals.out_dir with
   | None -> ()

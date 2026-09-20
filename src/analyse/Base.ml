@@ -82,6 +82,8 @@ open Pp
 let process_file () : unit =
   (*filename_objdump_d filename_branch_tables (filename_elf : string) : unit =*)
   let m = !Globals.ppmode in
+  (* Claude: decide once, before anything renders source links, whether --skylight can be honoured *)
+  check_skylight_available ();
 
   (* TODO: make idiomatic Cmdliner :-(  *)
   let filename_elf = match !Globals.elf with Some s -> s | None -> fatal "no --elf option\n" in
