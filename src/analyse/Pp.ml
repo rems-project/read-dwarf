@@ -668,7 +668,11 @@ let skylight an =
              let target =
                if skylight then begin
                  let target = Filename.basename path ^ ".html" in
-                 sys_command ("skylighting -n " ^ Filename.quote path ^ " > " ^ Filename.quote (Filename.concat out_dir target));
+                 (* Claude: -f html: skylighting's default output format is ANSI terminal colouring;
+                    its html line numbers carry id="N" anchors, matching the #N fragments of the
+                    source-line links *)
+                 sys_command
+                   ("skylighting -f html -n " ^ Filename.quote path ^ " > " ^ Filename.quote (Filename.concat out_dir target));
                  target
                end
                else source_href ufe

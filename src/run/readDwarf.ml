@@ -57,7 +57,7 @@ let dry_run =
     Arg.(value & flag & info ["dry-run"] ~docv:"DRY_RUN" ~doc)
 
 let skylight =
-  let doc = "skylight" in
+  let doc = "skylight: use skylight to render source files and link to those in html output" in
   setter Analyse.Globals.skylight Arg.(value & flag & info ["skylight"] ~docv:"SKYLIGHT" ~doc)
 
 let comp_dir =
