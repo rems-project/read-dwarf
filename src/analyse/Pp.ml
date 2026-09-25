@@ -164,7 +164,35 @@ let come_froms_of an k = List.filter (function cf -> cf.cf_target_kind <> T_plai
    frame and variable information before the instruction), the instruction
    line itself, and a suffix (variables going out of scope), so that the
    alternatives rendering can put the footprint of an entry together *)
-let pp_instruction_prefix m test an rendered_control_flow_common_prefix_end k i =
+(* the parameters of a function starting at this instruction, as "+ f params:" lines *)
+let pp_instruction_params m an i =
+  let pp_params addr params =
+    match List.assoc_opt addr params with
+    | None -> ""
+    | Some (name, vars) -> (
+        "+ " ^ name ^ " params:"
+        ^
+        match vars with
+        | [] -> " none\n"
+        | _ ->
+            "\n"
+            ^ String.concat ""
+                (List.map (pp_sdt_concise_variable_or_formal_parameter 0 true) vars)
+      )
+  in
+  css m Render_vars (pp_params i.i_addr an.ranged_vars_at_instructions.rvai_params)
+
+(* Claude: the variables whose location ranges start at instruction k, as
+   "+" lines; the alternatives rendering puts these (and the params lines)
+   before a block as a whole rather than inside it *)
+let pp_instruction_vars_new m an k =
+  if !Globals.show_vars then
+    css m Render_vars_new (pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k))
+    (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
+    (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
+  else ""
+
+let pp_instruction_prefix ?(vars = true) m test an rendered_control_flow_common_prefix_end k i =
   let addr = i.i_addr in
   let come_froms' = come_froms_of an k in
 
@@ -228,22 +256,7 @@ let pp_instruction_prefix m test an rendered_control_flow_common_prefix_end k i 
        List.map (pp_symb Render_symbol_star true) syms_nodollar
        @ List.map (pp_symb Render_symbol_nostar false) syms_dollar)
   (* function parameters at this address *)
-  ^
-  let pp_params addr params =
-    match List.assoc_opt addr params with
-    | None -> ""
-    | Some (name, vars) -> (
-        "+ " ^ name ^ " params:"
-        ^
-        match vars with
-        | [] -> " none\n"
-        | _ ->
-            "\n"
-            ^ String.concat ""
-                (List.map (pp_sdt_concise_variable_or_formal_parameter 0 true) vars)
-      )
-  in
-  css m Render_vars (pp_params addr an.ranged_vars_at_instructions.rvai_params)
+  ^ (if vars then pp_instruction_params m an i else "")
   (* the new inlining info for this address *)
   ^ css m Render_inlining ppd_new_inlining
   (* the source file lines (if any) associated to this address *)
@@ -318,13 +331,7 @@ let pp_instruction_prefix m test an rendered_control_flow_common_prefix_end k i 
      ^ "\n"
   *)
   (* the variables whose location ranges include this address - new version*)
-  ^ begin
-      if !Globals.show_vars then
-        css m Render_vars_new (pp_ranged_vars "+" an.ranged_vars_at_instructions.rvai_new.(k))
-        (*        ^ pp_ranged_vars "C" an.ranged_vars_at_instructions.rvai_current.(k)*)
-        (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
-      else ""
-    end
+  ^ (if vars then pp_instruction_vars_new m an k else "")
 
 
 (* Claude: the value of the relocation at instruction address [a], as linksem's
@@ -409,6 +416,7 @@ let pp_instruction_line m test an rendered_control_flow_common_prefix_end k i =
       ^ "\n"
       )
 
+(* the variables whose location ranges end after instruction k, as "-" lines *)
 let pp_instruction_suffix m an k =
   if (*true*) !Globals.show_vars then
     if k < Array.length an.instructions - 1 then
@@ -416,10 +424,12 @@ let pp_instruction_suffix m an k =
     else ""
   else ""
 
-let pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i =
-  pp_instruction_prefix m test an rendered_control_flow_common_prefix_end k i
+(* Claude: ~vars:false leaves out the "+" and "-" variable lines, for the
+   alternatives rendering, which prints them around the block instead *)
+let pp_instruction_plain ?(vars = true) m test an rendered_control_flow_common_prefix_end k i =
+  pp_instruction_prefix ~vars m test an rendered_control_flow_common_prefix_end k i
   ^ pp_instruction_line m test an rendered_control_flow_common_prefix_end k i
-  ^ pp_instruction_suffix m an k
+  ^ if vars then pp_instruction_suffix m an k else ""
 
 (* Claude: other commands (run-func-rd, rel-prog) render single instructions
    by index; they get the plain rendering, without alternatives *)
@@ -567,26 +577,30 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
       ^ pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref t e
 
 (* Claude: render one instruction group: a single instruction as before, or
-   an alternatives footprint as a block: header with the conditions, the
-   default instructions rendered as usual, then for each entry a "---" part
-   with its replacement or callback, then a footer *)
+   an alternatives footprint as a block: the "+" variable lines of all its
+   instructions, the header with the conditions, the default instructions
+   rendered as usual but without their variable lines, then for each entry
+   a "---" part with its replacement or callback, the footer, and the "-"
+   variable lines of all its instructions *)
 let pp_group m test an rendered_control_flow_common_prefix_end (g : instruction_group) =
   match g with
   | G_single k ->
       let i = an.instructions.(k) in
       pp_ungrouped_alternatives m an ~in_group:[] i ^ pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i
   | G_alternative (es, ks) ->
-      css m Render_alternative
-        ("---alternative---\n" ^ String.concat "" (List.map (fun e -> AlternativesPp.pp_condition e ^ "\n") es))
+      String.concat "" (List.map (fun k -> pp_instruction_params m an an.instructions.(k) ^ pp_instruction_vars_new m an k) ks)
+      ^ css m Render_alternative
+          ("---alternative---\n" ^ String.concat "" (List.map (fun e -> AlternativesPp.pp_condition e ^ "\n") es))
       ^ String.concat ""
           (List.map
              (fun k ->
                let i = an.instructions.(k) in
                pp_ungrouped_alternatives m an ~in_group:es i
-               ^ pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i)
+               ^ pp_instruction_plain ~vars:false m test an rendered_control_flow_common_prefix_end k i)
              ks)
       ^ String.concat "" (List.map (pp_alternative_action m test an rendered_control_flow_common_prefix_end ks) es)
       ^ css m Render_alternative "---end---\n"
+      ^ String.concat "" (List.map (pp_instruction_suffix m an) ks)
 
 (* Claude: render the groups covering instruction indices [index_low, index_high).
    A footprint that starts before index_low was rendered as a block with the
