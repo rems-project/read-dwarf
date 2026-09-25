@@ -90,7 +90,7 @@ let describe_callback (cb : Pkvm_alternatives.alt_callback) : string option =
 let rec expr_leaves (e : Symbolic_resolution.sym_expr) : string list =
   match e with
   | SConst _ -> []
-  | SSection s -> ["section(" ^ s ^ ")"]
+  | SSection s -> [s]
   | SSymbol s -> ["symbol(" ^ s ^ ")"]
   | SGotSlot s -> ["got(" ^ s ^ ")"]
   | SVar v -> ["var(" ^ v ^ ")"]

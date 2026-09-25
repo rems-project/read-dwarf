@@ -344,7 +344,8 @@ let pp_relocation_value test (a : addr) : string =
               (* printed as the "words written" expressions are, via Symbolic_resolution's printer *)
               "  = "
               ^ Symbolic_resolution.string_of_sym_expr
-                  (Symbolic_resolution.sym_expr_of_symbolic_expression rel.rel_desc_value) ) )
+                  (Symbolic_resolution.simplify_sym_expr
+                     (Symbolic_resolution.sym_expr_of_symbolic_expression rel.rel_desc_value)) ) )
   | _ -> ""
 
 (* Claude: the relocation objdump shows on an instruction, followed by its
@@ -513,7 +514,9 @@ let pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref (t : Alt
                match AlternativesPp.word_constant w with
                | Some _ -> ""
                | None ->
-                   prefix ^ css m Render_alternative ("    " ^ Symbolic_resolution.string_of_sym_expr w ^ "\n"))
+                   prefix
+                   ^ css m Render_alternative
+                       ("    " ^ Symbolic_resolution.string_of_sym_expr (Symbolic_resolution.simplify_sym_expr w) ^ "\n"))
              words)
 
 (* Claude: one replacement instruction, in the layout of pp_instruction_line
