@@ -586,24 +586,22 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
       ^ pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref t e
 
 (* Claude: render one instruction group: a single instruction as before, or
-   an alternatives footprint as a block: the params, inlining header and
-   "+" variable lines of all its instructions, the header with the
-   conditions, the default instructions rendered as usual but without those
-   lines, then for each entry a "---" part with its replacement or callback,
-   the footer, and the "-" variable lines of all its instructions *)
+   an alternatives footprint as a block: the params and "+" variable lines
+   of all its instructions, then their inlining header lines, the header
+   with the conditions, the default instructions rendered as usual but
+   without those lines, then for each entry a "---" part with its
+   replacement or callback, the footer, and the "-" variable lines of all
+   its instructions *)
 let pp_group m test an rendered_control_flow_common_prefix_end (g : instruction_group) =
   match g with
   | G_single k ->
       let i = an.instructions.(k) in
       pp_ungrouped_alternatives m an ~in_group:[] i ^ pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i
   | G_alternative (es, ks) ->
+      (* the location-info lines of the footprint's instructions, then their inlining headers *)
       String.concat ""
-        (List.map
-           (fun k ->
-             pp_instruction_params m an an.instructions.(k)
-             ^ pp_instruction_inlining_header m an k
-             ^ pp_instruction_vars_new m an k)
-           ks)
+        (List.map (fun k -> pp_instruction_params m an an.instructions.(k) ^ pp_instruction_vars_new m an k) ks)
+      ^ String.concat "" (List.map (pp_instruction_inlining_header m an) ks)
       ^ css m Render_alternative
           ("---alternative---\n" ^ String.concat "" (List.map (fun e -> AlternativesPp.pp_condition e ^ "\n") es))
       ^ String.concat ""
