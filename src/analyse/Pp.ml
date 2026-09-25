@@ -431,40 +431,53 @@ let pp_ungrouped_alternatives m an ~(in_group : AlternativesType.entry list) (i 
                ("!! alternative not rendered as a block (" ^ reason ^ "): " ^ AlternativesPp.pp_condition e ^ "\n"))
            others)
 
-(* Claude: a replacement instruction as it would be after patch_alternative()
-   in arch/arm64/kernel/alternative.c copied it to the original site: the
-   same disassembly at the original address, with an immediate branch whose
-   target lies inside the replacement block moving with the block (the
-   kernel leaves its immediate alone) and any other PC-relative target kept
-   (the kernel re-encodes the immediate).  The opcode bytes shown are those
-   assembled at the replacement address, so for re-encoded branches and adrp
-   they are not the bytes that are patched in.  Returns the rebased
-   instruction and a note *)
-let rebase_replacement_instruction (e : AlternativesType.entry) ~(orig : addr) ~(alt : addr) (r : instruction) :
-    instruction * string =
-  let inside t =
-    Sym.Ordered.less_equal alt t
-    && Sym.Ordered.less_equal t (Sym.add alt (Sym.of_int (AlternativesType.alt_len e)))
-  in
-  let shift t = Sym.add orig (Sym.sub t alt) in
-  let moves t = "branch within the block: target moves to " ^ pp_addr (shift t) in
-  let (c, note) =
-    match r.i_control_flow with
-    | C_branch (t, s) when inside t -> (C_branch (shift t, s), moves t)
-    | C_branch_and_link (t, s) when inside t -> (C_branch_and_link (shift t, s), moves t)
-    | C_branch_cond (mn, t, s) when inside t -> (C_branch_cond (mn, shift t, s), moves t)
-    | C_branch _ | C_branch_and_link _ | C_branch_cond _ ->
-        (r.i_control_flow, "branch out of the block: target kept, immediate re-encoded")
-    | _ ->
-        let literal =
-          Stdlib.List.mem r.i_mnemonic ["ldr"; "ldrsw"; "prfm"] && not (String.contains r.i_operands '[')
-        in
-        if r.i_mnemonic = "adrp" then (r.i_control_flow, "adrp: immediate re-encoded for the new page")
-        else if r.i_mnemonic = "adr" || literal then
-          (r.i_control_flow, "!! PC-relative literal: the kernel would BUG() patching this")
-        else (r.i_control_flow, "")
-  in
-  ({ r with i_addr = shift r.i_addr; i_control_flow = c; i_targets = [] }, note)
+(* Claude: a replacement instruction shown at the original site it is
+   copied to: the objdump's disassembly of it at the replacement address,
+   re-addressed.  What patch_alternative() in arch/arm64/kernel/alternative.c
+   actually writes there (an immediate branch or adrp re-targeted when its
+   target lies outside the block) is linksem's model's business, rendered
+   from its words below the instructions *)
+let rebase_replacement_instruction ~(orig : addr) ~(alt : addr) (r : instruction) : instruction =
+  { r with i_addr = Sym.add orig (Sym.sub r.i_addr alt); i_targets = [] }
+
+(* Claude: the word of an objdump instruction, as objdump prints it *)
+let word_of_opcode (opcode : int list) : Z.t =
+  List.fold_left (fun acc b -> Z.add (Z.shift_left acc 8) (Z.of_int b)) Z.zero opcode
+
+(* Claude: the note on a replacement line from linksem's word for it: nothing
+   if the word is the instruction as assembled, else what changes *)
+let replacement_note (r : instruction option) (w : Symbolic_resolution.sym_expr option) : string =
+  match (r, w) with
+  | (Some r, Some w) -> (
+      match AlternativesPp.word_constant w with
+      | Some x when Z.equal x (word_of_opcode r.i_opcode) -> ""
+      | Some x -> "re-encoded by patch_alternative(): 0x" ^ Z.format "%08x" x
+      | None -> "re-targeted by patch_alternative(), see the words below" )
+  | _ -> ""
+
+(* Claude: the words linksem's model says the entry writes, one line per
+   instruction of the footprint: a constant as a hex word, otherwise a
+   summary of what it depends on, with the whole expression on a second
+   line; or why linksem cannot say *)
+let pp_linksem_words m (t : AlternativesType.table) (e : AlternativesType.entry) =
+  let base = AlternativesType.orig_addr e in
+  let section = match base with Sym_ocaml.Num.Offset (s, _) -> s | Sym_ocaml.Num.Absolute _ -> "" in
+  match AlternativesType.words t e with
+  | Error why -> css m Render_alternative ("!! linksem cannot give the words written: " ^ why ^ "\n")
+  | Ok (words, _checks) ->
+      css m Render_alternative "words written (linksem's model):\n"
+      ^ String.concat ""
+          (List.map
+             (fun (off, w) ->
+               css m Render_alternative
+                 (Printf.sprintf "~   %s:  %s\n"
+                    (AlternativesPp.pp_addr (Sym_ocaml.Num.Offset (section, off)))
+                    (AlternativesPp.pp_word_summary w))
+               ^
+               match AlternativesPp.word_constant w with
+               | Some _ -> ""
+               | None -> css m Render_alternative ("~       " ^ Symbolic_resolution.string_of_sym_expr w ^ "\n"))
+             words)
 
 (* Claude: one replacement instruction, in the layout of pp_instruction_line
    but with blank inlining and control-flow columns (of the same width as
@@ -483,10 +496,13 @@ let pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref 
   ^ css m Render_relocation (match r.i_relocation with None -> "" | Some (typ, targ) -> "\t" ^ typ ^ " " ^ targ)
   ^ css m Render_alternative ((if note = "" then "" else "  [" ^ note ^ "]") ^ "\n")
 
-(* Claude: the "---" part of a block: what one entry does when applied *)
+(* Claude: the "---" part of a block: what one entry does when applied: the
+   callback or the replacement instructions (from the objdump), then the
+   words linksem's model says are written *)
 let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks : int list) (e : AlternativesType.entry) =
   let fetch a = Option.map (fun k -> an.instructions.(k)) (an.index_option_of_address a) in
   let k_ref = List.hd ks in
+  let t = Option.get an.alternatives in
   css m Render_alternative "---\n"
   ^
   match AlternativesAction.action_of_entry ~fetch e with
@@ -495,21 +511,26 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
         ("callback " ^ callback
         ^ (match AlternativesPp.describe_callback kind with Some d -> ": " ^ d | None -> "")
         ^ "\n")
+      ^ pp_linksem_words m t e
   | AlternativesAction.Act_unresolved { why; _ } -> css m Render_alternative ("unresolved action: " ^ why ^ "\n")
   | AlternativesAction.Act_replace { replacement_addr; replacement; _ } ->
       let orig = AlternativesType.orig_addr e in
+      let words = match AlternativesType.words t e with Ok (ws, _) -> List.map snd ws | Error _ -> [] in
+      let word_at j = List.nth_opt words j in
       css m Render_alternative
         (Printf.sprintf "replacement (assembled at %s, shown as patched in at %s):\n" (pp_addr replacement_addr)
            (pp_addr orig))
       ^ String.concat ""
-          (List.map
-             (fun (a, ro) ->
+          (List.mapi
+             (fun j (a, ro) ->
                match ro with
                | None -> css m Render_alternative (pp_addr a ^ ":  <no instruction at this address in the objdump>\n")
                | Some r ->
-                   let (r', note) = rebase_replacement_instruction e ~orig ~alt:replacement_addr r in
-                   pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref r' note)
+                   let r' = rebase_replacement_instruction ~orig ~alt:replacement_addr r in
+                   pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref r'
+                     (replacement_note ro (word_at j)))
              replacement)
+      ^ pp_linksem_words m t e
 
 (* Claude: render one instruction group: a single instruction as before, or
    an alternatives footprint as a block: header with the conditions, the

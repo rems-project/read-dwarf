@@ -81,6 +81,49 @@ let describe_callback (cb : Pkvm_alternatives.alt_callback) : string option =
   | Cb_spectre_bhb_patch_wa3 -> Some "mov w0, #ARM_SMCCC_ARCH_WORKAROUND_3 (as orr) if the firmware Spectre-BHB mitigation is in use; otherwise unchanged"
   | Cb_other _ -> None
 
+(*****************************************************************************)
+(*  the words an entry writes                                                *)
+(*****************************************************************************)
+
+(* Claude: the leaves of a symbolic word, printed as linksem prints them, for
+   a summary of what the word depends on *)
+let rec expr_leaves (e : Symbolic_resolution.sym_expr) : string list =
+  match e with
+  | SConst _ -> []
+  | SSection s -> ["section(" ^ s ^ ")"]
+  | SSymbol s -> ["symbol(" ^ s ^ ")"]
+  | SGotSlot s -> ["got(" ^ s ^ ")"]
+  | SVar v -> ["var(" ^ v ^ ")"]
+  | SBin (_, a, b) -> expr_leaves a @ expr_leaves b
+  | SNot a -> expr_leaves a
+  | SIte (f, a, b) -> flag_leaves f @ expr_leaves a @ expr_leaves b
+
+and flag_leaves (f : Symbolic_resolution.sym_flag) : string list =
+  match f with
+  | SFlag s -> ["flag(" ^ s ^ ")"]
+  | SIsZero e -> expr_leaves e
+  | SInRange (e, _, _) -> expr_leaves e
+  | SBoth (f1, f2) -> flag_leaves f1 @ flag_leaves f2
+
+let rec has_conditional (e : Symbolic_resolution.sym_expr) : bool =
+  match e with
+  | SIte _ -> true
+  | SBin (_, a, b) -> has_conditional a || has_conditional b
+  | SNot a -> has_conditional a
+  | SConst _ | SSection _ | SSymbol _ | SGotSlot _ | SVar _ -> false
+
+let word_constant (e : Symbolic_resolution.sym_expr) : Z.t option =
+  match e with SConst x -> Some x | _ -> None
+
+(** A word as an instruction word in hex if it is constant; otherwise what it depends on. *)
+let pp_word_summary (e : Symbolic_resolution.sym_expr) : string =
+  match e with
+  | SConst x -> "0x" ^ Z.format "%08x" x
+  | _ ->
+      (if has_conditional e then "conditional; " else "")
+      ^ "depends on "
+      ^ String.concat ", " (List.sort_uniq compare (expr_leaves e))
+
 (** The kind of an alternative entry: its condition and action, including which callback and
     what it writes, but no addresses and no instructions. *)
 let pp_alternative_kind (e : entry) : string =

@@ -8,7 +8,9 @@
     [Generated_arm64_cpucaps]). This module adds only what a viewer of an object needs on top of
     linksem's [alt_entry]: a file's entries indexed by the address of their original code,
     addresses in the form the objdump-derived instructions carry, the two sides of an entry as
-    an [action_ref], and the kernel's [BUG_ON] sanity checks as per-entry problems. *)
+    an [action_ref], the kernel's [BUG_ON] sanity checks as per-entry problems, and the words
+    linksem's model says an entry writes ([Pkvm_alternatives.alt_entry_words]) over the code
+    sections link-time relocated by linksem. *)
 
 open Utils
 open Pkvm_alternatives
@@ -35,6 +37,11 @@ type table = {
   entries : entry array;  (** in section order: entry [i] is at [section_name + 12 i] *)
   by_orig : entry list SymMap.t;  (** entries indexed by the address of their original code *)
   table_problems : string list;  (** problems with the section as a whole *)
+  elf : Elf_file.elf64_file;
+  resolved : ((string * Symbolic_resolution.sym_section) list, string) result Lazy.t;
+      (** the sections holding original or alternative sites, link-time relocated by linksem
+          (as its [resolve_aarch64_object] does, but only those sections): forced the first time
+          an entry's words are rendered *)
 }
 
 (*****************************************************************************)
@@ -123,6 +130,33 @@ let problems (e : entry) : string list =
 (*  the table of a file                                                      *)
 (*****************************************************************************)
 
+(* Claude: the named sections, link-time relocated by linksem with the
+   linker's possible ADRP+ADD relaxation, as Abi_aarch64_instruction_fields.
+   resolve_aarch64_object does for the whole object *)
+let relocate_sections (f64 : Elf_file.elf64_file) (names : string list) :
+    ((string * Symbolic_resolution.sym_section) list, string) result =
+  let relocate name =
+    match
+      Symbolic_resolution.relocate_section f64
+        Abi_aarch64_symbolic_relocation.aarch64_relocation_interpreter
+        Abi_aarch64_instruction_fields.aarch64_field_spec name
+    with
+    | Error.Fail m -> Error (name ^ ": " ^ m)
+    | Error.Success ss -> (
+        if ss.Symbolic_resolution.sec_words = [] then Ok ss
+        else
+          match Abi_aarch64_instruction_fields.relax_adrp_add f64 name ss with
+          | Error.Fail m -> Error (name ^ ": " ^ m)
+          | Error.Success ss -> Ok ss
+      )
+  in
+  List.fold_left
+    (fun acc name ->
+      match acc with
+      | Error m -> Error m
+      | Ok l -> ( match relocate name with Error m -> Error m | Ok ss -> Ok ((name, ss) :: l) ))
+    (Ok []) names
+
 (** [table_of_elf f64 section_name] is [None] iff [f64] has no section of that name. If linksem
     cannot read the section, the table has no entries and says why. *)
 let table_of_elf (f64 : Elf_file.elf64_file) (section_name : string) : table option =
@@ -151,5 +185,41 @@ let table_of_elf (f64 : Elf_file.elf64_file) (section_name : string) : table opt
         )
         SymMap.empty entries
     in
+    let site_sections =
+      List.sort_uniq compare
+        (List.concat_map
+           (fun e ->
+             fst e.ae_orig
+             :: (match action e with Replacement (Sym_ocaml.Num.Offset (s, _)) -> [s] | _ -> []))
+           (Array.to_list entries)
+        )
+    in
     info "alternatives: %d entries in %s" (Array.length entries) section_name;
-    Some { section_name; entries; by_orig; table_problems }
+    Some
+      {
+        section_name;
+        entries;
+        by_orig;
+        table_problems;
+        elf = f64;
+        resolved = lazy (relocate_sections f64 site_sections);
+      }
+
+(*****************************************************************************)
+(*  the words an entry writes                                                *)
+(*****************************************************************************)
+
+(** The (offset, word) of each instruction of the entry's footprint as linksem's model says it is
+    patched (a replacement's words with [patch_alternative()]'s re-targeting, a callback's
+    output over the environment's parameters and flags), and the model's checks; or why linksem
+    cannot say. The pass only matters for the boot-pass callback guard, which none of the
+    hypervisor's entries hit, so the system pass is asked for. *)
+let words (t : table) (e : entry) :
+    ((Z.t * Symbolic_resolution.sym_expr) list * Symbolic_resolution.sym_check list, string) result =
+  match Lazy.force t.resolved with
+  | Error m -> Error m
+  | Ok secs -> (
+      match alt_entry_words t.elf Pass_system e secs with
+      | Error.Success r -> Ok r
+      | Error.Fail m -> Error m
+    )
