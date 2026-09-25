@@ -76,11 +76,9 @@ let clip_binary = ref false
 let analyse_computed_branches = ref true
 
 (* Claude: Linux arm64 alternatives (runtime instruction patching): the
-   section to read entries from, None to disable; an optional cpucaps names
-   file from the same kernel build; and whether to dump the parsed table *)
+   section to read entries from, None to disable; and whether to dump the
+   table.  The cpucap names are linksem's generated table *)
 let alternatives_section = ref (Some ".altinstructions" : string option)
-
-let cpucaps_file = ref (None : string option)
 
 let dump_alternatives = ref false
 

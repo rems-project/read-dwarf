@@ -13,7 +13,11 @@ open AlternativesType
 (* Claude: instructions are paired with their addresses so that a missing one
    (not in the objdump) can still be reported *)
 type 'insn action =
-  | Act_callback of { orig : (addr * 'insn option) list; callback : string }
+  | Act_callback of {
+      orig : (addr * 'insn option) list;
+      callback : string;
+      kind : Pkvm_alternatives.alt_callback;
+    }
   | Act_replace of {
       orig : (addr * 'insn option) list;
       replacement_addr : addr;
@@ -28,13 +32,12 @@ let fetch_range ~(fetch : addr -> 'insn option) (base : addr) (nr_inst : int) :
       (a, fetch a)
   )
 
-(** The original instructions of an entry and, according to its kind, the callback name or the
-    replacement instructions. No PC-relative fixups are applied to the replacement: it is the code
-    as assembled at its own address. *)
+(** The original instructions of an entry and, according to its kind, the callback or the
+    replacement instructions as assembled at their own address. *)
 let action_of_entry ~(fetch : addr -> 'insn option) (e : entry) : 'insn action =
-  let orig = match e.orig with Some a -> fetch_range ~fetch a e.nr_inst | None -> [] in
-  match e.action with
-  | Callback name -> Act_callback { orig; callback = name }
+  let orig = fetch_range ~fetch (orig_addr e) (nr_inst e) in
+  match action e with
+  | Callback (name, kind) -> Act_callback { orig; callback = name; kind }
   | Replacement a ->
-      Act_replace { orig; replacement_addr = a; replacement = fetch_range ~fetch a e.nr_inst }
+      Act_replace { orig; replacement_addr = a; replacement = fetch_range ~fetch a (nr_inst e) }
   | Unresolved why -> Act_unresolved { orig; why }

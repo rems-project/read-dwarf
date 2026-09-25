@@ -45,10 +45,8 @@
 include Base
 (* Claude: the Linux arm64 alternatives modules, from src/analyse/alternatives/ *)
 module AlternativesAction = AlternativesAction
-module AlternativesParse = AlternativesParse
 module AlternativesPp = AlternativesPp
 module AlternativesType = AlternativesType
-module Cpucaps = Cpucaps
 module Base = Base
 module CallGraph = CallGraph
 module Collected = Collected

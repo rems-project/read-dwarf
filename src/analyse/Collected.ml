@@ -74,14 +74,13 @@ open ControlFlowPpText
 open DwarfVarInfo
 open DwarfInliningInfo
 
-(* Claude: parse the alternatives section named by --alternatives-section, if
-   the file has one; print the table if --dump-alternatives *)
+(* Claude: read the alternatives section named by --alternatives-section
+   through linksem, if the file has one; print the table if --dump-alternatives *)
 let mk_alternatives (test : test) (section_name : string) : AlternativesType.table option =
   match test.elf_file with
   | Elf_file.ELF_File_32 _ -> None
   | Elf_file.ELF_File_64 f64 ->
-      let cpucaps = Option.map Cpucaps.load !Globals.cpucaps_file in
-      let t = AlternativesParse.parse ?cpucaps f64 section_name in
+      let t = AlternativesType.table_of_elf f64 section_name in
       ( match t with
       | Some t when !Globals.dump_alternatives ->
           print_string (AlternativesPp.pp_table t);
@@ -110,16 +109,14 @@ let mk_instruction_groups (alternatives : AlternativesType.table option)
     incr ngroups
   in
   let fits k (e : AlternativesType.entry) =
-    e.nr_inst >= 1
-    &&
-    match e.orig with
-    | None -> false
-    | Some base ->
-        List.for_all
-          (fun j ->
-            index_option_of_address (Sym.add base (Sym.of_int (AlternativesType.aarch64_insn_size * j)))
-            = Some (k + j))
-          (List.init e.nr_inst Fun.id)
+    let nr_inst = AlternativesType.nr_inst e in
+    let base = AlternativesType.orig_addr e in
+    nr_inst >= 1
+    && List.for_all
+         (fun j ->
+           index_option_of_address (Sym.add base (Sym.of_int (AlternativesType.aarch64_insn_size * j)))
+           = Some (k + j))
+         (List.init nr_inst Fun.id)
   in
   let rec walk k =
     if k < n then begin
@@ -134,9 +131,12 @@ let mk_instruction_groups (alternatives : AlternativesType.table option)
           walk (k + 1)
       | fitting ->
           let sorted =
-            List.stable_sort (fun (a : AlternativesType.entry) (b : AlternativesType.entry) -> compare b.nr_inst a.nr_inst) fitting
+            List.stable_sort
+              (fun (a : AlternativesType.entry) (b : AlternativesType.entry) ->
+                compare (AlternativesType.nr_inst b) (AlternativesType.nr_inst a))
+              fitting
           in
-          let longest = (List.hd sorted).nr_inst in
+          let longest = AlternativesType.nr_inst (List.hd sorted) in
           let ks = List.init longest (fun j -> k + j) in
           emit (G_alternative (sorted, ks)) ks;
           walk (k + longest)

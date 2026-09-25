@@ -167,7 +167,9 @@ let cfg_source_nodes2 =
 let alternatives_section =
   let doc =
     "Name of the ELF section holding Linux-style alternatives entries (struct alt_instr), whose \
-     effect is shown inline with the instructions"
+     effect is shown inline with the instructions. The entries are read and modelled by \
+     linksem, whose generated table of arm64 cpucaps (from a particular kernel tree) names \
+     the conditions"
   in
   setter Analyse.Globals.alternatives_section
     Arg.(
@@ -182,16 +184,8 @@ let no_alternatives =
       const (fun b -> if b then None else !Analyse.Globals.alternatives_section)
       $ Arg.(value & flag & info ["no-alternatives"] ~doc))
 
-let cpucaps =
-  let doc =
-    "File naming the arm64 cpucaps, from the same kernel build as the ELF file: either the \
-     generated cpucap-defs.h or the arch/arm64/tools/cpucaps list"
-  in
-  setter Analyse.Globals.cpucaps_file
-    Arg.(value & opt (some non_dir_file) None & info ["cpucaps"] ~docv:"CPUCAPS_FILE" ~doc)
-
 let dump_alternatives =
-  let doc = "Print the parsed alternatives table to stdout before the main output" in
+  let doc = "Print the alternatives table to stdout before the main output" in
   setter Analyse.Globals.dump_alternatives Arg.(value & flag & info ["dump-alternatives"] ~doc)
 
 let html =
@@ -237,7 +231,6 @@ let options =
     cfg_source_nodes2;
     alternatives_section;
     no_alternatives;
-    cpucaps;
     dump_alternatives;
     html;
     morello ;

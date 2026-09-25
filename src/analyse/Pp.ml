@@ -423,7 +423,7 @@ let pp_ungrouped_alternatives m an ~(in_group : AlternativesType.entry list) (i 
         (List.map
            (fun (e : AlternativesType.entry) ->
              let reason =
-               if e.nr_inst = 0 then "empty footprint"
+               if AlternativesType.nr_inst e = 0 then "empty footprint"
                else if in_group <> [] then "its base is inside the enclosing alternative"
                else "footprint not contiguous in the objdump"
              in
@@ -443,7 +443,8 @@ let pp_ungrouped_alternatives m an ~(in_group : AlternativesType.entry list) (i 
 let rebase_replacement_instruction (e : AlternativesType.entry) ~(orig : addr) ~(alt : addr) (r : instruction) :
     instruction * string =
   let inside t =
-    Sym.Ordered.less_equal alt t && Sym.Ordered.less_equal t (Sym.add alt (Sym.of_int e.raw.alt_len))
+    Sym.Ordered.less_equal alt t
+    && Sym.Ordered.less_equal t (Sym.add alt (Sym.of_int (AlternativesType.alt_len e)))
   in
   let shift t = Sym.add orig (Sym.sub t alt) in
   let moves t = "branch within the block: target moves to " ^ pp_addr (shift t) in
@@ -489,14 +490,14 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
   css m Render_alternative "---\n"
   ^
   match AlternativesAction.action_of_entry ~fetch e with
-  | AlternativesAction.Act_callback { callback; _ } ->
+  | AlternativesAction.Act_callback { callback; kind; _ } ->
       css m Render_alternative
         ("callback " ^ callback
-        ^ (match AlternativesPp.describe_callback callback with Some d -> ": " ^ d | None -> "")
+        ^ (match AlternativesPp.describe_callback kind with Some d -> ": " ^ d | None -> "")
         ^ "\n")
   | AlternativesAction.Act_unresolved { why; _ } -> css m Render_alternative ("unresolved action: " ^ why ^ "\n")
   | AlternativesAction.Act_replace { replacement_addr; replacement; _ } ->
-      let orig = Option.get e.orig in
+      let orig = AlternativesType.orig_addr e in
       css m Render_alternative
         (Printf.sprintf "replacement (assembled at %s, shown as patched in at %s):\n" (pp_addr replacement_addr)
            (pp_addr orig))
@@ -889,7 +890,7 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
         | None -> []
         | Some t ->
             let in_range (e : AlternativesType.entry) =
-              match Option.bind e.orig an.index_option_of_address with
+              match an.index_option_of_address (AlternativesType.orig_addr e) with
               | None -> false
               | Some k -> (
                   match
