@@ -455,34 +455,10 @@ let replacement_note (r : instruction option) (w : Symbolic_resolution.sym_expr 
       | None -> "re-targeted by patch_alternative(), see the words below" )
   | _ -> ""
 
-(* Claude: the words linksem's model says the entry writes, one line per
-   instruction of the footprint: a constant as a hex word, otherwise a
-   summary of what it depends on, with the whole expression on a second
-   line; or why linksem cannot say *)
-let pp_linksem_words m (t : AlternativesType.table) (e : AlternativesType.entry) =
-  let base = AlternativesType.orig_addr e in
-  let section = match base with Sym_ocaml.Num.Offset (s, _) -> s | Sym_ocaml.Num.Absolute _ -> "" in
-  match AlternativesType.words t e with
-  | Error why -> css m Render_alternative ("!! linksem cannot give the words written: " ^ why ^ "\n")
-  | Ok (words, _checks) ->
-      css m Render_alternative "words written (linksem's model):\n"
-      ^ String.concat ""
-          (List.map
-             (fun (off, w) ->
-               css m Render_alternative
-                 (Printf.sprintf "~   %s:  %s\n"
-                    (AlternativesPp.pp_addr (Sym_ocaml.Num.Offset (section, off)))
-                    (AlternativesPp.pp_word_summary w))
-               ^
-               match AlternativesPp.word_constant w with
-               | Some _ -> ""
-               | None -> css m Render_alternative ("~       " ^ Symbolic_resolution.string_of_sym_expr w ^ "\n"))
-             words)
-
-(* Claude: one replacement instruction, in the layout of pp_instruction_line
-   but with blank inlining and control-flow columns (of the same width as
-   those of the default instruction at index k_ref) *)
-let pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref (r : instruction) (note : string) =
+(* Claude: the blank inlining and control-flow columns of a line inside a
+   block's "---" part, of the same width as those of the default instruction
+   at index k_ref, so that its address starts in the address column *)
+let pp_blank_prefix m an rendered_control_flow_common_prefix_end k_ref =
   let blank_glyphs = Array.make (Array.length an.rendered_control_flow.(k_ref)) Gnone in
   css m Render_inlining
     ("~"
@@ -491,6 +467,40 @@ let pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref 
     String.sub s 1 (String.length s - 1)
     )
   ^ css m Render_ctrlflow (ControlFlowPpText.pp_glyphs rendered_control_flow_common_prefix_end blank_glyphs)
+
+(* Claude: the words linksem's model says the entry writes, one line per
+   instruction of the footprint, in the address column: a constant as a hex
+   word, otherwise a summary of what it depends on, with the whole
+   expression on a second line; or why linksem cannot say *)
+let pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref (t : AlternativesType.table)
+    (e : AlternativesType.entry) =
+  let base = AlternativesType.orig_addr e in
+  let section = match base with Sym_ocaml.Num.Offset (s, _) -> s | Sym_ocaml.Num.Absolute _ -> "" in
+  let prefix = pp_blank_prefix m an rendered_control_flow_common_prefix_end k_ref in
+  match AlternativesType.words t e with
+  | Error why -> css m Render_alternative ("!! linksem cannot give the words written: " ^ why ^ "\n")
+  | Ok (words, _checks) ->
+      css m Render_alternative "words written (linksem's model):\n"
+      ^ String.concat ""
+          (List.map
+             (fun (off, w) ->
+               prefix
+               ^ css m Render_alternative
+                   (Printf.sprintf "%s:  %s\n"
+                      (AlternativesPp.pp_addr (Sym_ocaml.Num.Offset (section, off)))
+                      (AlternativesPp.pp_word_summary w))
+               ^
+               match AlternativesPp.word_constant w with
+               | Some _ -> ""
+               | None ->
+                   prefix ^ css m Render_alternative ("    " ^ Symbolic_resolution.string_of_sym_expr w ^ "\n"))
+             words)
+
+(* Claude: one replacement instruction, in the layout of pp_instruction_line
+   but with blank inlining and control-flow columns (of the same width as
+   those of the default instruction at index k_ref) *)
+let pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref (r : instruction) (note : string) =
+  pp_blank_prefix m an rendered_control_flow_common_prefix_end k_ref
   ^ css m Render_alternative
       (pp_addr r.i_addr ^ ":  " ^ pp_opcode_bytes test.arch r.i_opcode ^ "  " ^ r.i_mnemonic ^ "\t" ^ r.i_operands)
   ^ css m Render_relocation (match r.i_relocation with None -> "" | Some (typ, targ) -> "\t" ^ typ ^ " " ^ targ)
@@ -511,7 +521,7 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
         ("callback " ^ callback
         ^ (match AlternativesPp.describe_callback kind with Some d -> ": " ^ d | None -> "")
         ^ "\n")
-      ^ pp_linksem_words m t e
+      ^ pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref t e
   | AlternativesAction.Act_unresolved { why; _ } -> css m Render_alternative ("unresolved action: " ^ why ^ "\n")
   | AlternativesAction.Act_replace { replacement_addr; replacement; _ } ->
       let orig = AlternativesType.orig_addr e in
@@ -530,7 +540,7 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
                    pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref r'
                      (replacement_note ro (word_at j)))
              replacement)
-      ^ pp_linksem_words m t e
+      ^ pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref t e
 
 (* Claude: render one instruction group: a single instruction as before, or
    an alternatives footprint as a block: header with the conditions, the
