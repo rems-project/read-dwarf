@@ -327,6 +327,31 @@ let pp_instruction_prefix m test an rendered_control_flow_common_prefix_end k i 
     end
 
 
+(* Claude: the value of the relocation at instruction address [a], as linksem's
+   symbolic expression over section bases (the ABI's formula for the
+   relocation type, e.g. S + A - P, or Page(S + A) - Page(P) for adrp), for
+   printing after the relocation objdump shows; "" if there is none in the
+   ELF or the file is not relocatable *)
+let pp_relocation_value test (a : addr) : string =
+  match (test.elf_file, a) with
+  | (Elf_file.ELF_File_64 f64, Sym_ocaml.Num.Offset (section, off)) -> (
+      match SymbolicReloc.section_relocations f64 section with
+      | None -> ""
+      | Some tbl -> (
+          match Hashtbl.find_opt tbl (Z.to_int off) with
+          | None -> ""
+          | Some (rel : SymbolicReloc.relocation) ->
+              (* printed as the "words written" expressions are, via Symbolic_resolution's printer *)
+              "  = "
+              ^ Symbolic_resolution.string_of_sym_expr
+                  (Symbolic_resolution.sym_expr_of_symbolic_expression rel.rel_desc_value) ) )
+  | _ -> ""
+
+(* Claude: the relocation objdump shows on an instruction, followed by its
+   value as linksem's symbolic expression *)
+let pp_relocation test (a : addr) (r : (string * string) option) : string =
+  match r with None -> "" | Some (typ, targ) -> "\t" ^ typ ^ " " ^ targ ^ pp_relocation_value test a
+
 let pp_instruction_line m test an rendered_control_flow_common_prefix_end k i =
   let addr = i.i_addr in
   let come_froms' = come_froms_of an k in
@@ -350,12 +375,7 @@ let pp_instruction_line m test an rendered_control_flow_common_prefix_end k i =
       ^ "  "
       ^ i.i_mnemonic ^ "\t" ^ i.i_operands
       )
-  ^ css m Render_relocation
-      (match i.i_relocation with
-       | None -> ""
-       | Some (typ, targ) ->
-           "\t" ^ typ ^ " " ^ targ
-      )
+  ^ css m Render_relocation (pp_relocation test addr i.i_relocation)
   (* the instruction's control flow *)
   (* any indirect-branch control flow from this instruction *)
   ^ css m Render_ctrlflow
@@ -499,11 +519,12 @@ let pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref (t : Alt
 (* Claude: one replacement instruction, in the layout of pp_instruction_line
    but with blank inlining and control-flow columns (of the same width as
    those of the default instruction at index k_ref) *)
-let pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref (r : instruction) (note : string) =
+let pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref ~(assembled_at : addr) (r : instruction)
+    (note : string) =
   pp_blank_prefix m an rendered_control_flow_common_prefix_end k_ref
   ^ css m Render_alternative
       (pp_addr r.i_addr ^ ":  " ^ pp_opcode_bytes test.arch r.i_opcode ^ "  " ^ r.i_mnemonic ^ "\t" ^ r.i_operands)
-  ^ css m Render_relocation (match r.i_relocation with None -> "" | Some (typ, targ) -> "\t" ^ typ ^ " " ^ targ)
+  ^ css m Render_relocation (pp_relocation test assembled_at r.i_relocation)
   ^ css m Render_alternative ((if note = "" then "" else "  [" ^ note ^ "]") ^ "\n")
 
 (* Claude: the "---" part of a block: what one entry does when applied: the
@@ -537,7 +558,7 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
                | None -> css m Render_alternative (pp_addr a ^ ":  <no instruction at this address in the objdump>\n")
                | Some r ->
                    let r' = rebase_replacement_instruction ~orig ~alt:replacement_addr r in
-                   pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref r'
+                   pp_replacement_line m test an rendered_control_flow_common_prefix_end k_ref ~assembled_at:a r'
                      (replacement_note ro (word_at j)))
              replacement)
       ^ pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref t e
