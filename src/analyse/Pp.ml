@@ -192,12 +192,20 @@ let pp_instruction_vars_new m an k =
     (*        ^ pp_ranged_vars "R" an.ranged_vars_at_instructions.rvai_remaining.(k)*)
   else ""
 
-let pp_instruction_prefix ?(vars = true) m test an rendered_control_flow_common_prefix_end k i =
+(* Claude: the inlining header lines of instruction k (the inlined
+   subroutines whose ranges start here, labelled), if any *)
+let pp_instruction_inlining_header m an k =
+  let (_, ppd_new_inlining, _) = an.inlining.(k) in
+  css m Render_inlining ppd_new_inlining
+
+(* Claude: ~in_block:true leaves out the params, inlining header and variable
+   lines, which the alternatives rendering prints before the block instead *)
+let pp_instruction_prefix ?(in_block = false) m test an rendered_control_flow_common_prefix_end k i =
   let addr = i.i_addr in
   let come_froms' = come_froms_of an k in
 
   (* the inlining for this instruction *)
-  let (ppd_labels, ppd_new_inlining, _) = an.inlining.(k) in
+  let (ppd_labels, _, _) = an.inlining.(k) in
 
   (* the elf symbols at this address, if any (and reset the last_var_info if any) *)
   let elf_symbols = an.elf_symbols.(k) in
@@ -256,9 +264,9 @@ let pp_instruction_prefix ?(vars = true) m test an rendered_control_flow_common_
        List.map (pp_symb Render_symbol_star true) syms_nodollar
        @ List.map (pp_symb Render_symbol_nostar false) syms_dollar)
   (* function parameters at this address *)
-  ^ (if vars then pp_instruction_params m an i else "")
+  ^ (if in_block then "" else pp_instruction_params m an i)
   (* the new inlining info for this address *)
-  ^ css m Render_inlining ppd_new_inlining
+  ^ (if in_block then "" else pp_instruction_inlining_header m an k)
   (* the source file lines (if any) associated to this address *)
   (* OLD VERSION *)
   (* ^ begin
@@ -331,7 +339,7 @@ let pp_instruction_prefix ?(vars = true) m test an rendered_control_flow_common_
      ^ "\n"
   *)
   (* the variables whose location ranges include this address - new version*)
-  ^ (if vars then pp_instruction_vars_new m an k else "")
+  ^ (if in_block then "" else pp_instruction_vars_new m an k)
 
 
 (* Claude: the value of the relocation at instruction address [a], as linksem's
@@ -424,12 +432,13 @@ let pp_instruction_suffix m an k =
     else ""
   else ""
 
-(* Claude: ~vars:false leaves out the "+" and "-" variable lines, for the
-   alternatives rendering, which prints them around the block instead *)
-let pp_instruction_plain ?(vars = true) m test an rendered_control_flow_common_prefix_end k i =
-  pp_instruction_prefix ~vars m test an rendered_control_flow_common_prefix_end k i
+(* Claude: ~in_block:true leaves out the params, inlining header and "+"/"-"
+   variable lines, for the alternatives rendering, which prints them around
+   the block instead *)
+let pp_instruction_plain ?(in_block = false) m test an rendered_control_flow_common_prefix_end k i =
+  pp_instruction_prefix ~in_block m test an rendered_control_flow_common_prefix_end k i
   ^ pp_instruction_line m test an rendered_control_flow_common_prefix_end k i
-  ^ if vars then pp_instruction_suffix m an k else ""
+  ^ if in_block then "" else pp_instruction_suffix m an k
 
 (* Claude: other commands (run-func-rd, rel-prog) render single instructions
    by index; they get the plain rendering, without alternatives *)
@@ -577,18 +586,24 @@ let pp_alternative_action m test an rendered_control_flow_common_prefix_end (ks 
       ^ pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref t e
 
 (* Claude: render one instruction group: a single instruction as before, or
-   an alternatives footprint as a block: the "+" variable lines of all its
-   instructions, the header with the conditions, the default instructions
-   rendered as usual but without their variable lines, then for each entry
-   a "---" part with its replacement or callback, the footer, and the "-"
-   variable lines of all its instructions *)
+   an alternatives footprint as a block: the params, inlining header and
+   "+" variable lines of all its instructions, the header with the
+   conditions, the default instructions rendered as usual but without those
+   lines, then for each entry a "---" part with its replacement or callback,
+   the footer, and the "-" variable lines of all its instructions *)
 let pp_group m test an rendered_control_flow_common_prefix_end (g : instruction_group) =
   match g with
   | G_single k ->
       let i = an.instructions.(k) in
       pp_ungrouped_alternatives m an ~in_group:[] i ^ pp_instruction_plain m test an rendered_control_flow_common_prefix_end k i
   | G_alternative (es, ks) ->
-      String.concat "" (List.map (fun k -> pp_instruction_params m an an.instructions.(k) ^ pp_instruction_vars_new m an k) ks)
+      String.concat ""
+        (List.map
+           (fun k ->
+             pp_instruction_params m an an.instructions.(k)
+             ^ pp_instruction_inlining_header m an k
+             ^ pp_instruction_vars_new m an k)
+           ks)
       ^ css m Render_alternative
           ("---alternative---\n" ^ String.concat "" (List.map (fun e -> AlternativesPp.pp_condition e ^ "\n") es))
       ^ String.concat ""
@@ -596,7 +611,7 @@ let pp_group m test an rendered_control_flow_common_prefix_end (g : instruction_
              (fun k ->
                let i = an.instructions.(k) in
                pp_ungrouped_alternatives m an ~in_group:es i
-               ^ pp_instruction_plain ~vars:false m test an rendered_control_flow_common_prefix_end k i)
+               ^ pp_instruction_plain ~in_block:true m test an rendered_control_flow_common_prefix_end k i)
              ks)
       ^ String.concat "" (List.map (pp_alternative_action m test an rendered_control_flow_common_prefix_end ks) es)
       ^ css m Render_alternative "---end---\n"
