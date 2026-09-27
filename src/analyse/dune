@@ -1,4 +1,4 @@
-; Claude: src/analyse/alternatives/ holds plain sources compiled into this library
+; Claude: src/analyse/pkvm-alternatives/ and pkvm-jump-table/ hold plain sources compiled into this library
 (include_subdirs unqualified)
 
 (library

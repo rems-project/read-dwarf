@@ -88,6 +88,8 @@ type analysis = {
   rendered_control_flow_width : int;
   (* Claude: Linux alternatives entries, None iff the file has no alternatives section *)
   alternatives : AlternativesType.table option;
+  (* Claude: Linux static-key (jump label) sites, None iff the file has no jump-table section *)
+  jump_table : JumpTable.table option;
   instruction_groups : instruction_group array;
   group_of_index : int array;  (** instruction index -> index into instruction_groups *)
 }

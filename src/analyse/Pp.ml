@@ -76,6 +76,7 @@ type render_kind =
   | Render_ctrlflow
   | Render_relocation
   | Render_alternative
+  | Render_jump_label
 
 let render_colour = function
   | Render_symbol_star -> "gold"
@@ -90,6 +91,7 @@ let render_colour = function
   | Render_ctrlflow -> "white"
   | Render_relocation -> "purple"
   | Render_alternative -> "yellowgreen"
+  | Render_jump_label -> "hotpink"
 
 let render_class_name = function
   | Render_symbol_star -> "symbol-star"
@@ -104,6 +106,7 @@ let render_class_name = function
   | Render_ctrlflow -> "ctrlflow"
   | Render_relocation -> "relocation"
   | Render_alternative -> "alternative"
+  | Render_jump_label -> "jump-label"
 
 type html_idiom = HI_span | HI_pre | HI_classless_span | HI_font
 
@@ -356,11 +359,12 @@ let pp_relocation_value test (a : addr) : string =
           match Hashtbl.find_opt tbl (Z.to_int off) with
           | None -> ""
           | Some (rel : SymbolicReloc.relocation) ->
-              (* printed as the "words written" expressions are, via Symbolic_resolution's printer *)
+              (* printed as the "words written" expressions are, via Symbolic_resolution's printer,
+                 and evaluated under the recorded environment if there is one *)
+              let e = Symbolic_resolution.sym_expr_of_symbolic_expression rel.rel_desc_value in
               "  = "
-              ^ Symbolic_resolution.string_of_sym_expr
-                  (Symbolic_resolution.simplify_sym_expr
-                     (Symbolic_resolution.sym_expr_of_symbolic_expression rel.rel_desc_value)) ) )
+              ^ Symbolic_resolution.string_of_sym_expr (Symbolic_resolution.simplify_sym_expr e)
+              ^ ResolutionEnv.pp_resolved ~width:8 e ) )
   | _ -> ""
 
 (* Claude: the relocation objdump shows on an instruction, followed by its
@@ -392,6 +396,14 @@ let pp_instruction_line m test an rendered_control_flow_common_prefix_end k i =
       ^ i.i_mnemonic ^ "\t" ^ i.i_operands
       )
   ^ css m Render_relocation (pp_relocation test addr i.i_relocation)
+  (* Claude: a static-key test site, or a jump-label branch target, from the jump table *)
+  ^ css m Render_jump_label
+      (match an.jump_table with
+      | None -> ""
+      | Some t ->
+          String.concat ""
+            (List.map (fun e -> "\t" ^ JumpTablePp.pp_site_with_word t e) (JumpTable.at_code t addr)
+            @ List.map (fun e -> "\t" ^ JumpTablePp.pp_target e) (JumpTable.at_target t addr)))
   (* the instruction's control flow *)
   (* any indirect-branch control flow from this instruction *)
   ^ css m Render_ctrlflow
@@ -526,9 +538,10 @@ let pp_linksem_words m an rendered_control_flow_common_prefix_end k_ref (t : Alt
              (fun (off, w) ->
                prefix
                ^ css m Render_alternative
-                   (Printf.sprintf "%s:  %s\n"
+                   (Printf.sprintf "%s:  %s%s\n"
                       (AlternativesPp.pp_addr (Sym_ocaml.Num.Offset (section, off)))
-                      (AlternativesPp.pp_word_summary w))
+                      (AlternativesPp.pp_word_summary w)
+                      (match AlternativesPp.word_constant w with Some _ -> "" | None -> ResolutionEnv.pp_resolved w))
                ^
                match AlternativesPp.word_constant w with
                | Some _ -> ""
@@ -860,6 +873,11 @@ let whole_file_chunks m test an filename_stem cu_files =
           | Some t ->
               [ (ps "_alternative_kinds", "alternative kinds",
                  AlternativesPp.pp_alternative_kinds (Array.to_list t.AlternativesType.entries)) ] )
+        (* Claude: the static keys tested in the whole object, if it has a jump table *)
+        @ ( match an.jump_table with
+          | None -> []
+          | Some t ->
+              [ (ps "_static_keys", "static keys", JumpTablePp.pp_static_keys (Array.to_list t.JumpTable.entries)) ] )
         @  [(ps "_count", "instruction count", string_of_int (Array.length an.instructions)) ]
       )
   in
@@ -985,6 +1003,23 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
                 "alternative kinds",
                 AlternativesPp.pp_alternative_kinds
                   (List.filter in_range (Array.to_list t.AlternativesType.entries)) ) ] )
+      (* Claude: the static keys whose test sites are in this compilation unit's range *)
+      @ ( match an.jump_table with
+        | None -> []
+        | Some t ->
+            let in_range (e : JumpTable.entry) =
+              match an.index_option_of_address (JumpTable.code_addr e) with
+              | None -> false
+              | Some k -> (
+                  match
+                    (an.index_option_of_address low, an.index_option_of_address (Sym.sub high (Sym.of_int 4)))
+                  with
+                  | (Some index_low, Some index_high') -> k >= index_low && k <= index_high'
+                  | _ -> false )
+            in
+            [ ( "static_keys",
+                "static keys",
+                JumpTablePp.pp_static_keys (List.filter in_range (Array.to_list t.JumpTable.entries)) ) ] )
     )
   in
   let index_body =

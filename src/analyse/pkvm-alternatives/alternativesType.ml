@@ -38,10 +38,9 @@ type table = {
   by_orig : entry list SymMap.t;  (** entries indexed by the address of their original code *)
   table_problems : string list;  (** problems with the section as a whole *)
   elf : Elf_file.elf64_file;
-  resolved : ((string * Symbolic_resolution.sym_section) list, string) result Lazy.t;
-      (** the sections holding original or alternative sites, link-time relocated by linksem
-          (as its [resolve_aarch64_object] does, but only those sections): forced the first time
-          an entry's words are rendered *)
+  site_sections : string list;
+      (** the sections holding original or alternative sites; linksem relocates them
+          ([RelocatedSections]) the first time an entry's words are rendered *)
 }
 
 (*****************************************************************************)
@@ -130,33 +129,6 @@ let problems (e : entry) : string list =
 (*  the table of a file                                                      *)
 (*****************************************************************************)
 
-(* Claude: the named sections, link-time relocated by linksem with the
-   linker's possible ADRP+ADD relaxation, as Abi_aarch64_instruction_fields.
-   resolve_aarch64_object does for the whole object *)
-let relocate_sections (f64 : Elf_file.elf64_file) (names : string list) :
-    ((string * Symbolic_resolution.sym_section) list, string) result =
-  let relocate name =
-    match
-      Symbolic_resolution.relocate_section f64
-        Abi_aarch64_symbolic_relocation.aarch64_relocation_interpreter
-        Abi_aarch64_instruction_fields.aarch64_field_spec name
-    with
-    | Error.Fail m -> Error (name ^ ": " ^ m)
-    | Error.Success ss -> (
-        if ss.Symbolic_resolution.sec_words = [] then Ok ss
-        else
-          match Abi_aarch64_instruction_fields.relax_adrp_add f64 name ss with
-          | Error.Fail m -> Error (name ^ ": " ^ m)
-          | Error.Success ss -> Ok ss
-      )
-  in
-  List.fold_left
-    (fun acc name ->
-      match acc with
-      | Error m -> Error m
-      | Ok l -> ( match relocate name with Error m -> Error m | Ok ss -> Ok ((name, ss) :: l) ))
-    (Ok []) names
-
 (** [table_of_elf f64 section_name] is [None] iff [f64] has no section of that name. If linksem
     cannot read the section, the table has no entries and says why. *)
 let table_of_elf (f64 : Elf_file.elf64_file) (section_name : string) : table option =
@@ -202,7 +174,7 @@ let table_of_elf (f64 : Elf_file.elf64_file) (section_name : string) : table opt
         by_orig;
         table_problems;
         elf = f64;
-        resolved = lazy (relocate_sections f64 site_sections);
+        site_sections;
       }
 
 (*****************************************************************************)
@@ -216,7 +188,7 @@ let table_of_elf (f64 : Elf_file.elf64_file) (section_name : string) : table opt
     hypervisor's entries hit, so the system pass is asked for. *)
 let words (t : table) (e : entry) :
     ((Z.t * Symbolic_resolution.sym_expr) list * Symbolic_resolution.sym_check list, string) result =
-  match Lazy.force t.resolved with
+  match RelocatedSections.relocated_list t.elf t.site_sections with
   | Error m -> Error m
   | Ok secs -> (
       match alt_entry_words t.elf Pass_system e secs with

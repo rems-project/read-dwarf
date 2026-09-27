@@ -88,6 +88,20 @@ let mk_alternatives (test : test) (section_name : string) : AlternativesType.tab
       | _ -> () );
       t
 
+(* Claude: read the jump-label section named by --jump-table-section through
+   linksem, if the file has one; print the table if --dump-jump-table *)
+let mk_jump_table (test : test) (section_name : string) : JumpTable.table option =
+  match test.elf_file with
+  | Elf_file.ELF_File_32 _ -> None
+  | Elf_file.ELF_File_64 f64 ->
+      let t = JumpTable.table_of_elf f64 section_name in
+      ( match t with
+      | Some t when !Globals.dump_jump_table ->
+          print_string (JumpTablePp.pp_table t);
+          flush stdout
+      | _ -> () );
+      t
+
 (* Claude: group the instructions (in address order) into the footprints of
    alternatives entries and single instructions.  An entry forms a group iff
    its footprint is non-empty and its addresses are exactly the next nr_inst
@@ -184,6 +198,12 @@ let mk_analysis test filename_objdump_d filename_branch_table_option =
     | Some section_name -> time "mk_alternatives" (mk_alternatives test) section_name
   in
 
+  let jump_table =
+    match !Globals.jump_table_section with
+    | None -> None
+    | Some section_name -> time "mk_jump_table" (mk_jump_table test) section_name
+  in
+
   let (instruction_groups, group_of_index) =
     time "mk_instruction_groups" (mk_instruction_groups alternatives instructions) index_option_of_address
   in
@@ -216,6 +236,7 @@ let mk_analysis test filename_objdump_d filename_branch_table_option =
       rendered_control_flow_inbetweens;
       rendered_control_flow_width;
       alternatives;
+      jump_table;
       instruction_groups;
       group_of_index;
     }

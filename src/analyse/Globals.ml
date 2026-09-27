@@ -82,6 +82,16 @@ let alternatives_section = ref (Some ".altinstructions" : string option)
 
 let dump_alternatives = ref false
 
+(* Claude: Linux static keys (jump labels): the section to read the sites
+   from, None to disable; and whether to dump the table *)
+let jump_table_section = ref (Some "__jump_table" : string option)
+
+let dump_jump_table = ref false
+
+(* Claude: an optional recorded resolution environment (linksem's report
+   format), under which the symbolic values shown are also evaluated *)
+let resolution_env_file = ref (None : string option)
+
 let show_vars = ref true
 
 let show_cfa = ref true

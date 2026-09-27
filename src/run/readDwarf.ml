@@ -188,6 +188,37 @@ let dump_alternatives =
   let doc = "Print the alternatives table to stdout before the main output" in
   setter Analyse.Globals.dump_alternatives Arg.(value & flag & info ["dump-alternatives"] ~doc)
 
+(* Claude: Linux static-key (jump label) options *)
+let jump_table_section =
+  let doc =
+    "Name of the ELF section holding Linux-style static-key test sites (struct jump_entry), shown \
+     on the site and target instructions; read and modelled by linksem"
+  in
+  setter Analyse.Globals.jump_table_section
+    Arg.(value & opt (some string) (Some "__jump_table") & info ["jump-table-section"] ~docv:"SECTION" ~doc)
+
+let no_jump_table =
+  let doc = "Do not look for a jump-table section" in
+  setter Analyse.Globals.jump_table_section
+    Term.(
+      const (fun b -> if b then None else !Analyse.Globals.jump_table_section)
+      $ Arg.(value & flag & info ["no-jump-table"] ~doc))
+
+let dump_jump_table =
+  let doc = "Print the jump table to stdout before the main output" in
+  setter Analyse.Globals.dump_jump_table Arg.(value & flag & info ["dump-jump-table"] ~doc)
+
+(* Claude: the optional recorded environment *)
+let resolution_env =
+  let doc =
+    "A recorded resolution environment in linksem's report format (section bases, imported \
+     symbols, parameters and flags, as objcheck env-from-exe or the pKVM runtime dump write \
+     it). The symbolic values shown (relocation values, the words of alternatives and \
+     jump-label sites) are then also evaluated under it, as 'resolved to: ...'"
+  in
+  setter Analyse.Globals.resolution_env_file
+    Arg.(value & opt (some non_dir_file) None & info ["resolution-env"] ~docv:"ENV_FILE" ~doc)
+
 let html =
   let doc = "Enables html output" in
   setter Analyse.Globals.ppmode
@@ -232,6 +263,10 @@ let options =
     alternatives_section;
     no_alternatives;
     dump_alternatives;
+    jump_table_section;
+    no_jump_table;
+    dump_jump_table;
+    resolution_env;
     html;
     morello ;
     suppress_stuff;

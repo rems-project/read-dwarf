@@ -43,10 +43,15 @@
 (*==================================================================================*)
 
 include Base
-(* Claude: the Linux arm64 alternatives modules, from src/analyse/alternatives/ *)
+(* Claude: the Linux arm64 alternatives modules, from src/analyse/pkvm-alternatives/,
+   the static-key (jump label) modules from src/analyse/pkvm-jump-table/, and what they share *)
 module AlternativesAction = AlternativesAction
 module AlternativesPp = AlternativesPp
 module AlternativesType = AlternativesType
+module JumpTable = JumpTable
+module JumpTablePp = JumpTablePp
+module RelocatedSections = RelocatedSections
+module ResolutionEnv = ResolutionEnv
 module Base = Base
 module CallGraph = CallGraph
 module Collected = Collected
