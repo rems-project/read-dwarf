@@ -963,7 +963,7 @@ let chunks_of_ranged_cu m test an filename_stem ((low, high), cu) =
           pp_abbreviations_table cu'.cu_abbreviations_table );
         ( "die",
           ".debug_info die tree",
-          pp_die c cu'.cu_header d.d_str true (*indent*) (Nat_big_num.of_int 0) true cu'.cu_die );
+          pp_die c cu'.cu_header (Dwarf.unit_context_of_cu d cu') true (*indent*) (Nat_big_num.of_int 0) true cu'.cu_die );
         ( "line",
           ".debug_line line number info",
           let lnp = line_number_program_of_compilation_unit d cu' in

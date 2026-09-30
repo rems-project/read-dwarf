@@ -79,12 +79,14 @@ let process_file () : unit =
       (function
         | lnfe ->
             ( lnh.lnh_comp_dir,
-              (let dir = Sym.to_int lnfe.lnfe_directory_index in
-               if dir = 0 then None
-               else
+              (* Claude: the directory table is 1-based in DWARF 2-4 and 0-based in
+                 DWARF 5; linksem's accessor knows which *)
+              (match Dwarf.lnh_directory lnh lnfe.lnfe_directory_index with
+               | None -> None
+               | Some dir ->
                  Some
                    (Byte_sequence.string_of_byte_sequence
-                      (Dwarf_byte_sequence.sym_bs_expect_const (List.nth lnh.lnh_include_directories (dir - 1))))),
+                      (Dwarf_byte_sequence.sym_bs_expect_const dir))),
               Byte_sequence.string_of_byte_sequence (Dwarf_byte_sequence.sym_bs_expect_const lnfe.lnfe_path) ))
       lnh.lnh_file_entries
   in
