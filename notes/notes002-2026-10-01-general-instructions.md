@@ -40,3 +40,14 @@ and all of it applies here too.
   the small smoke test at `-O0`/`-O2` (now also with DWARF 5) and `rd` on the
   pKVM hypervisor object, and check that the rendering is sensible (and,
   after a linksem-only change, unchanged).
+
+## Maintaining these notes
+
+- This note, `notes001-2026-10-01-instructions-given.md` and
+  `notes003-2026-10-01-summary-since-september.md` are living records: when
+  further work is done on read-dwarf, append to them rather than starting new
+  ones.  Add each new prompt that leads to a read-dwarf change to notes001,
+  verbatim, numbered and timestamped as the existing entries are; add any new
+  standing rule the owner states to this note; and add a paragraph on each
+  new strand of work to notes003 with the dates and the commits.  The usual
+  rule that committed notes are not edited does not apply to these three.
