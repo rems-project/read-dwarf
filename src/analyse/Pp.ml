@@ -841,13 +841,13 @@ let whole_file_chunks m test an filename_stem cu_files =
        ::*)
     wrap_chunks m
       (
-        [ (ps "_loc", ".debug_loc location lists", pp_loc c cuh_default d.d_loc)]
+        [ (ps "_loc", ".debug_loc location lists", pp_loc c cuh_default (Dwarf.dwarf_loc_lists d))]
         @ (if not(!Globals.suppress_stuff) then 
              [  (ps "_loc_eval", "evaluated location info",
                  pp_analysed_location_data ds.ds_dwarf ds.ds_analysed_location_data ) ] else [] )
         @ [
-            (ps "_ranges", ".debug_ranges range lists", pp_ranges c cuh_default d.d_ranges);
-            (ps "_frame", ".debug_frame frame info", pp_frame_info c cuh_default d.d_frame_info);
+            (ps "_ranges", ".debug_ranges range lists", pp_ranges c cuh_default (Dwarf.dwarf_range_lists d));
+            (ps "_frame", ".debug_frame frame info", pp_frame_info c cuh_default (Dwarf.dwarf_frame_info d));
             (ps "_frame_eval", "evaluated frame info", pp_evaluated_frame_info ds.ds_evaluated_frame_info);
             (ps "_inlined", "inlined subroutine info", pp_inlined_subroutines ds iss);
             (ps "_inlined_by_range",
@@ -901,7 +901,7 @@ let whole_file_chunks m test an filename_stem cu_files =
 
 (*      
       ^ "\n************** .debug_line section: line number info   ****************\n"
-  ^ pp_line_info d.d_line_info
+  ^ pp_line_info (Dwarf.dwarf_line_programs d)
        ^ "************** simple die tree *************************\n"
        ^        pp_sdt_dwarf sdt_d
      ^ "************** line info *************************\n"
